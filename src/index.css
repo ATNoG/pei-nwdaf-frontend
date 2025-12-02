@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@theme {
+  --color-navy-900: #0a192f;
+  --color-navy-800: #112240;
+  --color-navy-700: #1a2f4a;
+  --color-azure-500: #4169e1;
+  --color-azure-600: #3457c9;
+}
+
+@layer base {
+  body {
+    background-color: #f3f4f6;
+    color: #1f2937;
+  }
+}
