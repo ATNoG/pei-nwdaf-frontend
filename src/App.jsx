@@ -2,10 +2,11 @@ import React from 'react';
 import Sidebar from './components/Sidebar';
 import ServiceStatusOverview from './components/ServiceStatusOverview';
 import DataTable from './components/DataTable';
-import { latencyData } from './data/latencyData';
 
 function App() {
-  // Column definitions for raw data table (from CSV) - All 41 columns
+  const rawDataUrl = import.meta.env.VITE_RAW_DATA_URL;
+  
+  // Column definitions for raw data table (from CSV) - All 36 columns (matching actual data structure)
   const rawDataColumns = [
     { header: 'Packet Loss', accessor: 'packet_loss' },
     { header: 'Server IP', accessor: 'server_ip' },
@@ -47,11 +48,6 @@ function App() {
     { header: 'Primary Bandwidth', accessor: 'primary_bandwidth' },
     { header: 'Cell Bandwidths', accessor: 'cellbandwidths' },
     { header: 'UL Bandwidth', accessor: 'ul_bandwidth' },
-    { header: 'LTE MCS', accessor: 'lte_mcs' },
-    { header: 'LTE RI', accessor: 'lte_ri' },
-    { header: 'NR MCS', accessor: 'nr_mcs' },
-    { header: 'NR RI', accessor: 'nr_ri' },
-    { header: 'TX Power', accessor: 'tx_power' },
     { header: 'MCC', accessor: 'mcc' },
     { header: 'MNC', accessor: 'mnc' },
     { header: 'SS-RSRP', accessor: 'ss_rsrp' },
@@ -90,10 +86,12 @@ function App() {
           <ServiceStatusOverview />
 
           {/* Raw Data Table */}
+		{console.log(rawDataUrl)}
           <DataTable
-            title="Raw Data - Complete Network Metrics (41 Columns)"
-            data={latencyData}
-            columns={rawDataColumns}
+          title="Raw Data - Complete Network Metrics (36 Columns)"
+          apiEndpoint={`${rawDataUrl}/data`}
+          columns={rawDataColumns}
+          refreshInterval={60000}
           />
         </div>
       </div>
