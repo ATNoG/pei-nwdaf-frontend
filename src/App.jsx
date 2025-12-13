@@ -1,69 +1,39 @@
 import React from 'react';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
-import ServiceStatusOverview from './components/ServiceStatusOverview';
-import DataTable from './components/DataTable';
+import Dashboard from './pages/Dashboard';
+import MLModels from './pages/MLModels';
+import Analytics from './pages/Analytics';
 
-function App() {
-  const rawDataUrl = import.meta.env.VITE_RAW_DATA_URL;
+function AppContent() {
+  const location = useLocation();
   
-  // Column definitions for raw data table (from CSV) - All 36 columns (matching actual data structure)
-  const rawDataColumns = [
-    { header: 'Packet Loss', accessor: 'packet_loss' },
-    { header: 'Server IP', accessor: 'server_ip' },
-    {
-      header: 'Mean Latency (ms)',
-      accessor: 'mean_latency',
-      render: (value) => {
-        if (!value) return '-';
-        const latency = parseFloat(value);
-        const color = latency < 30 ? 'text-green-600' : latency < 50 ? 'text-yellow-600' : 'text-red-600';
-        return <span className={`font-medium ${color}`}>{value}</span>;
-      }
-    },
-    { header: 'Min Latency (ms)', accessor: 'min_latency' },
-    { header: 'Max Latency (ms)', accessor: 'max_latency' },
-    { header: 'Mean Dev Latency', accessor: 'mean_dev_latency' },
-    { header: 'No. Pings', accessor: 'no_pings' },
-    { header: 'Timestamp', accessor: 'timestamp' },
-    { header: 'Network', accessor: 'network' },
-    { header: 'Cell Index', accessor: 'cell_index' },
-    { header: 'Physical Cell ID', accessor: 'physical_cellid' },
-    { header: 'Tracking Area Code', accessor: 'tracking_area_code' },
-    { header: 'EARFCN', accessor: 'earfcn' },
-    {
-      header: 'RSRP (dBm)',
-      accessor: 'rsrp',
-      render: (value) => {
-        if (!value) return '-';
-        const rsrp = parseFloat(value);
-        const color = rsrp > -90 ? 'text-green-600' : rsrp > -100 ? 'text-yellow-600' : 'text-red-600';
-        return <span className={`font-medium ${color}`}>{value}</span>;
-      }
-    },
-    { header: 'RSRQ (dB)', accessor: 'rsrq' },
-    { header: 'RSSI (dBm)', accessor: 'rssi' },
-    { header: 'SINR (dB)', accessor: 'sinr' },
-    { header: 'TA', accessor: 'ta' },
-    { header: 'CQI', accessor: 'cqi' },
-    { header: 'Primary Bandwidth', accessor: 'primary_bandwidth' },
-    { header: 'Cell Bandwidths', accessor: 'cellbandwidths' },
-    { header: 'UL Bandwidth', accessor: 'ul_bandwidth' },
-    { header: 'MCC', accessor: 'mcc' },
-    { header: 'MNC', accessor: 'mnc' },
-    { header: 'SS-RSRP', accessor: 'ss_rsrp' },
-    { header: 'SS-RSRQ', accessor: 'ss_rsrq' },
-    { header: 'SS-SINR', accessor: 'ss_sinr' },
-    { header: 'Latitude', accessor: 'latitude' },
-    { header: 'Longitude', accessor: 'longitude' },
-    { header: 'Altitude', accessor: 'altitude' },
-    { header: 'Location Accuracy', accessor: 'location_accuracy' },
-    { header: 'Velocity', accessor: 'velocity' },
-    { header: 'Velocity Accuracy', accessor: 'velocity_accuracy' },
-    { header: 'Bearing', accessor: 'bearing' },
-    { header: 'Bearing Accuracy', accessor: 'bearing_accuracy' },
-    { header: 'Device', accessor: 'device' },
-    { header: 'MNO', accessor: 'MNO' },
-  ];
+  // Get page title based on current route
+  const getPageTitle = () => {
+    switch (location.pathname) {
+      case '/':
+        return 'Dashboard';
+      case '/ml-models':
+        return 'ML Models';
+      case '/analytics':
+        return 'Analytics';
+      default:
+        return 'AION';
+    }
+  };
+
+  const getPageSubtitle = () => {
+    switch (location.pathname) {
+      case '/':
+        return 'Real-time Network Monitoring & ML Control';
+      case '/ml-models':
+        return 'Browse and Manage ML Models from MLFlow Registry';
+      case '/analytics':
+        return 'Cell Analytics Predictions & Insights';
+      default:
+        return '';
+    }
+  };
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -74,28 +44,30 @@ function App() {
       <div className="flex-1 overflow-auto">
         {/* Header */}
         <header className="bg-gradient-to-r from-blue-500 to-blue-600 px-8 py-6 shadow-md">
-          <h1 className="text-3xl font-bold text-white">AION Dashboard</h1>
+          <h1 className="text-3xl font-bold text-white">AION {getPageTitle()}</h1>
           <p className="text-blue-50 mt-1">
-            Real-time Network Monitoring & ML Control
+            {getPageSubtitle()}
           </p>
         </header>
 
-        {/* Dashboard Content */}
-        <div className="p-8 space-y-8">
-          {/* Service Status Overview */}
-          <ServiceStatusOverview />
-
-          {/* Raw Data Table */}
-		{console.log(rawDataUrl)}
-          <DataTable
-          title="Raw Data - Complete Network Metrics (36 Columns)"
-          apiEndpoint={`${rawDataUrl}/data`}
-          columns={rawDataColumns}
-          refreshInterval={60000}
-          />
+        {/* Page Content */}
+        <div className="p-8">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/ml-models" element={<MLModels />} />
+            <Route path="/analytics" element={<Analytics />} />
+          </Routes>
         </div>
       </div>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AppContent />
+    </Router>
   );
 }
 
