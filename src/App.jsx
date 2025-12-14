@@ -1,14 +1,17 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
-import Dashboard from './pages/Dashboard';
-import DataPage from './pages/DataPage';
-import ServiceStatusPage from './pages/ServiceStatusPage';
+import ServiceStatusOverview from './components/ServiceStatusOverview';
+import DataTable from './components/DataTable';
+import { latencyData } from './data/latencyData';
 
 function App() {
+<<<<<<< HEAD
   const rawDataUrl = import.meta.env.VITE_RAW_DATA_URL;
   
   // Column definitions for raw data table (from CSV) - All 36 columns (matching actual data structure)
+=======
+  // Column definitions for raw data table (from CSV) - All 41 columns
+>>>>>>> parent of 9d94ca7 (Meeting unchanged UI)
   const rawDataColumns = [
     { header: 'Packet Loss', accessor: 'packet_loss' },
     { header: 'Server IP', accessor: 'server_ip' },
@@ -50,6 +53,14 @@ function App() {
     { header: 'Primary Bandwidth', accessor: 'primary_bandwidth' },
     { header: 'Cell Bandwidths', accessor: 'cellbandwidths' },
     { header: 'UL Bandwidth', accessor: 'ul_bandwidth' },
+<<<<<<< HEAD
+=======
+    { header: 'LTE MCS', accessor: 'lte_mcs' },
+    { header: 'LTE RI', accessor: 'lte_ri' },
+    { header: 'NR MCS', accessor: 'nr_mcs' },
+    { header: 'NR RI', accessor: 'nr_ri' },
+    { header: 'TX Power', accessor: 'tx_power' },
+>>>>>>> parent of 9d94ca7 (Meeting unchanged UI)
     { header: 'MCC', accessor: 'mcc' },
     { header: 'MNC', accessor: 'mnc' },
     { header: 'SS-RSRP', accessor: 'ss_rsrp' },
@@ -68,20 +79,19 @@ function App() {
   ];
 
   return (
-    <Router>
-      <div className="flex h-screen bg-gray-100">
-        {/* Sidebar */}
-        <Sidebar />
+    <div className="flex h-screen bg-gray-100">
+      {/* Sidebar */}
+      <Sidebar />
 
-        {/* Main Content */}
-        <div className="flex-1 overflow-auto">
-          {/* Header */}
-          <header className="bg-gradient-to-r from-blue-500 to-blue-600 px-8 py-6 shadow-md">
-            <h1 className="text-3xl font-bold text-white">AION Dashboard</h1>
-            <p className="text-blue-50 mt-1">
-              Real-time Network Monitoring & ML Control
-            </p>
-          </header>
+      {/* Main Content */}
+      <div className="flex-1 overflow-auto">
+        {/* Header */}
+        <header className="bg-gradient-to-r from-blue-500 to-blue-600 px-8 py-6 shadow-md">
+          <h1 className="text-3xl font-bold text-white">AION Dashboard</h1>
+          <p className="text-blue-50 mt-1">
+            Real-time Network Monitoring & ML Control
+          </p>
+        </header>
 
         {/* Dashboard Content */}
         <div className="p-8 space-y-8">
@@ -89,6 +99,7 @@ function App() {
           <ServiceStatusOverview />
 
           {/* Raw Data Table */}
+<<<<<<< HEAD
 		{console.log(rawDataUrl)}
           <DataTable
           title="Raw Data - Complete Network Metrics (36 Columns)"
@@ -104,9 +115,16 @@ function App() {
               <Route path="/servicestatus" element={<ServiceStatusPage />} />
             </Routes>
           </div>
+=======
+          <DataTable
+            title="Raw Data - Complete Network Metrics (41 Columns)"
+            data={latencyData}
+            columns={rawDataColumns}
+          />
+>>>>>>> parent of 9d94ca7 (Meeting unchanged UI)
         </div>
       </div>
-    </Router>
+    </div>
   );
 }
 

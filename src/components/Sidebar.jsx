@@ -1,18 +1,9 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
 
 const Sidebar = () => {
-  const location = useLocation();
-
   const navItems = [
-    { name: 'Dashboard', icon: '🏠', path: '/' },
-    { name: 'Network Data', icon: '📊', path: '/data' },
-    { name: 'Service Status', icon: '⚡', path: '/servicestatus' },
+    { name: 'Home', icon: '🏠', active: true },
   ];
-
-  const isActive = (path) => {
-    return location.pathname === path;
-  };
 
   return (
     <div className="w-64 h-screen bg-white border-r border-gray-200 flex flex-col shadow-sm">
@@ -47,17 +38,17 @@ const Sidebar = () => {
         <ul className="space-y-2">
           {navItems.map((item) => (
             <li key={item.name}>
-              <Link
-                to={item.path}
+              <a
+                href="#"
                 className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
-                  isActive(item.path)
+                  item.active
                     ? 'bg-blue-600 text-white'
                     : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
                 }`}
               >
                 <span className="text-xl">{item.icon}</span>
                 <span className="font-medium">{item.name}</span>
-              </Link>
+              </a>
             </li>
           ))}
         </ul>

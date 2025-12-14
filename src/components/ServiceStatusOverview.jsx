@@ -2,13 +2,13 @@ import React from 'react';
 
 const ServiceStatusOverview = () => {
   const services = [
-    { name: 'API Gateway', status: 'down' },
-    { name: 'Auth Service', status: 'down' },
-    { name: 'User Service', status: 'down' },
-    { name: 'Notification Service', status: 'down' },
-    { name: 'Analytics Service', status: 'down' },
-    { name: 'Storage Service', status: 'down' },
-    { name: 'Search Service', status: 'down' },
+    { name: 'API Gateway', avgResponse: '-', status: 'down' },
+    { name: 'Auth Service', avgResponse: '-', status: 'down' },
+    { name: 'User Service', avgResponse: '-', status: 'down' },
+    { name: 'Notification Service', avgResponse: '-', status: 'down' },
+    { name: 'Analytics Service', avgResponse: '-', status: 'down' },
+    { name: 'Storage Service', avgResponse: '-', status: 'down' },
+    { name: 'Search Service', avgResponse: '-', status: 'down' },
   ];
 
   const getStatusColor = (status) => {
@@ -34,19 +34,6 @@ const ServiceStatusOverview = () => {
         return 'text-gray-500';
       default:
         return 'text-blue-500';
-    }
-  };
-
-  const getStatusText = (status) => {
-    switch (status) {
-      case 'operational':
-        return 'Online';
-      case 'degraded':
-        return 'Degraded';
-      case 'down':
-        return 'Offline';
-      default:
-        return 'Unknown';
     }
   };
 
@@ -92,7 +79,7 @@ const ServiceStatusOverview = () => {
               </div>
             </div>
             <p className="text-xs text-gray-600">
-              Status: <span className={`font-medium ${getStatusIconColor(service.status)}`}>{getStatusText(service.status)}</span>
+              Avg Response: <span className="font-medium">{service.avgResponse}</span>
             </p>
           </div>
         ))}
