@@ -480,7 +480,7 @@ const MLModels = () => {
           <div>
             <h2 className="text-2xl font-bold text-gray-900">ML Models Registry</h2>
             <p className="text-sm text-gray-600 mt-1">
-              Browse and manage ML models from MLFlow registry
+              Browse and manage ML models
             </p>
           </div>
           <div className="flex items-center space-x-3">

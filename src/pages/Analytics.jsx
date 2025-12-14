@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import { useConfig } from '../contexts/ConfigContext';
+import SearchableDropdown from '../components/SearchableDropdown';
 
 const Analytics = () => {
   //const dataStorageUrl = import.meta.env.VITE_DATA_STORAGE_URL;
   const dataStorageUrl = '/data-storage';
  ///const mlUrl = import.meta.env.VITE_ML_URL;
   const mlUrl = '/pei-ml'
+  const { config, loading: configLoading } = useConfig();
+  
   const [formData, setFormData] = useState({
     analytics_type: 'latency',
     cell_id: 26379009,
     horizon: 60,
-    model_type: 'xgboost',
   });
 
   const [prediction, setPrediction] = useState(null);
@@ -155,44 +158,42 @@ const Analytics = () => {
                 value={formData.analytics_type}
                 onChange={handleInputChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                disabled={configLoading}
               >
-                <option value="latency">Latency</option>
-                <option value="throughput">Throughput</option>
-                <option value="signal_strength">Signal Strength</option>
-                <option value="packet_loss">Packet Loss</option>
+                {configLoading ? (
+                  <option>Loading...</option>
+                ) : config?.inference_types ? (
+                  [...new Set(config.inference_types.map(t => t.name))].map(name => (
+                    <option key={name} value={name}>
+                      {name.charAt(0).toUpperCase() + name.slice(1)}
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    <option value="latency">Latency</option>
+                    <option value="throughput">Throughput</option>
+                  </>
+                )}
               </select>
             </div>
 
             {/* Cell ID */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Cell ID
+                Cell ID {cellList.length > 0 && `(${cellList.length} available)`}
               </label>
-              {loadingCells ? (
-                <div className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500">
-                  Loading cells...
-                </div>
-              ) : cellList.length > 0 ? (
-                <select
-                  name="cell_id"
-                  value={formData.cell_id}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                >
-                  {cellList.map(cell => (
-                    <option key={cell} value={cell}>{cell}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="number"
-                  name="cell_id"
-                  value={formData.cell_id}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                  placeholder="No cells available - enter manually"
-                />
-              )}
+              <SearchableDropdown
+                options={cellList}
+                value={formData.cell_id}
+                onChange={(cell) => setFormData(prev => ({ ...prev, cell_id: cell }))}
+                placeholder={loadingCells ? "Loading cells..." : cellList.length > 0 ? "Search or select a cell..." : "Enter cell ID manually"}
+                disabled={loadingCells}
+                loading={loadingCells}
+                formatOption={(cell) => `Cell ${cell}`}
+                filterOption={(cell, searchTerm) => 
+                  cell.toString().includes(searchTerm)
+                }
+              />
             </div>
 
             {/* Horizon */}
@@ -200,32 +201,29 @@ const Analytics = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Horizon (seconds)
               </label>
-              <input
-                type="number"
+              <select
                 name="horizon"
                 value={formData.horizon}
                 onChange={handleInputChange}
-                min="1"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                placeholder="e.g., 60"
-              />
-            </div>
-
-            {/* Model Type */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Model Type
-              </label>
-              <select
-                name="model_type"
-                value={formData.model_type}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                disabled={configLoading}
               >
-                <option value="xgboost">XGBoost</option>
-                <option value="random_forest">Random Forest</option>
-                <option value="lstm">LSTM</option>
-                <option value="linear_regression">Linear Regression</option>
+                {configLoading ? (
+                  <option>Loading...</option>
+                ) : config?.inference_types ? (
+                  config.inference_types
+                    .filter(t => t.name === formData.analytics_type)
+                    .map(t => (
+                      <option key={`${t.name}-${t.horizon}`} value={t.horizon}>
+                        {t.horizon}s - {t.description}
+                      </option>
+                    ))
+                ) : (
+                  <>
+                    <option value={60}>60s</option>
+                    <option value={300}>300s</option>
+                  </>
+                )}
               </select>
             </div>
           </div>
