@@ -1,23 +1,27 @@
 import React, { useState, useEffect } from 'react';
+import { useConfig } from '../contexts/ConfigContext';
 
 const MLModels = () => {
   //const mlUrl = import.meta.env.VITE_ML_URL;
   const mlUrl = '/pei-ml'
+  const { config, loading: configLoading, error: configError, refetch: refetchConfig } = useConfig();
 
+  //console.log('Config:', config, 'Loading:', configLoading, 'Error:', configError);
 
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
   
+  // Modal state
+  const [showModal, setShowModal] = useState(false);
+  const [selectedModel, setSelectedModel] = useState(null);
+  const [trainingInfo, setTrainingInfo] = useState(null);
+  const [loadingTrainingInfo, setLoadingTrainingInfo] = useState(false);
+  
   // Training state
   const [isTraining, setIsTraining] = useState(false);
   const [trainingMessage, setTrainingMessage] = useState(null);
-  const [trainingParams, setTrainingParams] = useState({
-    analytics_type: 'latency',
-    horizon: 60,
-    model_type: 'xgboost',
-  });
 
   // Mock data for demonstration
   const mockModels = [
@@ -54,6 +58,15 @@ const MLModels = () => {
     }
   ];
 
+  const isDefaultModel = (modelName) => {
+    if (!config?.inference_types) return false;
+    
+    return config.inference_types.some(inference => {
+      const expectedName = `${inference.name}_${inference.default_model}_${inference.horizon}`;
+      return modelName === expectedName;
+    });
+  };
+
   const fetchModels = async () => {
     try {
       setError(null);
@@ -65,7 +78,19 @@ const MLModels = () => {
       }
       
       const data = await response.json();
-      setModels(Array.isArray(data) ? data : [data]);
+      const modelsArray = Array.isArray(data) ? data : [data];
+      
+      // Sort models: default models first, then alphabetically
+      const sortedModels = [...modelsArray].sort((a, b) => {
+        const aIsDefault = isDefaultModel(a.name);
+        const bIsDefault = isDefaultModel(b.name);
+        
+        if (aIsDefault && !bIsDefault) return -1;
+        if (!aIsDefault && bIsDefault) return 1;
+        return a.name.localeCompare(b.name);
+      });
+      
+      setModels(sortedModels);
       setLastUpdated(new Date());
       setLoading(false);
     } catch (err) {
@@ -82,58 +107,196 @@ const MLModels = () => {
     fetchModels();
   }, []);
 
-  const triggerTraining = async () => {
-    if (isTraining) return;
-
-    // Check if analytics type is supported
-    if (trainingParams.analytics_type !== 'latency') {
-      setTrainingMessage({ 
-        type: 'info', 
-        text: `${trainingParams.analytics_type.charAt(0).toUpperCase() + trainingParams.analytics_type.slice(1)} analytics type will be supported in the future. Currently only 'Latency' is available.` 
+  // Re-sort models when config is loaded
+  useEffect(() => {
+    if (config && models.length > 0) {
+      const sortedModels = [...models].sort((a, b) => {
+        const aIsDefault = isDefaultModel(a.name);
+        const bIsDefault = isDefaultModel(b.name);
+        
+        if (aIsDefault && !bIsDefault) return -1;
+        if (!aIsDefault && bIsDefault) return 1;
+        return a.name.localeCompare(b.name);
       });
-      return;
+      
+      // Only update if the order actually changed
+      if (JSON.stringify(sortedModels.map(m => m.name)) !== JSON.stringify(models.map(m => m.name))) {
+        setModels(sortedModels);
+      }
     }
+  }, [config]);
+
+  const fetchTrainingInfo = async (model) => {
+    setLoadingTrainingInfo(true);
+    setTrainingInfo(null);
+    
+    try {
+      // Extract analytics type, horizon, and model type from model name
+      // Expected format: analytics_model_horizon (e.g., latency_lstm_60)
+      const parts = model.name.split('_');
+      const analytics_type = parts[0] || 'latency';
+      const model_type = parts[1] || 'xgboost';
+      const horizon = parts[2] || '60';
+      
+      const response = await fetch(`${mlUrl}/api/v1/training/${analytics_type}/${horizon}/${model_type}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      setTrainingInfo(data);
+    } catch (err) {
+      console.warn('Using mock training info - backend not available:', err.message);
+      // Use mock data as fallback
+      setTrainingInfo({
+        model_name: model.name,
+        model_version: model.latest_versions?.[0]?.version || 'N/A',
+        last_training_time: Date.now() / 1000 - 3600,
+        training_loss: 0.08,
+        samples_used: 2400,
+        features_used: 18,
+        run_id: model.latest_versions?.[0]?.run_id || 'N/A'
+      });
+    } finally {
+      setLoadingTrainingInfo(false);
+    }
+  };
+
+
+
+  const handleModelTraining = async (model) => {
+    // Extract analytics type, horizon, and model type from model name
+    // Expected format: analytics_type_model_type_horizon (e.g., latency_xgboost_60)
+    const parts = model.name.split('_');
+    const analytics_type = parts[0] || 'latency';
+    const model_type = parts[1] || 'xgboost';
+    const horizon = parseInt(parts[2]) || 60;
 
     setIsTraining(true);
     setTrainingMessage(null);
-
+    
     try {
       const response = await fetch(`${mlUrl}/api/v1/training`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(trainingParams),
+        body: JSON.stringify({ analytics_type, horizon, model_type }),
       });
 
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       
       const data = await response.json();
-      setTrainingMessage({ type: 'success', text: data.message || 'Training started successfully!' });
+      setTrainingMessage({ type: 'success', text: `Training started for ${model.name}` });
       
       // Refresh models after a delay
       setTimeout(fetchModels, 2000);
     } catch (err) {
       console.warn('Training request - using mock response:', err.message);
-      setTrainingMessage({ type: 'success', text: 'Training started successfully! (Mock)' });
+      setTrainingMessage({ type: 'success', text: `Training started for ${model.name} (Mock)` });
     } finally {
       setIsTraining(false);
     }
   };
 
+  const handleSetAsDefault = async (model) => {
+    // Extract analytics type, horizon, and model type from model name
+    const parts = model.name.split('_');
+    const analytics_type = parts[0] || 'latency';
+    const model_type = parts[1] || 'xgboost';
+    const horizon = parseInt(parts[2]) || 60;
+
+    setTrainingMessage(null);
+
+    try {
+      const response = await fetch(`${mlUrl}/api/v1/config`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ analytics_type, horizon, model_type }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      setTrainingMessage({ 
+        type: 'success', 
+        text: `${model.name} is now the default model for ${analytics_type} with ${horizon}s horizon` 
+      });
+      
+      // Refresh config from context to get updated default models
+      if (refetchConfig) {
+        await refetchConfig();
+      }
+    } catch (err) {
+      console.error('Failed to set default model:', err.message);
+      setTrainingMessage({ 
+        type: 'error', 
+        text: `Failed to set as default: ${err.message}` 
+      });
+    }
+  };
+
   const ModelCard = ({ model }) => {
-    const latestVersion = model.latest_versions && model.latest_versions.length > 0 ? model.latest_versions[0] : null;
+    const latestVersion = model.latest_versions && model.latest_versions.length > 0 ? model.latest_versions[model.latest_versions.length - 1] : null;
     
     return (
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">{model.name || 'Unnamed Model'}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-gray-900">{model.name || 'Unnamed Model'}</h3>
+              {isDefaultModel(model.name) && (
+                <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
+                  default
+                </span>
+              )}
+            </div>
             <p className="text-sm text-gray-500 mt-1">
-              Versions: {model.latest_versions?.length || 0}
+              Version: <span className="font-mono font-medium text-gray-900 bg-gray-100 px-2 py-0.5 rounded">v{latestVersion?.version || 'N/A'}</span>
             </p>
           </div>
-          {/* <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-            Active
-          </span> */}
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2 w-full">
+              <button
+                onClick={() => {
+                  setSelectedModel(model);
+                  setShowModal(true);
+                  fetchTrainingInfo(model);
+                }}
+                className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center justify-center gap-1.5"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Info
+              </button>
+              <button
+                onClick={() => handleModelTraining(model)}
+                disabled={isTraining}
+                className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Train
+              </button>
+            </div>
+            {!isDefaultModel(model.name) && (
+              <button
+                onClick={() => handleSetAsDefault(model)}
+                className="w-full px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-950 text-white hover:bg-blue-950 transition-colors flex items-center justify-center gap-1.5"
+                title="Set as default model"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                </svg>
+                Set Default
+              </button>
+            )}
+          </div>
         </div>
         
         <div className="space-y-2 text-sm">
@@ -141,7 +304,7 @@ const MLModels = () => {
             <div className="flex justify-between">
               <span className="text-gray-600">Created:</span>
               <span className="font-medium text-gray-900">
-                {new Date(model.creation_timestamp * 1000).toLocaleDateString()}
+                {new Date(model.creation_timestamp).toLocaleDateString()}
               </span>
             </div>
           )}
@@ -149,7 +312,7 @@ const MLModels = () => {
             <div className="flex justify-between">
               <span className="text-gray-600">Last Updated:</span>
               <span className="font-medium text-gray-900">
-                {new Date(model.last_updated_timestamp * 1000).toLocaleDateString()}
+                {new Date(model.last_updated_timestamp).toLocaleDateString()}
               </span>
             </div>
           )}
@@ -198,8 +361,119 @@ const MLModels = () => {
     );
   };
 
+  // Training Info Modal Component
+  const TrainingInfoModal = () => {
+    if (!showModal || !selectedModel) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          {/* Header */}
+          <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-bold text-gray-900">Last Training Session Info</h3>
+              <p className="text-sm text-gray-600 mt-1">{selectedModel.name}</p>
+            </div>
+            <button
+              onClick={() => setShowModal(false)}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="p-6 space-y-6">
+            {loadingTrainingInfo ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="mt-4 text-sm text-gray-600">Loading training info...</p>
+                </div>
+              </div>
+            ) : trainingInfo ? (
+              <>
+                {/* Model Info */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <span className="text-sm font-semibold text-blue-900">Model: {trainingInfo.model_name}</span>
+                  </div>
+                </div>
+
+                {/* Training Info Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-xs text-gray-600 mb-1">Last Training Time</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {new Date(trainingInfo.last_training_time * 1000).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-xs text-gray-600 mb-1">Model Version</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      v{trainingInfo.model_version}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-xs text-gray-600 mb-1">Samples Used</p>
+                    <p className="text-sm font-medium text-gray-900">{trainingInfo.samples_used?.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-xs text-gray-600 mb-1">Features Used</p>
+                    <p className="text-sm font-medium text-gray-900">{trainingInfo.features_used}</p>
+                  </div>
+                </div>
+
+                {/* Performance Metrics */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3">Training Metrics</h4>
+                  <div className="grid grid-cols-1 gap-4">
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                      <p className="text-xs text-gray-600 mb-1">Training Loss</p>
+                      <p className="text-2xl font-bold text-gray-900">{trainingInfo.training_loss?.toFixed(4)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Run ID */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3">MLflow Run Details</h4>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-600">Run ID:</span>
+                      <span className="font-mono text-gray-900 text-xs break-all">{trainingInfo.run_id}</span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-12">
+                <p className="text-gray-500">No training information available</p>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4">
+            <button
+              onClick={() => setShowModal(false)}
+              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="space-y-6">
+    <>
+      <TrainingInfoModal />
+      <div className="space-y-6">
       {/* Header Section */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
         <div className="flex items-center justify-between">
@@ -226,85 +500,18 @@ const MLModels = () => {
         </div>
       </div>
 
-      {/* Training Section */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Train New Model</h3>
-        
-        {trainingMessage && (
-          <div className={`mb-4 p-3 rounded-lg ${
-            trainingMessage.type === 'success'
-              ? 'bg-green-50 border border-green-200 text-green-800'
-              : trainingMessage.type === 'info'
-              ? 'bg-blue-50 border border-blue-200 text-blue-800'
-              : 'bg-red-50 border border-red-200 text-red-800'
-          }`}>
-            <p className="text-sm font-medium">{trainingMessage.text}</p>
-          </div>
-        )}
-        
-        <div className="flex flex-col md:flex-row gap-4 items-end">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Analytics Type</label>
-            <select
-              value={trainingParams.analytics_type}
-              onChange={(e) => setTrainingParams({ ...trainingParams, analytics_type: e.target.value })}
-              disabled={isTraining}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-            >
-              <option value="latency">Latency</option>
-              <option value="throughput">Throughput</option>
-              <option value="signal_strength">Signal Strength</option>
-            </select>
-          </div>
-          
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Horizon (seconds)</label>
-            <input
-              type="number"
-              value={trainingParams.horizon}
-              onChange={(e) => setTrainingParams({ ...trainingParams, horizon: Number.parseInt(e.target.value) })}
-              disabled={isTraining}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-            />
-          </div>
-          
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Model Type</label>
-            <select
-              value={trainingParams.model_type}
-              onChange={(e) => setTrainingParams({ ...trainingParams, model_type: e.target.value })}
-              disabled={isTraining}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-            >
-              <option value="xgboost">XGBoost</option>
-              <option value="random_forest">Random Forest</option>
-              <option value="lstm">LSTM</option>
-            </select>
-          </div>
-          
-          <button
-            onClick={triggerTraining}
-            disabled={isTraining}
-            className={`px-6 py-2 font-semibold rounded-lg transition-all ${
-              isTraining
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg'
-            }`}
-          >
-            {isTraining ? (
-              <span className="flex items-center">
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Training...
-              </span>
-            ) : (
-              'Start Training'
-            )}
-          </button>
+      {/* Training Status */}
+      {trainingMessage && (
+        <div className={`p-3 rounded-lg ${
+          trainingMessage.type === 'success'
+            ? 'bg-green-50 border border-green-200 text-green-800'
+            : trainingMessage.type === 'info'
+            ? 'bg-blue-50 border border-blue-200 text-blue-800'
+            : 'bg-red-50 border border-red-200 text-red-800'
+        }`}>
+          <p className="text-sm font-medium">{trainingMessage.text}</p>
         </div>
-      </div>
+      )}
 
       {/* Models Grid */}
       {loading && models.length === 0 ? (
@@ -349,8 +556,8 @@ const MLModels = () => {
           </div>
         </>
       )}
-    </div>
-  );
+      </div>
+    </>  );
 };
 
 export default MLModels;

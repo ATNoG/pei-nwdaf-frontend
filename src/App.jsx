@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
 import MLModels from './pages/MLModels';
 import Analytics from './pages/Analytics';
+import { ConfigProvider } from './contexts/ConfigContext';
 
 function AppContent() {
   const location = useLocation();
@@ -66,7 +67,9 @@ function AppContent() {
 function App() {
   return (
     <Router>
-      <AppContent />
+      <ConfigProvider>
+        <AppContent />
+      </ConfigProvider>
     </Router>
   );
 }
