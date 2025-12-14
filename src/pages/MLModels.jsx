@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 
 const MLModels = () => {
-  const trainUrl = import.meta.env.VITE_TRAIN_URL;
-  const modelsUrl = import.meta.env.VITE_MODELS_URL;
+  //const mlUrl = import.meta.env.VITE_ML_URL;
+  const mlUrl = '/pei-ml'
+
 
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -57,7 +58,7 @@ const MLModels = () => {
     try {
       setError(null);
       setLoading(true);
-      const response = await fetch(`${modelsUrl}`);
+      const response = await fetch(`${mlUrl}/ml/models`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -84,11 +85,20 @@ const MLModels = () => {
   const triggerTraining = async () => {
     if (isTraining) return;
 
+    // Check if analytics type is supported
+    if (trainingParams.analytics_type !== 'latency') {
+      setTrainingMessage({ 
+        type: 'info', 
+        text: `${trainingParams.analytics_type.charAt(0).toUpperCase() + trainingParams.analytics_type.slice(1)} analytics type will be supported in the future. Currently only 'Latency' is available.` 
+      });
+      return;
+    }
+
     setIsTraining(true);
     setTrainingMessage(null);
 
     try {
-      const response = await fetch(`${trainUrl}`, {
+      const response = await fetch(`${mlUrl}/api/v1/training`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(trainingParams),
@@ -121,9 +131,9 @@ const MLModels = () => {
               Versions: {model.latest_versions?.length || 0}
             </p>
           </div>
-          <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+          {/* <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
             Active
-          </span>
+          </span> */}
         </div>
         
         <div className="space-y-2 text-sm">
@@ -153,10 +163,35 @@ const MLModels = () => {
         
         {latestVersion && (
           <div className="mt-4 pt-4 border-t border-gray-200">
-            <p className="text-xs font-semibold text-gray-700 mb-2">Latest Version Info</p>
-            <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto max-h-32">
-              {JSON.stringify(latestVersion, null, 2)}
-            </pre>
+            <p className="text-xs font-semibold text-gray-700 mb-2">Latest Version</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-600">Version:</span>
+                <span className="font-mono font-medium text-gray-900 bg-gray-100 px-2 py-1 rounded">
+                  v{latestVersion.version}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-600">Stage:</span>
+                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                  latestVersion.stage === 'Production' 
+                    ? 'bg-green-100 text-green-800' 
+                    : latestVersion.stage === 'Staging'
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {latestVersion.stage}
+                </span>
+              </div>
+              {latestVersion.run_id && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-600">Run ID:</span>
+                  <span className="font-mono text-gray-700 text-xs truncate max-w-[180px]" title={latestVersion.run_id}>
+                    {latestVersion.run_id}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -199,6 +234,8 @@ const MLModels = () => {
           <div className={`mb-4 p-3 rounded-lg ${
             trainingMessage.type === 'success'
               ? 'bg-green-50 border border-green-200 text-green-800'
+              : trainingMessage.type === 'info'
+              ? 'bg-blue-50 border border-blue-200 text-blue-800'
               : 'bg-red-50 border border-red-200 text-red-800'
           }`}>
             <p className="text-sm font-medium">{trainingMessage.text}</p>

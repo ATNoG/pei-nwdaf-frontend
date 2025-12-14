@@ -3,7 +3,9 @@ import ServiceStatusOverview from '../components/ServiceStatusOverview';
 import DataTable from '../components/DataTable';
 
 const Dashboard = () => {
-  const rawDataUrl = import.meta.env.VITE_RAW_DATA_URL;
+  //const rawDataUrl = import.meta.env.VITE_RAW_DATA_URL;
+  const rawDataUrl = '/data-ingestion';
+
   
   // Column definitions for raw data table (from CSV) - All 36 columns (matching actual data structure)
   const rawDataColumns = [

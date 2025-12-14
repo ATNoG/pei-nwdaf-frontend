@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 
 const Analytics = () => {
-  const cellsUrl = import.meta.env.VITE_CELLS_URL;
-  const analyticsUrl = import.meta.env.VITE_ANALYTICS_URL;
+  //const dataStorageUrl = import.meta.env.VITE_DATA_STORAGE_URL;
+  const dataStorageUrl = '/data-storage';
+ ///const mlUrl = import.meta.env.VITE_ML_URL;
+  const mlUrl = '/pei-ml'
   const [formData, setFormData] = useState({
     analytics_type: 'latency',
     cell_id: 26379009,
@@ -23,7 +25,7 @@ const Analytics = () => {
   useEffect(() => {
     const fetchCells = async () => {
       try {
-        const response = await fetch(`${cellsUrl}`);
+        const response = await fetch(`${dataStorageUrl}/api/v1/cell`);
         if (response.ok) {
           const data = await response.json();
           setCellList(data);
@@ -92,12 +94,19 @@ const Analytics = () => {
 
   const fetchPrediction = async (e) => {
     e.preventDefault();
+    
+    // Check if analytics type is supported
+    if (formData.analytics_type !== 'latency') {
+      setError(`${formData.analytics_type.charAt(0).toUpperCase() + formData.analytics_type.slice(1)} analytics type will be supported in the future. Currently only 'Latency' is available.`);
+      return;
+    }
+    
     setLoading(true);
     setError(null);
     setPrediction(null);
 
     try {
-      const response = await fetch(`${analyticsUrl}`, {
+      const response = await fetch(`${mlUrl}/api/v1/analytics`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -246,7 +255,6 @@ const Analytics = () => {
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex items-start space-x-3">
-            <span className="text-2xl">⚠️</span>
             <div>
               <p className="font-semibold text-red-900 mb-1">Error</p>
               <p className="text-sm text-red-800">{error}</p>
