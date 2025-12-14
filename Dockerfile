@@ -11,4 +11,4 @@ COPY . .
 EXPOSE 5173
 
 # Ensure Vite listens on all interfaces so host can access it when containerized
-CMD [ "npm", "run", "dev"]
+CMD [ "npm", "run", "dev", "--", "--host", "0.0.0.0"]
