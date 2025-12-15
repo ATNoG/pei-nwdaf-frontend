@@ -32,15 +32,9 @@ export const ConfigProvider = ({ children }) => {
       setConfig(data);
       setLoading(false);
     } catch (err) {
-      console.warn('Failed to fetch config - backend not available:', err.message);
-      // Use mock data as fallback
-      setConfig({
-        analytics_types: ['latency', 'throughput', 'signal_strength'],
-        model_types: ['xgboost', 'random_forest', 'lstm'],
-        horizons: [30, 60, 120, 300],
-        default_horizon: 60
-      });
-      setError(null); // Clear error since we have mock data
+      console.error('Failed to fetch config:', err.message);
+      setError(`Failed to load configuration from ML service: ${err.message}`);
+      setConfig(null);
       setLoading(false);
     }
   };
