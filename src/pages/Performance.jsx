@@ -66,36 +66,44 @@ const Performance = () => {
       if (pingIntervalRef.current) {
         clearInterval(pingIntervalRef.current);
       }
+      setError('Disconnected from WebSocket. Attempting to reconnect...');
     },
     onError: (err) => {
       console.error('Performance WebSocket error:', err);
-      setError('Error connecting to WebSocket. Please check your network connection.');
+      setError('Error connecting to WebSocket. Please check your network connection and ensure the ML service is running.');
     },
     onMessage: (message) => {
       try {
         if (message.type === 'initial_status' || message.type === 'status_response') {
-          setPerformanceData(message.data);
-          const sizes = extractWindowSizes(message.data);
-          setWindowSizes(sizes);
-          setError(null); // Clear any previous errors when we receive data
+          // Only process if we have actual data
+          if (message.data && Object.keys(message.data).length > 0) {
+            setPerformanceData(message.data);
+            const sizes = extractWindowSizes(message.data);
+            setWindowSizes(sizes);
+            setError(null); // Clear any previous errors when we receive data
+          }
         } else if (message.type === 'performance_update') {
-          setPerformanceData(prevData => {
-            const updatedData = { ...prevData };
-            updatedData[message.model_key] = message.data;
-            
-            // If new window size detected, add to window sizes
-            const allSizes = extractWindowSizes(updatedData);
-            setWindowSizes(allSizes);
-            
-            return updatedData;
-          });
-          setError(null); // Clear any previous errors when we receive updates
+          // Only process if we have actual data
+          if (message.data && message.model_key) {
+            setPerformanceData(prevData => {
+              const updatedData = { ...prevData };
+              updatedData[message.model_key] = message.data;
+              
+              // If new window size detected, add to window sizes
+              const allSizes = extractWindowSizes(updatedData);
+              setWindowSizes(allSizes);
+              
+              return updatedData;
+            });
+            setError(null); // Clear any previous errors when we receive updates
+          }
         } else if (message.type === 'pong') {
           // Heartbeat response received
           console.log('WebSocket heartbeat');
         }
       } catch (err) {
         console.error('Error parsing WebSocket message:', err);
+        setError('Error processing WebSocket data. Please try refreshing the page.');
       }
     }
   });
@@ -294,7 +302,8 @@ const Performance = () => {
       {isConnected && Object.keys(performanceData).length === 0 && !error && (
         <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
           <div className="text-center py-8">
-            <p className="text-gray-600">Connected to WebSocket. Waiting for performance data...</p>
+            <p className="text-gray-600">Connected to WebSocket but no performance data available.</p>
+            <p className="text-sm text-gray-500 mt-2">The ML service might not have generated any performance metrics yet.</p>
           </div>
         </div>
       )}
@@ -308,7 +317,7 @@ const Performance = () => {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              <p className="text-gray-600">Connecting to WebSocket...</p>
+              <p className="text-gray-600">Connecting to WebSocket for performance data...</p>
             </div>
           </div>
         </div>

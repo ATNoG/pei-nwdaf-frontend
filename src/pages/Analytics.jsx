@@ -8,11 +8,11 @@ const Analytics = () => {
  ///const mlUrl = import.meta.env.VITE_ML_URL;
   const mlUrl = '/pei-ml'
   const { config, loading: configLoading } = useConfig();
-  
+
   const [formData, setFormData] = useState({
     analytics_type: 'latency',
     cell_index: 26379009,
-    horizon: 60,
+    horizon: 60
   });
 
   const [prediction, setPrediction] = useState(null);
@@ -21,8 +21,7 @@ const Analytics = () => {
   const [cellList, setCellList] = useState([]);
   const [loadingCells, setLoadingCells] = useState(true);
 
-  // Mock cell data
-  const mockCells = [26379009, 26379010, 26379011, 26379012, 26379013];
+
 
   // Fetch available cells on mount
   useEffect(() => {
@@ -35,13 +34,8 @@ const Analytics = () => {
           if (data.length > 0 && !formData.cell_index) {
             setFormData(prev => ({ ...prev, cell_index: data[0] }));
           }
-        }
-      } catch (err) {
-        console.warn('Using mock cell data - backend not available:', err.message);
-        // Use mock data as fallback
-        setCellList(mockCells);
-        if (!formData.cell_index) {
-          setFormData(prev => ({ ...prev, cell_index: mockCells[0] }));
+        } else {
+          throw new Error(`Server responded with status: ${response.status}`);
         }
       } finally {
         setLoadingCells(false);
@@ -58,52 +52,17 @@ const Analytics = () => {
     }));
   };
 
-  // Mock prediction generator
-  const getMockPrediction = () => {
-    const baseValue = formData.analytics_type === 'latency' ? 45.5 : 
-                     formData.analytics_type === 'throughput' ? 85.2 :
-                     formData.analytics_type === 'signal_strength' ? -92.3 : 1.2;
-    
-    const now = Math.floor(Date.now() / 1000);
-    
-    return {
-      interval: `${formData.horizon}s`,
-      predicted_value: baseValue + (Math.random() * 10 - 5),
-      confidence: 0.85 + (Math.random() * 0.1),
-      data: {
-        rsrp_mean: -96.28571428571429,
-        rsrp_max: -90,
-        rsrp_min: -100,
-        rsrp_std: 4.268463449507354,
-        sinr_mean: 14.714285714285714,
-        sinr_max: 17,
-        sinr_min: 12,
-        sinr_std: 1.8156825980064073,
-        rsrq_mean: -11.642857142857142,
-        rsrq_max: -10,
-        rsrq_min: -14,
-        rsrq_std: 1.5984195491000024,
-        cqi_mean: 12.428571428571429,
-        cqi_max: 14,
-        cqi_min: 10,
-        cqi_std: 1.4525460784051258,
-        primary_bandwidth: 20000,
-        ul_bandwidth: 20000
-      },
-      target_start_time: now,
-      target_end_time: now + formData.horizon
-    };
-  };
+
 
   const fetchPrediction = async (e) => {
     e.preventDefault();
-    
+
     // Check if analytics type is supported
     if (formData.analytics_type !== 'latency') {
       setError(`${formData.analytics_type.charAt(0).toUpperCase() + formData.analytics_type.slice(1)} analytics type will be supported in the future. Currently only 'Latency' is available.`);
       return;
     }
-    
+
     setLoading(true);
     setError(null);
     setPrediction(null);
@@ -124,10 +83,8 @@ const Analytics = () => {
       const data = await response.json();
       setPrediction(data);
     } catch (err) {
-      console.warn('Using mock prediction - backend not available:', err.message);
-      // Use mock data as fallback
-      setPrediction(getMockPrediction());
-      setError(null); // Clear error since we have mock data
+      console.error('Error fetching prediction:', err.message);
+      setError(`Failed to fetch prediction: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -190,7 +147,7 @@ const Analytics = () => {
                 disabled={loadingCells}
                 loading={loadingCells}
                 formatOption={(cell) => cell.toString()}
-                filterOption={(cell, searchTerm) => 
+                filterOption={(cell, searchTerm) =>
                   cell.toString().includes(searchTerm)
                 }
               />
@@ -271,7 +228,7 @@ const Analytics = () => {
 
           <div className="p-6">
             {/* Key Metrics (neutral styling) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
               <div className="bg-white rounded-lg p-4 border border-gray-200">
                 <p className="text-sm text-gray-600 font-medium mb-1">Predicted Value</p>
                 <p className="text-3xl font-bold text-gray-900">
@@ -290,6 +247,13 @@ const Analytics = () => {
                 <p className="text-sm text-gray-600 font-medium mb-1">Interval</p>
                 <p className="text-3xl font-bold text-gray-900">
                   {prediction.interval || 'N/A'}
+                </p>
+              </div>
+
+              <div className="bg-white rounded-lg p-4 border border-gray-200">
+                <p className="text-sm text-gray-600 font-medium mb-1">Used Model</p>
+                <p className="text-lg font-bold text-gray-900 truncate" title={prediction.used_model || 'N/A'}>
+                  {prediction.used_model || 'N/A'}
                 </p>
               </div>
             </div>

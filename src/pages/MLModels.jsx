@@ -39,12 +39,12 @@ const MLModels = () => {
         setTrainingStatus(message.data || {});
       } else if (message.type === 'training_update') {
         const { model_name, data } = message;
-        
+
         setTrainingStatus(prev => ({
           ...prev,
           [model_name]: data
         }));
-        
+
         setTrainingLogs(prev => ({
           ...prev,
           [model_name]: [
@@ -99,7 +99,7 @@ const MLModels = () => {
 
   const isDefaultModel = (modelName) => {
     if (!config?.inference_types) return false;
-    
+
     return config.inference_types.some(inference => {
       const expectedName = `${inference.name}_${inference.default_model}_${inference.horizon}`;
       return modelName === expectedName;
@@ -125,34 +125,32 @@ const MLModels = () => {
       setError(null);
       setLoading(true);
       const response = await fetch(`${mlUrl}/ml/models`);
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const data = await response.json();
       const modelsArray = Array.isArray(data) ? data : [data];
-      
+
       // Sort models: default models first, then alphabetically
       const sortedModels = [...modelsArray].sort((a, b) => {
         const aIsDefault = isDefaultModel(a.name);
         const bIsDefault = isDefaultModel(b.name);
-        
+
         if (aIsDefault && !bIsDefault) return -1;
         if (!aIsDefault && bIsDefault) return 1;
         return a.name.localeCompare(b.name);
       });
-      
+
       setModels(sortedModels);
       setLastUpdated(new Date());
       setLoading(false);
     } catch (err) {
-      console.warn('Using mock data - backend not available:', err.message);
-      // Use mock data as fallback
-      setModels(mockModels);
-      setLastUpdated(new Date());
+      console.error('Failed to fetch models:', err.message);
+      setError(`Failed to load models from ML service: ${err.message}`);
+      setModels([]);
       setLoading(false);
-      setError(null); // Clear error since we have mock data
     }
   };
 
@@ -166,12 +164,12 @@ const MLModels = () => {
       const sortedModels = [...models].sort((a, b) => {
         const aIsDefault = isDefaultModel(a.name);
         const bIsDefault = isDefaultModel(b.name);
-        
+
         if (aIsDefault && !bIsDefault) return -1;
         if (!aIsDefault && bIsDefault) return 1;
         return a.name.localeCompare(b.name);
       });
-      
+
       // Only update if the order actually changed
       if (JSON.stringify(sortedModels.map(m => m.name)) !== JSON.stringify(models.map(m => m.name))) {
         setModels(sortedModels);
@@ -182,7 +180,7 @@ const MLModels = () => {
   const fetchTrainingInfo = async (model) => {
     setLoadingTrainingInfo(true);
     setTrainingInfo(null);
-    
+
     try {
       // Extract analytics type, horizon, and model type from model name
       // Expected format: analytics_model_horizon (e.g., latency_lstm_60)
@@ -190,27 +188,19 @@ const MLModels = () => {
       const analytics_type = parts[0] || 'latency';
       const model_type = parts[1] || 'xgboost';
       const horizon = parts[2] || '60';
-      
+
       const response = await fetch(`${mlUrl}/api/v1/training/${analytics_type}/${horizon}/${model_type}`);
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const data = await response.json();
       setTrainingInfo(data);
     } catch (err) {
-      console.warn('Using mock training info - backend not available:', err.message);
-      // Use mock data as fallback
-      setTrainingInfo({
-        model_name: model.name,
-        model_version: model.latest_versions?.[0]?.version || 'N/A',
-        last_training_time: Date.now() / 1000 - 3600,
-        training_loss: 0.08,
-        samples_used: 2400,
-        features_used: 18,
-        run_id: model.latest_versions?.[0]?.run_id || 'N/A'
-      });
+      console.error('Failed to fetch training info:', err.message);
+      setTrainingInfoError(`Failed to load training information: ${err.message}`);
+      setTrainingInfo(null);
     } finally {
       setLoadingTrainingInfo(false);
     }
@@ -228,7 +218,7 @@ const MLModels = () => {
 
     setIsTraining(true);
     setTrainingMessage(null);
-    
+
     try {
       const response = await fetch(`${mlUrl}/api/v1/training`, {
         method: 'POST',
@@ -237,15 +227,15 @@ const MLModels = () => {
       });
 
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      
+
       const data = await response.json();
       setTrainingMessage({ type: 'success', text: `Training started for ${model.name}` });
-      
+
       // Refresh models after a delay
       setTimeout(fetchModels, 2000);
     } catch (err) {
-      console.warn('Training request - using mock response:', err.message);
-      setTrainingMessage({ type: 'success', text: `Training started for ${model.name} (Mock)` });
+      console.error('Failed to start training:', err.message);
+      setTrainingMessage({ type: 'error', text: `Failed to start training for ${model.name}: ${err.message}` });
     } finally {
       setIsTraining(false);
     }
@@ -271,29 +261,29 @@ const MLModels = () => {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
       }
-      
+
       const data = await response.json();
-      setTrainingMessage({ 
-        type: 'success', 
-        text: `${model.name} is now the default model for ${analytics_type} with ${horizon}s horizon` 
+      setTrainingMessage({
+        type: 'success',
+        text: `${model.name} is now the default model for ${analytics_type} with ${horizon}s horizon`
       });
-      
+
       // Refresh config from context to get updated default models
       if (refetchConfig) {
         await refetchConfig();
       }
     } catch (err) {
-      console.error('Failed to set default model:', err.message);
-      setTrainingMessage({ 
-        type: 'error', 
-        text: `Failed to set as default: ${err.message}` 
+      console.error('Failed to force model:', err.message);
+      setTrainingMessage({
+        type: 'error',
+        text: `Failed to set as default: ${err.message}`
       });
     }
   };
 
   const ModelCard = ({ model }) => {
     const latestVersion = model.latest_versions && model.latest_versions.length > 0 ? model.latest_versions[model.latest_versions.length - 1] : null;
-    
+
     return (
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
         <div className="flex items-start justify-between mb-4">
@@ -302,7 +292,7 @@ const MLModels = () => {
               <h3 className="text-lg font-semibold text-gray-900">{model.name || 'Unnamed Model'}</h3>
               {isDefaultModel(model.name) && (
                 <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
-                  default
+                  in use
                 </span>
               )}
 
@@ -351,19 +341,16 @@ const MLModels = () => {
             {!isDefaultModel(model.name) && (
               <button
                 onClick={() => handleSetAsDefault(model)}
-                className="w-full px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-950 text-white hover:bg-blue-950 transition-colors flex items-center justify-center gap-1.5"
+                className="w-full px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-blue-950 transition-colors flex items-center justify-center gap-1.5"
                 title="Set as default model"
               >
 
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                </svg>
-                Set Default
+                Force
               </button>
             )}
           </div>
         </div>
-        
+
         <div className="space-y-2 text-sm">
           {model.creation_timestamp && (
             <div className="flex justify-between">
@@ -382,20 +369,20 @@ const MLModels = () => {
             </div>
           )}
         </div>
-        
+
         {model.description && (
           <p className="mt-4 text-sm text-gray-600 border-t border-gray-200 pt-3">
             {model.description}
           </p>
         )}
-        
+
         {/* Training Status Component - Gets data from parent WebSocket */}
-        <TrainingStatus 
-          modelName={model.name} 
-          trainingStatus={trainingStatus[model.name]} 
-          trainingLogs={trainingLogs[model.name]} 
+        <TrainingStatus
+          modelName={model.name}
+          trainingStatus={trainingStatus[model.name]}
+          trainingLogs={trainingLogs[model.name]}
         />
-        
+
         {latestVersion && (
           <div className="mt-4 pt-4 border-t border-gray-200">
             <p className="text-xs font-semibold text-gray-700 mb-2">Latest Version</p>
@@ -409,8 +396,8 @@ const MLModels = () => {
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-600">Stage:</span>
                 <span className={`px-2 py-1 rounded text-xs font-medium ${
-                  latestVersion.stage === 'Production' 
-                    ? 'bg-green-100 text-green-800' 
+                  latestVersion.stage === 'Production'
+                    ? 'bg-green-100 text-green-800'
                     : latestVersion.stage === 'Staging'
                     ? 'bg-yellow-100 text-yellow-800'
                     : 'bg-gray-100 text-gray-800'
@@ -629,14 +616,14 @@ const MLModels = () => {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {models.map((model, index) => (
-              <ModelCard 
-                key={model.name || model.id || index} 
+              <ModelCard
+                key={model.name || model.id || index}
                 model={model}
               />
             ))}
           </div>
 
-          
+
           <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 text-center">
             <p className="text-sm text-gray-600">
               Total Models: <span className="font-semibold text-gray-900">{models.length}</span>
