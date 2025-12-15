@@ -11,7 +11,7 @@ const Analytics = () => {
   
   const [formData, setFormData] = useState({
     analytics_type: 'latency',
-    cell_id: 26379009,
+    cell_index: 26379009,
     horizon: 60,
   });
 
@@ -32,16 +32,16 @@ const Analytics = () => {
         if (response.ok) {
           const data = await response.json();
           setCellList(data);
-          if (data.length > 0 && !formData.cell_id) {
-            setFormData(prev => ({ ...prev, cell_id: data[0] }));
+          if (data.length > 0 && !formData.cell_index) {
+            setFormData(prev => ({ ...prev, cell_index: data[0] }));
           }
         }
       } catch (err) {
         console.warn('Using mock cell data - backend not available:', err.message);
         // Use mock data as fallback
         setCellList(mockCells);
-        if (!formData.cell_id) {
-          setFormData(prev => ({ ...prev, cell_id: mockCells[0] }));
+        if (!formData.cell_index) {
+          setFormData(prev => ({ ...prev, cell_index: mockCells[0] }));
         }
       } finally {
         setLoadingCells(false);
@@ -54,7 +54,7 @@ const Analytics = () => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: name === 'cell_id' || name === 'horizon' ? Number.parseInt(value) : value,
+      [name]: name === 'cell_index' || name === 'horizon' ? Number.parseInt(value) : value,
     }));
   };
 
@@ -184,12 +184,12 @@ const Analytics = () => {
               </label>
               <SearchableDropdown
                 options={cellList}
-                value={formData.cell_id}
-                onChange={(cell) => setFormData(prev => ({ ...prev, cell_id: cell }))}
+                value={formData.cell_index}
+                onChange={(cell) => setFormData(prev => ({ ...prev, cell_index: cell }))}
                 placeholder={loadingCells ? "Loading cells..." : cellList.length > 0 ? "Search or select a cell..." : "Enter cell ID manually"}
                 disabled={loadingCells}
                 loading={loadingCells}
-                formatOption={(cell) => `Cell ${cell}`}
+                formatOption={(cell) => cell.toString()}
                 filterOption={(cell, searchTerm) => 
                   cell.toString().includes(searchTerm)
                 }
@@ -266,7 +266,7 @@ const Analytics = () => {
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-green-50 to-blue-50">
             <h3 className="text-lg font-semibold text-gray-900">Prediction Results</h3>
-            <p className="text-sm text-gray-600">Analytics prediction for Cell ID: {formData.cell_id}</p>
+            <p className="text-sm text-gray-600">Analytics prediction for Cell ID: {formData.cell_index}</p>
           </div>
 
           <div className="p-6">

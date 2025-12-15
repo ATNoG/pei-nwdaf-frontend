@@ -17,19 +17,21 @@ export default defineConfig({
 				target: rawTarget,
 				changeOrigin: true,
 				secure: false,
-				rewrite: (path) => path.replace(/^\/data-ingestion/, '')
+				rewrite: (path) => path.replace(/^\/data-ingestion/, ''),
+				ws: true
 			},
 			'/data-storage': {
 				target: storageTarget,
 				changeOrigin: true,
 				secure: false,
 				rewrite: (path) => path.replace(/^\/data-storage/, '')
-			}
-			,'/pei-ml': {
+			},
+			'/pei-ml': {
 				target: mlTarget,
 				changeOrigin: true,
 				secure: false,
-				rewrite: (path) => path.replace(/^\/pei-ml/, '')
+				rewrite: (path) => path.replace(/^\/pei-ml/, ''),
+				ws: true
 			}
 		}
 	}

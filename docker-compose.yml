@@ -1,26 +1,54 @@
 services:
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: pei-nwdaf-frontend
+  #---- Reverse Proxy
+  nginx:
+    image: pei-nginx:latest
+    container_name: nginx
     ports:
-      - "${FRONTEND_PORT:-5173}:5173"
+      - "${NGINX_PORT1}:${NGINX_PORT1}"
+      - "${NGINX_PORT2}:${NGINX_PORT2}"
     environment:
-      - VITE_RAW_DATA_URL=${RAW_DATA_URL:-http://data-ingestion:7000}
-      - VITE_DATA_STORAGE_URL=${DATA_STORAGE_URL:-http://data-storage:8000}
-      - VITE_ML_URL=${ML_URL:-http://pei-ml:8060}
-    develop:
-      watch:
-        - action: sync
-          path: ./src
-          target: /app/src
+      - KEYCLOAK_HOST=${KEYCLOAK_HOST}
+      - KEYCLOAK_PORT=${KEYCLOAK_PORT}
+      - POLICY_HOST=${POLICY_HOST}
+      - POLICY_PORT=${POLICY_PORT}
+      - DASHBOARD_HOST=${DASHBOARD_HOST}
+      - DASHBOARD_PORT=${DASHBOARD_PORT}
+      - ML_HOST=${ML_HOST}
+      - ML_PORT=${ML_PORT}
+      - DECISION_HOST=${DECISION_HOST}
+      - DECISION_PORT=${DECISION_PORT}
+      - DATA_INGESTION_HOST=${DATA_INGESTION_HOST}
+      - DATA_INGESTION_PORT=${DATA_INGESTION_PORT}
+    healthcheck:
+      test: ["CMD-SHELL", "service nginx status"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 15s
     networks:
       - nwdaf-network
     restart: unless-stopped
 
-volumes:
-  node_modules:
+  #---- Frontend
+  frontend:
+    image: frontend:latest
+    container_name: frontend
+    ports:
+      - "5173:5173"
+    # volumes:
+    #   - .:/app
+    #   - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+      - HOST=0.0.0.0
+      - VITE_RAW_DATA_URL=${VITE_RAW_DATA_URL}
+      - VITE_DATA_STORAGE_URL=${VITE_DATA_STORAGE_URL}
+      - VITE_ML_URL=${VITE_ML_URL}
+    working_dir: /app
+    networks:
+      - nwdaf-network
+    restart: unless-stopped
 
 networks:
   nwdaf-network:
