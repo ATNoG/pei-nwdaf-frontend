@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
 import { useConfig } from '../contexts/ConfigContext';
 import { useWebSocket } from '../hooks/useWebSocket';
+import TrainingStatus from '../components/TrainingStatus';
 
 const MLModels = () => {
   //const mlUrl = import.meta.env.VITE_ML_URL;
@@ -15,36 +16,35 @@ const MLModels = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
-  
+
   // Modal state
   const [showModal, setShowModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [selectedModel, setSelectedModel] = useState(null);
   const [trainingInfo, setTrainingInfo] = useState(null);
   const [loadingTrainingInfo, setLoadingTrainingInfo] = useState(false);
-  
+
   // Training state
   const [isTraining, setIsTraining] = useState(false);
   const [trainingMessage, setTrainingMessage] = useState(null);
-  
-  // WebSocket state for training status
+
+  // Single WebSocket for all training status
   const [trainingStatus, setTrainingStatus] = useState({});
   const [trainingLogs, setTrainingLogs] = useState({});
-  
-  // WebSocket connection for training status
-  const { isConnected: wsConnected } = useWebSocket(wsUrl, {
+
+  useWebSocket(wsUrl, {
     enabled: true,
     onMessage: (message) => {
       if (message.type === 'initial_status') {
         setTrainingStatus(message.data || {});
       } else if (message.type === 'training_update') {
         const { model_name, data } = message;
+        
         setTrainingStatus(prev => ({
           ...prev,
           [model_name]: data
         }));
         
-        // Add to logs
         setTrainingLogs(prev => ({
           ...prev,
           [model_name]: [
@@ -53,7 +53,7 @@ const MLModels = () => {
               timestamp: new Date(),
               ...data
             }
-          ].slice(-50) // Keep last 50 log entries
+          ]
         }));
       }
     },
@@ -293,9 +293,6 @@ const MLModels = () => {
 
   const ModelCard = ({ model }) => {
     const latestVersion = model.latest_versions && model.latest_versions.length > 0 ? model.latest_versions[model.latest_versions.length - 1] : null;
-    const modelStatus = trainingStatus[model.name];
-    const modelLogs = trainingLogs[model.name] || [];
-    const recentLogs = modelLogs.slice(-3);
     
     return (
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
@@ -308,11 +305,7 @@ const MLModels = () => {
                   default
                 </span>
               )}
-              {modelStatus && modelStatus.status === 'training' && (
-                <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-full animate-pulse">
-                  training
-                </span>
-              )}
+
             </div>
             <div className="flex items-center gap-2 mt-2">
               <p className="text-sm text-gray-500">
@@ -361,6 +354,7 @@ const MLModels = () => {
                 className="w-full px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-950 text-white hover:bg-blue-950 transition-colors flex items-center justify-center gap-1.5"
                 title="Set as default model"
               >
+
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                 </svg>
@@ -395,70 +389,12 @@ const MLModels = () => {
           </p>
         )}
         
-        {/* Training Status Section */}
-        {modelStatus && (
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-semibold text-gray-700">Training Status</p>
-              {modelLogs.length > 3 && (
-                <button
-                  onClick={() => {
-                    setSelectedModel(model);
-                    setShowStatusModal(true);
-                  }}
-                  className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-                >
-                  View Full Log
-                </button>
-              )}
-            </div>
-            
-            {/* Progress Bar */}
-            {modelStatus.current_epoch !== undefined && modelStatus.total_epochs && (
-              <div className="mb-2">
-                <div className="flex justify-between text-xs text-gray-600 mb-1">
-                  <span>Epoch {modelStatus.current_epoch}/{modelStatus.total_epochs}</span>
-                  <span>{Math.round((modelStatus.current_epoch / modelStatus.total_epochs) * 100)}%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${(modelStatus.current_epoch / modelStatus.total_epochs) * 100}%` }}
-                  ></div>
-                </div>
-              </div>
-            )}
-            
-            {/* Recent Logs */}
-            <div className="space-y-1 max-h-24 overflow-hidden">
-              {recentLogs.map((log, idx) => (
-                <div
-                  key={idx}
-                  className="text-xs text-gray-600 font-mono bg-gray-50 px-2 py-1 rounded"
-                  style={{
-                    opacity: 1 - (recentLogs.length - idx - 1) * 0.3
-                  }}
-                >
-                  <span className="text-gray-400">{log.timestamp?.toLocaleTimeString()}</span>
-                  {' - '}
-                  Epoch {log.current_epoch}/{log.total_epochs}
-                  {log.loss !== undefined && log.loss !== null && ` - Loss: ${log.loss.toFixed(4)}`}
-                </div>
-              ))}
-            </div>
-            
-            {modelStatus.status === 'completed' && (
-              <div className="mt-2 text-xs text-green-600 font-medium">
-                ✓ {modelStatus.message || 'Training completed'}
-              </div>
-            )}
-            {modelStatus.status === 'error' && (
-              <div className="mt-2 text-xs text-red-600 font-medium">
-                ✗ {modelStatus.message || 'Training failed'}
-              </div>
-            )}
-          </div>
-        )}
+        {/* Training Status Component - Gets data from parent WebSocket */}
+        <TrainingStatus 
+          modelName={model.name} 
+          trainingStatus={trainingStatus[model.name]} 
+          trainingLogs={trainingLogs[model.name]} 
+        />
         
         {latestVersion && (
           <div className="mt-4 pt-4 border-t border-gray-200">
@@ -493,104 +429,6 @@ const MLModels = () => {
             </div>
           </div>
         )}
-      </div>
-    );
-  };
-
-  // Training Status Logs Modal Component
-  const TrainingStatusModal = () => {
-    if (!showStatusModal || !selectedModel) return null;
-    
-    const modelLogs = trainingLogs[selectedModel.name] || [];
-    const logsEndRef = useRef(null);
-    const logsContainerRef = useRef(null);
-    const [autoScroll, setAutoScroll] = useState(true);
-
-    // Handle scroll to detect if user scrolled up
-    const handleScroll = () => {
-      if (logsContainerRef.current) {
-        const { scrollTop, scrollHeight, clientHeight } = logsContainerRef.current;
-        const isNearBottom = scrollHeight - scrollTop - clientHeight < 50;
-        setAutoScroll(isNearBottom);
-      }
-    };
-
-    // Auto-scroll to bottom when new logs arrive (only if autoScroll is enabled)
-    useEffect(() => {
-      if (autoScroll && logsEndRef.current) {
-        logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
-      }
-    }, [modelLogs, autoScroll]);
-    
-    return (
-      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-          {/* Header */}
-          <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-            <div>
-              <h3 className="text-xl font-bold text-gray-900">Training Status Logs</h3>
-              <p className="text-sm text-gray-600 mt-1">{selectedModel.name}</p>
-            </div>
-            <button
-              onClick={() => setShowStatusModal(false)}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Content */}
-          <div 
-            ref={logsContainerRef}
-            onScroll={handleScroll}
-            className="p-6 max-h-[60vh] overflow-y-auto"
-          >
-            {modelLogs.length > 0 ? (
-              <div className="space-y-2 font-mono text-sm">
-                {modelLogs.map((log, idx) => (
-                  <div
-                    key={idx}
-                    className={`px-4 py-2 rounded ${
-                      log.status === 'error' ? 'bg-red-50 text-red-900' :
-                      log.status === 'completed' ? 'bg-green-50 text-green-900' :
-                      'bg-gray-50 text-gray-900'
-                    }`}
-                  >
-                    <div className="flex items-start gap-2">
-                      <span className="text-gray-500 text-xs">[{log.timestamp?.toLocaleTimeString()}]</span>
-                      <div className="flex-1">
-                        <div>
-                          Epoch {log.current_epoch}/{log.total_epochs}
-                          {log.loss !== undefined && log.loss !== null && ` - Loss: ${log.loss.toFixed(6)}`}
-                        </div>
-                        {log.message && (
-                          <div className="text-xs mt-1 opacity-75">{log.message}</div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                <div ref={logsEndRef} />
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <p className="text-gray-500">No training logs available</p>
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4">
-            <button
-              onClick={() => setShowStatusModal(false)}
-              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-            >
-              Close
-            </button>
-          </div>
-        </div>
       </div>
     );
   };
@@ -707,7 +545,6 @@ const MLModels = () => {
   return (
     <>
       <TrainingInfoModal />
-      <TrainingStatusModal />
       <div className="space-y-6">
       {/* Header Section */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
@@ -730,12 +567,7 @@ const MLModels = () => {
               </svg>
               Open in MLflow
             </a>
-            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-              <span className="text-xs text-gray-500">
-                {wsConnected ? 'Live' : 'Disconnected'}
-              </span>
-            </div>
+
             {lastUpdated && (
               <span className="text-xs text-gray-500">
                 Updated: {lastUpdated.toLocaleTimeString()}
@@ -797,9 +629,13 @@ const MLModels = () => {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {models.map((model, index) => (
-              <ModelCard key={model.id || index} model={model} />
+              <ModelCard 
+                key={model.name || model.id || index} 
+                model={model}
+              />
             ))}
           </div>
+
           
           <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 text-center">
             <p className="text-sm text-gray-600">
@@ -809,7 +645,8 @@ const MLModels = () => {
         </>
       )}
       </div>
-    </>  );
+    </>
+  );
 };
 
 export default MLModels;
