@@ -10,7 +10,7 @@ const Sidebar = () => {
 
   const navItems = [
     { name: 'Dashboard', icon: <FaHouse />, path: '/' },
-    { name: 'ML Models', icon: <FaRobot />, path: '/ml-models' },
+    { name: 'ML', icon: <FaRobot />, path: '/ml' },
     { name: 'Analytics', icon: <VscGraph />, path: '/analytics' },
     { name: 'Performance', icon: <FaChartLine />, path: '/performance' },
   ];
