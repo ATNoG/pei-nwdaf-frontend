@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { FaHouse } from 'react-icons/fa6';
 import { FaRobot } from 'react-icons/fa';
 import { VscGraph } from 'react-icons/vsc';
-import { FaBars, FaChevronLeft } from 'react-icons/fa';
+import { FaBars, FaChevronLeft, FaChartLine } from 'react-icons/fa';
 
 const Sidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(window.innerWidth < 1024);
@@ -12,6 +12,7 @@ const Sidebar = () => {
     { name: 'Dashboard', icon: <FaHouse />, path: '/' },
     { name: 'ML Models', icon: <FaRobot />, path: '/ml-models' },
     { name: 'Analytics', icon: <VscGraph />, path: '/analytics' },
+    { name: 'Performance', icon: <FaChartLine />, path: '/performance' },
   ];
 
   // Auto-collapse on small screens

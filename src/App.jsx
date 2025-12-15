@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
 import MLModels from './pages/MLModels';
 import Analytics from './pages/Analytics';
+import Performance from './pages/Performance';
 import { ConfigProvider } from './contexts/ConfigContext';
 
 function AppContent() {
@@ -18,6 +19,8 @@ function AppContent() {
         return 'ML Models';
       case '/analytics':
         return 'Analytics';
+      case '/performance':
+        return 'Performance';
       default:
         return 'AION';
     }
@@ -31,6 +34,8 @@ function AppContent() {
         return 'Browse and Manage ML Models from MLFlow Registry';
       case '/analytics':
         return 'Cell Analytics Predictions & Insights';
+      case '/performance':
+        return 'Real-time ML Model Performance Monitoring';
       default:
         return '';
     }
@@ -57,6 +62,7 @@ function AppContent() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/ml-models" element={<MLModels />} />
             <Route path="/analytics" element={<Analytics />} />
+            <Route path="/performance" element={<Performance />} />
           </Routes>
         </div>
       </div>
