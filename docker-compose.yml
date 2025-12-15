@@ -1,7 +1,7 @@
 services:
   #---- Reverse Proxy
   nginx:
-    image: pei-nginx:latest
+    build: ./revproxy/
     container_name: nginx
     ports:
       - "${NGINX_PORT1}:${NGINX_PORT1}"
@@ -31,7 +31,7 @@ services:
 
   #---- Frontend
   frontend:
-    image: frontend:latest
+    build: .
     container_name: frontend
     ports:
       - "5173:5173"
