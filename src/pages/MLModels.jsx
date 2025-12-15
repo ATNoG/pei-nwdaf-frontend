@@ -20,6 +20,7 @@ const MLModels = () => {
   // Modal state
   const [showModal, setShowModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedModel, setSelectedModel] = useState(null);
   const [trainingInfo, setTrainingInfo] = useState(null);
   const [loadingTrainingInfo, setLoadingTrainingInfo] = useState(false);
@@ -281,6 +282,82 @@ const MLModels = () => {
     }
   };
 
+  const handleDeleteModel = async (model) => {
+    if (!confirm(`Are you sure you want to delete ${model.name}? This action cannot be undone.`)) {
+      return;
+    }
+
+    setTrainingMessage(null);
+
+    try {
+      const response = await fetch(`${mlUrl}/api/v1/model/instance/${model.name}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setTrainingMessage({
+        type: 'success',
+        text: `Model ${model.name} deleted successfully`
+      });
+
+      // Refresh models list and config
+      await fetchModels();
+      if (refetchConfig) {
+        await refetchConfig();
+      }
+    } catch (err) {
+      console.error('Failed to delete model:', err.message);
+      setTrainingMessage({
+        type: 'error',
+        text: `Failed to delete model: ${err.message}`
+      });
+    }
+  };
+
+  const handleCreateModel = async (formData) => {
+    setTrainingMessage(null);
+
+    try {
+      const response = await fetch(`${mlUrl}/api/v1/model/instance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setTrainingMessage({
+        type: 'success',
+        text: `Model ${data.model_name} created successfully`
+      });
+
+      // Close modal and refresh
+      setShowCreateModal(false);
+      await fetchModels();
+      if (refetchConfig) {
+        await refetchConfig();
+      }
+
+      return true;
+    } catch (err) {
+      console.error('Failed to create model:', err.message);
+      setTrainingMessage({
+        type: 'error',
+        text: `Failed to create model: ${err.message}`
+      });
+      return false;
+    }
+  };
+
   const ModelCard = ({ model }) => {
     const latestVersion = model.latest_versions && model.latest_versions.length > 0 ? model.latest_versions[model.latest_versions.length - 1] : null;
 
@@ -338,16 +415,27 @@ const MLModels = () => {
                 Train
               </button>
             </div>
-            {!isDefaultModel(model.name) && (
+            <div className="flex gap-2 w-full">
+              {!isDefaultModel(model.name) && (
+                <button
+                  onClick={() => handleSetAsDefault(model)}
+                  className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1.5"
+                  title="Set as default model"
+                >
+                  Force
+                </button>
+              )}
               <button
-                onClick={() => handleSetAsDefault(model)}
-                className="w-full px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-blue-950 transition-colors flex items-center justify-center gap-1.5"
-                title="Set as default model"
+                onClick={() => handleDeleteModel(model)}
+                className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center justify-center gap-1.5"
+                title="Delete model instance"
               >
-
-                Force
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Delete
               </button>
-            )}
+            </div>
           </div>
         </div>
 
@@ -416,6 +504,147 @@ const MLModels = () => {
             </div>
           </div>
         )}
+      </div>
+    );
+  };
+
+  // Create Model Modal Component
+  const CreateModelModal = () => {
+    const [formData, setFormData] = useState({
+      analytics_type: 'latency',
+      horizon: 60,
+      model_type: 'lstm'
+    });
+    const [isCreating, setIsCreating] = useState(false);
+
+    if (!showCreateModal) return null;
+
+    const handleSubmit = async (e) => {
+      e.preventDefault();
+      setIsCreating(true);
+
+      const success = await handleCreateModel({
+        analytics_type: formData.analytics_type,
+        horizon: parseInt(formData.horizon),
+        model_type: formData.model_type
+      });
+
+      setIsCreating(false);
+    };
+
+    const availableModelTypes = config?.supported_model_types || [ 'ann', 'lstm'];
+    const availableAnalyticsTypes = config?.inference_types?.map(it => it.name) || ['latency'];
+    const availableHorizons = config?.inference_types?.map(it => it.horizon) || [60, 300];
+
+    return (
+      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+          {/* Header */}
+          <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-lg">
+            <div>
+              <h3 className="text-xl font-bold text-gray-900">Create new Instance</h3>
+              <p className="text-sm text-gray-600 mt-1">Instantiate a model</p>
+            </div>
+            <button
+              onClick={() => setShowCreateModal(false)}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            {/* Analytics Type */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Analytics Type
+              </label>
+              <select
+                value={formData.analytics_type}
+                onChange={(e) => setFormData({ ...formData, analytics_type: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                required
+              >
+                {[...new Set(availableAnalyticsTypes)].map(type => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Horizon */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Horizon (seconds)
+              </label>
+              <select
+                value={formData.horizon}
+                onChange={(e) => setFormData({ ...formData, horizon: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                required
+              >
+                {[...new Set(availableHorizons)].map(horizon => (
+                  <option key={horizon} value={horizon}>{horizon}s</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Model Type */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Model Type
+              </label>
+              <select
+                value={formData.model_type}
+                onChange={(e) => setFormData({ ...formData, model_type: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                required
+              >
+                {availableModelTypes.map(type => (
+                  <option key={type} value={type}>
+                    {type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Preview */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-xs text-blue-600 font-medium mb-1">Model Name Preview:</p>
+              <p className="text-sm font-mono text-blue-900">
+                {formData.analytics_type}_{formData.model_type}_{formData.horizon}
+              </p>
+            </div>
+
+            {/* Buttons */}
+            <div className="flex gap-3 pt-4">
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                disabled={isCreating}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isCreating}
+                className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isCreating ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Creating...
+                  </>
+                ) : (
+                  'Create Model'
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     );
   };
@@ -531,18 +760,29 @@ const MLModels = () => {
 
   return (
     <>
+      <CreateModelModal />
       <TrainingInfoModal />
       <div className="space-y-6">
       {/* Header Section */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex-1">
-            <h2 className="text-2xl font-bold text-gray-900">ML Models Registry</h2>
+            <h2 className="text-2xl font-bold text-gray-900">ML Registry</h2>
             <p className="text-sm text-gray-600 mt-1">
               Browse and manage ML models
             </p>
           </div>
           <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              New Instance
+            </button>
+
             <a
               href={mlflowUrl}
               target="_blank"

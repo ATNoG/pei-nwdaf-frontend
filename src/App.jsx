@@ -9,14 +9,14 @@ import { ConfigProvider } from './contexts/ConfigContext';
 
 function AppContent() {
   const location = useLocation();
-  
+
   // Get page title based on current route
   const getPageTitle = () => {
     switch (location.pathname) {
       case '/':
         return 'Dashboard';
-      case '/ml-models':
-        return 'ML Models';
+      case '/ml':
+        return 'ML';
       case '/analytics':
         return 'Analytics';
       case '/performance':
@@ -30,8 +30,8 @@ function AppContent() {
     switch (location.pathname) {
       case '/':
         return 'Real-time Network Monitoring & ML Control';
-      case '/ml-models':
-        return 'Browse and Manage ML Models from MLFlow Registry';
+      case '/ml':
+        return 'Browse and Manage model instances';
       case '/analytics':
         return 'Cell Analytics Predictions & Insights';
       case '/performance':
@@ -50,7 +50,7 @@ function AppContent() {
       <div className="flex-1 overflow-auto">
         {/* Header */}
         <header className="bg-gradient-to-r from-blue-500 to-blue-600 px-8 py-6 shadow-md">
-          <h1 className="text-3xl font-bold text-white">AION {getPageTitle()}</h1>
+          <h1 className="text-3xl font-bold text-white">{getPageTitle()}</h1>
           <p className="text-blue-50 mt-1">
             {getPageSubtitle()}
           </p>
@@ -60,7 +60,7 @@ function AppContent() {
         <div className="p-8">
           <Routes>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/ml-models" element={<MLModels />} />
+            <Route path="/ml" element={<MLModels />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/performance" element={<Performance />} />
           </Routes>
