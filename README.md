@@ -2,7 +2,11 @@
 
 Frontend dashboard for monitoring network analytics and ML-based resource control.
 
-## Como correr
+## Dev 
+```bash 
+docker compose up --build --watch
+
+```
 
 ### Instalação
 
