@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 
-const TrainingStatus = ({ modelName, trainingStatus, trainingLogs }) => {
+const TrainingStatus = memo(({ modelName, trainingStatus, trainingLogs }) => {
   const [showLogsModal, setShowLogsModal] = useState(false);
 
   const status = trainingStatus || null;
@@ -131,6 +131,10 @@ const TrainingStatus = ({ modelName, trainingStatus, trainingLogs }) => {
       )}
     </>
   );
-};
+}, (prevProps, nextProps) => {
+  // Only re-render if the training status or logs for this model have changed
+  return JSON.stringify(prevProps.trainingStatus) === JSON.stringify(nextProps.trainingStatus) &&
+         JSON.stringify(prevProps.trainingLogs) === JSON.stringify(nextProps.trainingLogs);
+});
 
 export default TrainingStatus;
