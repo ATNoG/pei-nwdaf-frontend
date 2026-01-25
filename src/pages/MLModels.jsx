@@ -3,11 +3,751 @@ import { useConfig } from '../contexts/ConfigContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import TrainingStatus from '../components/TrainingStatus';
 
+// Create Model Modal Component - Extracted to prevent re-mounting on parent re-render
+const CreateModelModal = ({ showCreateModal, setShowCreateModal, handleCreateModel, config, mlUrl }) => {
+  const [formData, setFormData] = useState({
+    analytics_type: 'latency',
+    horizon: 60,
+    model_type: 'lstm',
+    name: '',
+    config: {
+      training: {
+        learning_rate: 0.001,
+        optimizer: 'adam',
+        loss_function: 'mse',
+        max_epochs: 50,
+      },
+      architecture: {
+        hidden_size: 32,
+        num_layers: 2,
+        dropout: 0.2,
+        activation: 'relu',
+      },
+      sequence: {
+        sequence_length: 5,
+      }
+    }
+  });
+  const [isCreating, setIsCreating] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [configOptions, setConfigOptions] = useState(null);
+
+  // Fetch config options on mount
+  useEffect(() => {
+    const fetchConfigOptions = async () => {
+      try {
+        const response = await fetch(`${mlUrl}/api/v1/model/config-options`);
+        if (response.ok) {
+          const data = await response.json();
+          setConfigOptions(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch config options:', err);
+      }
+    };
+    fetchConfigOptions();
+  }, [mlUrl]);
+
+  if (!showCreateModal) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsCreating(true);
+
+    const requestBody = {
+      analytics_type: formData.analytics_type,
+      horizon: parseInt(formData.horizon),
+      model_type: formData.model_type,
+      name: formData.name,
+    };
+
+    // Only include config if user opened advanced settings
+    if (showAdvanced) {
+      requestBody.config = formData.config;
+    }
+
+    const success = await handleCreateModel(requestBody);
+
+    setIsCreating(false);
+  };
+
+  const availableModelTypes = configOptions?.model_types || [];
+  const availableAnalyticsTypes = configOptions?.analytics_types || [];
+  const availableHorizons = configOptions?.horizons || [];
+
+  return (
+    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-lg flex-shrink-0">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900">Create new Instance</h3>
+            <p className="text-sm text-gray-600 mt-1">Instantiate a model</p>
+          </div>
+          <button
+            onClick={() => setShowCreateModal(false)}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Form - Scrollable */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
+          {/* Model Name */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Model Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="my_custom_model"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              required
+            />
+          </div>
+
+          {/* Analytics Type */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Analytics Type
+            </label>
+            <select
+              value={formData.analytics_type}
+              onChange={(e) => setFormData({ ...formData, analytics_type: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              required
+            >
+              {[...new Set(availableAnalyticsTypes)].map(type => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Horizon */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Horizon (seconds)
+            </label>
+            <select
+              value={formData.horizon}
+              onChange={(e) => setFormData({ ...formData, horizon: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              required
+            >
+              {[...new Set(availableHorizons)].map(horizon => (
+                <option key={horizon} value={horizon}>{horizon}s</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Model Type */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Model Type
+            </label>
+            <select
+              value={formData.model_type}
+              onChange={(e) => setFormData({ ...formData, model_type: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              required
+            >
+              {availableModelTypes.map(type => (
+                <option key={type} value={type}>
+                  {type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Advanced Settings Toggle */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+            >
+              <svg
+                className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-90' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+              Advanced Settings
+            </button>
+          </div>
+
+          {/* Advanced Settings Panel */}
+          {showAdvanced && (
+            <div className="border border-gray-200 rounded-lg p-4 space-y-4 bg-gray-50">
+              {/* Training Config */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">Training</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Learning Rate</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={formData.config.training.learning_rate}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        config: {
+                          ...formData.config,
+                          training: { ...formData.config.training, learning_rate: parseFloat(e.target.value) }
+                        }
+                      })}
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Optimizer</label>
+                    <select
+                      value={formData.config.training.optimizer}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        config: {
+                          ...formData.config,
+                          training: { ...formData.config.training, optimizer: e.target.value }
+                        }
+                      })}
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      {configOptions?.optimizers?.map(opt => (
+                        <option key={opt} value={opt}>{opt.charAt(0).toUpperCase() + opt.slice(1)}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Loss Function</label>
+                    <select
+                      value={formData.config.training.loss_function}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        config: {
+                          ...formData.config,
+                          training: { ...formData.config.training, loss_function: e.target.value }
+                        }
+                      })}
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      {configOptions?.loss_functions?.map(fn => (
+                        <option key={fn} value={fn}>{fn.toUpperCase()}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Max Epochs</label>
+                    <input
+                      type="number"
+                      value={formData.config.training.max_epochs}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        config: {
+                          ...formData.config,
+                          training: { ...formData.config.training, max_epochs: parseInt(e.target.value) }
+                        }
+                      })}
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Architecture Config */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">Architecture</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Hidden Size</label>
+                    <input
+                      type="number"
+                      value={formData.config.architecture.hidden_size}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        config: {
+                          ...formData.config,
+                          architecture: { ...formData.config.architecture, hidden_size: parseInt(e.target.value) }
+                        }
+                      })}
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Num Layers</label>
+                    <input
+                      type="number"
+                      value={formData.config.architecture.num_layers}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        config: {
+                          ...formData.config,
+                          architecture: { ...formData.config.architecture, num_layers: parseInt(e.target.value) }
+                        }
+                      })}
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Dropout</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="1"
+                      value={formData.config.architecture.dropout}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        config: {
+                          ...formData.config,
+                          architecture: { ...formData.config.architecture, dropout: parseFloat(e.target.value) }
+                        }
+                      })}
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Activation</label>
+                    <select
+                      value={formData.config.architecture.activation}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        config: {
+                          ...formData.config,
+                          architecture: { ...formData.config.architecture, activation: e.target.value }
+                        }
+                      })}
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      {configOptions?.activations?.map(act => (
+                        <option key={act} value={act}>{act.charAt(0).toUpperCase() + act.slice(1).replace('_', ' ')}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sequence Config */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">Sequence</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Sequence Length</label>
+                    <input
+                      type="number"
+                      value={formData.config.sequence.sequence_length}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        config: {
+                          ...formData.config,
+                          sequence: { ...formData.config.sequence, sequence_length: parseInt(e.target.value) }
+                        }
+                      })}
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Preview */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p className="text-xs text-blue-600 font-medium mb-1">Model Name:</p>
+            <p className="text-sm font-mono text-blue-900">
+              {formData.name || `${formData.analytics_type}_${formData.model_type}_${formData.horizon}`}
+            </p>
+          </div>
+
+          {/* Buttons */}
+          <div className="flex gap-3 pt-4 flex-shrink-0 border-t border-gray-200 -mx-6 px-6 -mb-6 pb-6 bg-white">
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(false)}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+              disabled={isCreating}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isCreating}
+              className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isCreating ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Creating...
+                </>
+              ) : (
+                'Create Model'
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Training Info Modal Component - Extracted to prevent re-mounting on parent re-render
+const TrainingInfoModal = ({ showModal, setShowModal, selectedModel, loadingTrainingInfo, trainingInfo }) => {
+  if (!showModal || !selectedModel) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900">Last Training Session Info</h3>
+            <p className="text-sm text-gray-600 mt-1">{selectedModel.name}</p>
+          </div>
+          <button
+            onClick={() => setShowModal(false)}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          {loadingTrainingInfo ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-4 text-sm text-gray-600">Loading training info...</p>
+              </div>
+            </div>
+          ) : trainingInfo ? (
+            <>
+              {/* Model Info */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <span className="text-sm font-semibold text-blue-900">Model: {trainingInfo.model_name}</span>
+                </div>
+              </div>
+
+              {/* Training Info Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-xs text-gray-600 mb-1">Last Training Time</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {new Date(trainingInfo.last_training_time * 1000).toLocaleString()}
+                  </p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-xs text-gray-600 mb-1">Model Version</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    v{trainingInfo.model_version}
+                  </p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-xs text-gray-600 mb-1">Samples Used</p>
+                  <p className="text-sm font-medium text-gray-900">{trainingInfo.samples_used?.toLocaleString()}</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-xs text-gray-600 mb-1">Features Used</p>
+                  <p className="text-sm font-medium text-gray-900">{trainingInfo.features_used}</p>
+                </div>
+              </div>
+
+              {/* Performance Metrics */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">Training Metrics</h4>
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <p className="text-xs text-gray-600 mb-1">Training Loss</p>
+                    <p className="text-2xl font-bold text-gray-900">{trainingInfo.training_loss?.toFixed(4)}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Run ID */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">MLflow Run Details</h4>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-600">Run ID:</span>
+                    <span className="font-mono text-gray-900 text-xs break-all">{trainingInfo.run_id}</span>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-gray-500">No training information available</p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4">
+          <button
+            onClick={() => setShowModal(false)}
+            className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Model Details Modal Component - Shows full model configuration
+const ModelDetailsModal = ({ showModal, setShowModal, selectedModel, loadingDetails, modelDetails, mlUrl }) => {
+  if (!showModal || !selectedModel) return null;
+
+  if (loadingDetails) {
+    return (
+      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full">
+          <div className="p-12 flex items-center justify-center">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-4 text-sm text-gray-600">Loading model details...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!modelDetails) {
+    return (
+      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+          <div className="p-12 text-center">
+            <p className="text-gray-500">No model details available</p>
+            <button
+              onClick={() => setShowModal(false)}
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const config = modelDetails.config || {};
+
+  return (
+    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900">Model Details</h3>
+            <p className="text-sm text-gray-600 mt-1">{modelDetails.name}</p>
+          </div>
+          <button
+            onClick={() => setShowModal(false)}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Content - Scrollable */}
+        <div className="p-6 space-y-6 overflow-y-auto flex-1">
+          {/* Basic Info */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h4 className="text-sm font-semibold text-blue-900 mb-3">Basic Information</h4>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <span className="text-gray-600">Model Type:</span>
+                <span className="ml-2 font-medium text-gray-900">{modelDetails.model_type?.toUpperCase()}</span>
+              </div>
+              <div>
+                <span className="text-gray-600">Analytics Type:</span>
+                <span className="ml-2 font-medium text-gray-900">{modelDetails.analytics_type}</span>
+              </div>
+              <div>
+                <span className="text-gray-600">Horizon:</span>
+                <span className="ml-2 font-medium text-gray-900">{modelDetails.horizon}s</span>
+              </div>
+              <div>
+                <span className="text-gray-600">Stage:</span>
+                <span className={`ml-2 px-2 py-0.5 rounded text-xs font-medium ${
+                  modelDetails.stage === 'Production'
+                    ? 'bg-green-100 text-green-800'
+                    : modelDetails.stage === 'Staging'
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {modelDetails.stage || 'N/A'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Training Config */}
+          {config.training && (
+            <div>
+              <h4 className="text-sm font-semibold text-gray-900 mb-3">Training Configuration</h4>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-gray-600">Learning Rate:</span>
+                    <span className="ml-2 font-mono font-medium text-gray-900">{config.training.learning_rate}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Optimizer:</span>
+                    <span className="ml-2 font-medium text-gray-900">{config.training.optimizer}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Loss Function:</span>
+                    <span className="ml-2 font-medium text-gray-900">{config.training.loss_function}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Max Epochs:</span>
+                    <span className="ml-2 font-medium text-gray-900">{config.training.max_epochs}</span>
+                  </div>
+                  {config.training.batch_size && (
+                    <div>
+                      <span className="text-gray-600">Batch Size:</span>
+                      <span className="ml-2 font-medium text-gray-900">{config.training.batch_size}</span>
+                    </div>
+                  )}
+                  {config.training.early_stopping_patience && (
+                    <div>
+                      <span className="text-gray-600">Early Stopping:</span>
+                      <span className="ml-2 font-medium text-gray-900">{config.training.early_stopping_patience}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Architecture Config */}
+          {config.architecture && (
+            <div>
+              <h4 className="text-sm font-semibold text-gray-900 mb-3">Architecture Configuration</h4>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-gray-600">Hidden Size:</span>
+                    <span className="ml-2 font-medium text-gray-900">{config.architecture.hidden_size}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Num Layers:</span>
+                    <span className="ml-2 font-medium text-gray-900">{config.architecture.num_layers}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Dropout:</span>
+                    <span className="ml-2 font-medium text-gray-900">{config.architecture.dropout}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Activation:</span>
+                    <span className="ml-2 font-medium text-gray-900">{config.architecture.activation}</span>
+                  </div>
+                  {config.architecture.hidden_layers && (
+                    <div className="col-span-2">
+                      <span className="text-gray-600">Hidden Layers:</span>
+                      <span className="ml-2 font-mono text-xs text-gray-900">[{config.architecture.hidden_layers.join(', ')}]</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Sequence Config */}
+          {config.sequence && (
+            <div>
+              <h4 className="text-sm font-semibold text-gray-900 mb-3">Sequence Configuration</h4>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-gray-600">Sequence Length:</span>
+                    <span className="ml-2 font-medium text-gray-900">{config.sequence.sequence_length}</span>
+                  </div>
+                  {config.sequence.prediction_horizon && (
+                    <div>
+                      <span className="text-gray-600">Prediction Horizon:</span>
+                      <span className="ml-2 font-medium text-gray-900">{config.sequence.prediction_horizon}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Training Info */}
+          {modelDetails.last_training_time && (
+            <div>
+              <h4 className="text-sm font-semibold text-gray-900 mb-3">Training Information</h4>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <div className="grid grid-cols-1 gap-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Last Training:</span>
+                    <span className="font-medium text-gray-900">
+                      {new Date(modelDetails.last_training_time * 1000).toLocaleString()}
+                    </span>
+                  </div>
+                  {modelDetails.training_loss !== null && modelDetails.training_loss !== undefined && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Training Loss:</span>
+                      <span className="font-medium text-gray-900">{modelDetails.training_loss?.toFixed(4)}</span>
+                    </div>
+                  )}
+                  {modelDetails.run_id && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Run ID:</span>
+                      <span className="font-mono text-xs text-gray-900">{modelDetails.run_id}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex-shrink-0">
+          <div className="flex gap-3">
+            <a
+              href={`${mlUrl}/api/v1/model/instance/${modelDetails.name}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-center text-sm"
+            >
+              View JSON
+            </a>
+            <button
+              onClick={() => setShowModal(false)}
+              className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors text-sm"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const MLModels = () => {
   //const mlUrl = import.meta.env.VITE_ML_URL;
   const mlUrl = '/pei-ml'
   const mlflowUrl = import.meta.env.VITE_MLFLOW_URL || 'http://localhost:5000';
-  const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/pei-ml/ws/training/status`;
+  const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/pei-ml/api/v1/websocket/training/status`;
   const { config, loading: configLoading, error: configError, refetch: refetchConfig } = useConfig();
 
   //console.log('Config:', config, 'Loading:', configLoading, 'Error:', configError);
@@ -21,9 +761,12 @@ const MLModels = () => {
   const [showModal, setShowModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedModel, setSelectedModel] = useState(null);
   const [trainingInfo, setTrainingInfo] = useState(null);
   const [loadingTrainingInfo, setLoadingTrainingInfo] = useState(false);
+  const [modelDetails, setModelDetails] = useState(null);
+  const [loadingModelDetails, setLoadingModelDetails] = useState(false);
 
   // Training state
   const [isTraining, setIsTraining] = useState(false);
@@ -125,7 +868,7 @@ const MLModels = () => {
     try {
       setError(null);
       setLoading(true);
-      const response = await fetch(`${mlUrl}/ml/models`);
+      const response = await fetch(`${mlUrl}/api/v1/model/models`);
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -207,16 +950,28 @@ const MLModels = () => {
     }
   };
 
+  const fetchModelDetails = async (model) => {
+    setLoadingModelDetails(true);
+    setModelDetails(null);
 
+    try {
+      const response = await fetch(`${mlUrl}/api/v1/model/instance/${model.name}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setModelDetails(data);
+    } catch (err) {
+      console.error('Failed to fetch model details:', err.message);
+      setModelDetails(null);
+    } finally {
+      setLoadingModelDetails(false);
+    }
+  };
 
   const handleModelTraining = async (model) => {
-    // Extract analytics type, horizon, and model type from model name
-    // Expected format: analytics_type_model_type_horizon (e.g., latency_xgboost_60)
-    const parts = model.name.split('_');
-    const analytics_type = parts[0] || 'latency';
-    const model_type = parts[1] || 'xgboost';
-    const horizon = parseInt(parts[2]) || 60;
-
     setIsTraining(true);
     setTrainingMessage(null);
 
@@ -224,7 +979,7 @@ const MLModels = () => {
       const response = await fetch(`${mlUrl}/api/v1/training`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ analytics_type, horizon, model_type }),
+        body: JSON.stringify({ model_name: model.name }),
       });
 
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -393,6 +1148,20 @@ const MLModels = () => {
               <button
                 onClick={() => {
                   setSelectedModel(model);
+                  setShowDetailsModal(true);
+                  fetchModelDetails(model);
+                }}
+                className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors flex items-center justify-center gap-1.5"
+                title="View model configuration"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Details
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedModel(model);
                   setShowModal(true);
                   fetchTrainingInfo(model);
                 }}
@@ -508,260 +1277,30 @@ const MLModels = () => {
     );
   };
 
-  // Create Model Modal Component
-  const CreateModelModal = () => {
-    const [formData, setFormData] = useState({
-      analytics_type: 'latency',
-      horizon: 60,
-      model_type: 'lstm'
-    });
-    const [isCreating, setIsCreating] = useState(false);
-
-    if (!showCreateModal) return null;
-
-    const handleSubmit = async (e) => {
-      e.preventDefault();
-      setIsCreating(true);
-
-      const success = await handleCreateModel({
-        analytics_type: formData.analytics_type,
-        horizon: parseInt(formData.horizon),
-        model_type: formData.model_type
-      });
-
-      setIsCreating(false);
-    };
-
-    const availableModelTypes = config?.supported_model_types || [ 'ann', 'lstm'];
-    const availableAnalyticsTypes = config?.inference_types?.map(it => it.name) || ['latency'];
-    const availableHorizons = config?.inference_types?.map(it => it.horizon) || [60, 300];
-
-    return (
-      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-          {/* Header */}
-          <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-lg">
-            <div>
-              <h3 className="text-xl font-bold text-gray-900">Create new Instance</h3>
-              <p className="text-sm text-gray-600 mt-1">Instantiate a model</p>
-            </div>
-            <button
-              onClick={() => setShowCreateModal(false)}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="p-6 space-y-4">
-            {/* Analytics Type */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Analytics Type
-              </label>
-              <select
-                value={formData.analytics_type}
-                onChange={(e) => setFormData({ ...formData, analytics_type: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-              >
-                {[...new Set(availableAnalyticsTypes)].map(type => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Horizon */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Horizon (seconds)
-              </label>
-              <select
-                value={formData.horizon}
-                onChange={(e) => setFormData({ ...formData, horizon: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-              >
-                {[...new Set(availableHorizons)].map(horizon => (
-                  <option key={horizon} value={horizon}>{horizon}s</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Model Type */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Model Type
-              </label>
-              <select
-                value={formData.model_type}
-                onChange={(e) => setFormData({ ...formData, model_type: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-              >
-                {availableModelTypes.map(type => (
-                  <option key={type} value={type}>
-                    {type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Preview */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <p className="text-xs text-blue-600 font-medium mb-1">Model Name Preview:</p>
-              <p className="text-sm font-mono text-blue-900">
-                {formData.analytics_type}_{formData.model_type}_{formData.horizon}
-              </p>
-            </div>
-
-            {/* Buttons */}
-            <div className="flex gap-3 pt-4">
-              <button
-                type="button"
-                onClick={() => setShowCreateModal(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
-                disabled={isCreating}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isCreating}
-                className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isCreating ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Creating...
-                  </>
-                ) : (
-                  'Create Model'
-                )}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    );
-  };
-
-  // Training Info Modal Component
-  const TrainingInfoModal = () => {
-    if (!showModal || !selectedModel) return null;
-
-    return (
-      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-          {/* Header */}
-          <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-            <div>
-              <h3 className="text-xl font-bold text-gray-900">Last Training Session Info</h3>
-              <p className="text-sm text-gray-600 mt-1">{selectedModel.name}</p>
-            </div>
-            <button
-              onClick={() => setShowModal(false)}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Content */}
-          <div className="p-6 space-y-6">
-            {loadingTrainingInfo ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="mt-4 text-sm text-gray-600">Loading training info...</p>
-                </div>
-              </div>
-            ) : trainingInfo ? (
-              <>
-                {/* Model Info */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                    <span className="text-sm font-semibold text-blue-900">Model: {trainingInfo.model_name}</span>
-                  </div>
-                </div>
-
-                {/* Training Info Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-xs text-gray-600 mb-1">Last Training Time</p>
-                    <p className="text-sm font-medium text-gray-900">
-                      {new Date(trainingInfo.last_training_time * 1000).toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-xs text-gray-600 mb-1">Model Version</p>
-                    <p className="text-sm font-medium text-gray-900">
-                      v{trainingInfo.model_version}
-                    </p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-xs text-gray-600 mb-1">Samples Used</p>
-                    <p className="text-sm font-medium text-gray-900">{trainingInfo.samples_used?.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-xs text-gray-600 mb-1">Features Used</p>
-                    <p className="text-sm font-medium text-gray-900">{trainingInfo.features_used}</p>
-                  </div>
-                </div>
-
-                {/* Performance Metrics */}
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-900 mb-3">Training Metrics</h4>
-                  <div className="grid grid-cols-1 gap-4">
-                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                      <p className="text-xs text-gray-600 mb-1">Training Loss</p>
-                      <p className="text-2xl font-bold text-gray-900">{trainingInfo.training_loss?.toFixed(4)}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Run ID */}
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-900 mb-3">MLflow Run Details</h4>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-600">Run ID:</span>
-                      <span className="font-mono text-gray-900 text-xs break-all">{trainingInfo.run_id}</span>
-                    </div>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="text-center py-12">
-                <p className="text-gray-500">No training information available</p>
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4">
-            <button
-              onClick={() => setShowModal(false)}
-              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <>
-      <CreateModelModal />
-      <TrainingInfoModal />
+      <CreateModelModal
+        showCreateModal={showCreateModal}
+        setShowCreateModal={setShowCreateModal}
+        handleCreateModel={handleCreateModel}
+        config={config}
+        mlUrl={mlUrl}
+      />
+      <TrainingInfoModal
+        showModal={showModal}
+        setShowModal={setShowModal}
+        selectedModel={selectedModel}
+        loadingTrainingInfo={loadingTrainingInfo}
+        trainingInfo={trainingInfo}
+      />
+      <ModelDetailsModal
+        showModal={showDetailsModal}
+        setShowModal={setShowDetailsModal}
+        selectedModel={selectedModel}
+        loadingDetails={loadingModelDetails}
+        modelDetails={modelDetails}
+        mlUrl={mlUrl}
+      />
       <div className="space-y-6">
       {/* Header Section */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">

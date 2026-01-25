@@ -32,10 +32,10 @@ const Performance = () => {
   const [windowSizes, setWindowSizes] = useState([]);
   const [error, setError] = useState(null);
   const pingIntervalRef = useRef(null);
-  
+
   // Use the same WebSocket URL pattern as other parts of the app
-  const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/pei-ml/ws/performance/status`;
-  
+  const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/pei-ml/v1/ws/performance/status`;
+
   // Extract window sizes from the data
   const extractWindowSizes = (data) => {
     const windowSizes = new Set();
@@ -88,11 +88,11 @@ const Performance = () => {
             setPerformanceData(prevData => {
               const updatedData = { ...prevData };
               updatedData[message.model_key] = message.data;
-              
+
               // If new window size detected, add to window sizes
               const allSizes = extractWindowSizes(updatedData);
               setWindowSizes(allSizes);
-              
+
               return updatedData;
             });
             setError(null); // Clear any previous errors when we receive updates
@@ -111,10 +111,10 @@ const Performance = () => {
   // Prepare chart data for a specific window size
   const prepareChartData = (windowSize) => {
     // Filter cells by window size
-    const cellKeys = Object.keys(performanceData).filter(key => 
+    const cellKeys = Object.keys(performanceData).filter(key =>
       key.includes(`window_${windowSize}`)
     );
-    
+
     if (cellKeys.length === 0) {
       return null;
     }
@@ -122,16 +122,16 @@ const Performance = () => {
     // Extract all timestamps across all cells for this window size
     const allTimestamps = new Set();
     const cellData = {};
-    
+
     cellKeys.forEach(key => {
       const cell = performanceData[key];
       const cellId = cell.cell_index;
-      
+
       cellData[cellId] = {
         data: [],
         latest_mse: cell.latest_mse
       };
-      
+
       cell.history.forEach(item => {
         allTimestamps.add(item.timestamp);
         cellData[cellId].data.push({
@@ -140,10 +140,10 @@ const Performance = () => {
         });
       });
     });
-    
+
     // Sort timestamps
     const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b);
-    
+
     // Prepare datasets for each cell
     const datasets = [];
     const colors = [
@@ -158,14 +158,14 @@ const Performance = () => {
       'rgb(153, 102, 255)',
       'rgb(255, 159, 64)'
     ];
-    
+
     let colorIndex = 0;
     Object.keys(cellData).sort((a, b) => parseInt(a, 10) - parseInt(b, 10)).forEach(cellId => {
       const cell = cellData[cellId];
-      
+
       // Sort data by timestamp
       const sortedData = [...cell.data].sort((a, b) => a.x - b.x);
-      
+
       datasets.push({
         label: `Cell ${cellId}`,
         data: sortedData,
@@ -176,10 +176,10 @@ const Performance = () => {
         pointRadius: 3,
         pointHoverRadius: 5
       });
-      
+
       colorIndex++;
     });
-    
+
     return {
       labels: sortedTimestamps,
       datasets
@@ -250,8 +250,8 @@ const Performance = () => {
             </p>
           </div>
           <div className={`flex items-center space-x-2 px-3 py-1 rounded-full ${
-            isConnected 
-              ? 'bg-green-100 text-green-800' 
+            isConnected
+              ? 'bg-green-100 text-green-800'
               : 'bg-red-100 text-red-800'
           }`}>
             {isConnected ? (
@@ -281,11 +281,11 @@ const Performance = () => {
       {/* Charts for each window size */}
       {windowSizes.map(windowSize => {
         const chartData = prepareChartData(windowSize);
-        
+
         if (!chartData || chartData.datasets.length === 0) {
           return null;
         }
-        
+
         return (
           <div key={windowSize} className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
