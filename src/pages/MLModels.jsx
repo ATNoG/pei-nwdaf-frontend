@@ -3,8 +3,188 @@ import { useConfig } from '../contexts/ConfigContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import TrainingStatus from '../components/TrainingStatus';
 
+// Memoized ModelCard component - defined outside parent to prevent re-creation on each render
+const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefault, onDelete, isDefault, analyticsType, horizon, isTraining, trainingStatus, trainingLogs }) => {
+  const latestVersion = model.latest_versions && model.latest_versions.length > 0 ? model.latest_versions[model.latest_versions.length - 1] : null;
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-gray-900">{model.name || 'Unnamed Model'}</h3>
+            {isDefault && (
+              <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
+                in use
+              </span>
+            )}
+
+          </div>
+          <div className="flex items-center gap-2 mt-2">
+            <p className="text-sm text-gray-500">
+              Version: <span className="font-mono font-medium text-gray-900 bg-gray-100 px-2 py-0.5 rounded">v{latestVersion?.version || 'N/A'}</span>
+            </p>
+            <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">
+              {analyticsType}
+            </span>
+            {horizon && (
+              <span className="px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-700 rounded">
+                {horizon}s
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2 w-full">
+            <button
+              onClick={() => onShowDetails(model)}
+              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors flex items-center justify-center gap-1.5"
+              title="View model configuration"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Details
+            </button>
+            <button
+              onClick={() => onShowInfo(model)}
+              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center justify-center gap-1.5"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Info
+            </button>
+            <button
+              onClick={() => onTrain(model)}
+              disabled={isTraining}
+              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Train
+            </button>
+          </div>
+          <div className="flex gap-2 w-full">
+            {!isDefault && (
+              <button
+                onClick={() => onSetDefault(model)}
+                className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1.5"
+                title="Set as default model"
+              >
+                Force
+              </button>
+            )}
+            <button
+              onClick={() => onDelete(model)}
+              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center justify-center gap-1.5"
+              title="Delete model instance"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2 text-sm">
+        {model.creation_timestamp && (
+          <div className="flex justify-between">
+            <span className="text-gray-600">Created:</span>
+            <span className="font-medium text-gray-900">
+              {new Date(model.creation_timestamp).toLocaleDateString()}
+            </span>
+          </div>
+        )}
+        {model.last_updated_timestamp && (
+          <div className="flex justify-between">
+            <span className="text-gray-600">Last Updated:</span>
+            <span className="font-medium text-gray-900">
+              {new Date(model.last_updated_timestamp).toLocaleDateString()}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {model.description && (
+        <p className="mt-4 text-sm text-gray-600 border-t border-gray-200 pt-3">
+          {model.description}
+        </p>
+      )}
+
+      {/* Training Status Component - Gets data from parent WebSocket */}
+      <TrainingStatus
+        modelName={model.name}
+        trainingStatus={trainingStatus[model.name]}
+        trainingLogs={trainingLogs[model.name]}
+      />
+
+      {latestVersion && (
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          <p className="text-xs font-semibold text-gray-700 mb-2">Latest Version</p>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-600">Version:</span>
+              <span className="font-mono font-medium text-gray-900 bg-gray-100 px-2 py-1 rounded">
+                v{latestVersion.version}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-600">Stage:</span>
+              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                latestVersion.stage === 'Production'
+                  ? 'bg-green-100 text-green-800'
+                  : latestVersion.stage === 'Staging'
+                  ? 'bg-yellow-100 text-yellow-800'
+                  : 'bg-gray-100 text-gray-800'
+              }`}>
+                {latestVersion.stage}
+              </span>
+            </div>
+            {latestVersion.run_id && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-600">Run ID:</span>
+                <span className="font-mono text-gray-700 text-xs truncate max-w-[180px]" title={latestVersion.run_id}>
+                  {latestVersion.run_id}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  // Custom comparison function - only return true (skip re-render) if:
+  // 1. The model object is the same (shallow comparison of key properties)
+  // 2. The training status for THIS model hasn't changed
+  // 3. The training logs for THIS model haven't changed
+  // 4. The isDefault status hasn't changed
+  // 5. The isTraining state hasn't changed
+  // Note: We DON'T compare handler functions (onShowInfo, onTrain, etc.) because
+  // even though they're stable references, the inline () => fn(model) creates new closures.
+  // The key is that model data is what drives re-renders, not handler references.
+
+  const modelSame = prevProps.model.name === nextProps.model.name &&
+                   prevProps.model.creation_timestamp === nextProps.model.creation_timestamp &&
+                   prevProps.model.last_updated_timestamp === nextProps.model.last_updated_timestamp &&
+                   prevProps.model.description === nextProps.model.description &&
+                   JSON.stringify(prevProps.model.latest_versions) === JSON.stringify(nextProps.model.latest_versions);
+
+  const trainingStatusSame = JSON.stringify(prevProps.trainingStatus[prevProps.model.name]) === JSON.stringify(nextProps.trainingStatus[nextProps.model.name]);
+  const trainingLogsSame = JSON.stringify(prevProps.trainingLogs[prevProps.model.name]) === JSON.stringify(nextProps.trainingLogs[nextProps.model.name]);
+  const isDefaultSame = prevProps.isDefault === nextProps.isDefault;
+  const isTrainingSame = prevProps.isTraining === nextProps.isTraining;
+
+  return modelSame && trainingStatusSame && trainingLogsSame && isDefaultSame && isTrainingSame;
+});
+
 // Create Model Modal Component - Extracted to prevent re-mounting on parent re-render
-const CreateModelModal = ({ showCreateModal, setShowCreateModal, handleCreateModel, config, mlUrl }) => {
+const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCreateModel, config, mlUrl }) => {
   const [formData, setFormData] = useState({
     analytics_type: 'latency',
     horizon: 60,
@@ -394,10 +574,10 @@ const CreateModelModal = ({ showCreateModal, setShowCreateModal, handleCreateMod
       </div>
     </div>
   );
-};
+});
 
 // Training Info Modal Component - Extracted to prevent re-mounting on parent re-render
-const TrainingInfoModal = ({ showModal, setShowModal, selectedModel, loadingTrainingInfo, trainingInfo }) => {
+const TrainingInfoModal = memo(({ showModal, setShowModal, selectedModel, loadingTrainingInfo, trainingInfo }) => {
   if (!showModal || !selectedModel) return null;
 
   return (
@@ -503,10 +683,10 @@ const TrainingInfoModal = ({ showModal, setShowModal, selectedModel, loadingTrai
       </div>
     </div>
   );
-};
+});
 
 // Model Details Modal Component - Shows full model configuration
-const ModelDetailsModal = ({ showModal, setShowModal, selectedModel, loadingDetails, modelDetails, mlUrl }) => {
+const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadingDetails, modelDetails, mlUrl }) => {
   if (!showModal || !selectedModel) return null;
 
   if (loadingDetails) {
@@ -741,7 +921,7 @@ const ModelDetailsModal = ({ showModal, setShowModal, selectedModel, loadingDeta
       </div>
     </div>
   );
-};
+});
 
 const MLModels = () => {
   //const mlUrl = import.meta.env.VITE_ML_URL;
@@ -806,65 +986,30 @@ const MLModels = () => {
     }
   });
 
-  // Mock data for demonstration
-  const mockModels = [
-    {
-      name: "latency_prediction_xgboost",
-      creation_timestamp: 1702300800,
-      last_updated_timestamp: 1702387200,
-      description: "XGBoost model for predicting network latency with 60s horizon",
-      latest_versions: [
-        { version: "1", stage: "Production", run_id: "abc123" }
-      ]
-    },
-    {
-      name: "latency_prediction_lstm",
-      creation_timestamp: 1702214400,
-      last_updated_timestamp: 1702300800,
-      description: "LSTM neural network for time-series latency prediction",
-      latest_versions: [
-        { version: "3", stage: "Staging", run_id: "def456" },
-        { version: "2", stage: "Archived", run_id: "ghi789" },
-        { version: "1", stage: "Archived", run_id: "mkl789" }
-
-      ]
-    },
-    {
-      name: "latency_prediction_random_forest",
-      creation_timestamp: 1702128000,
-      last_updated_timestamp: 1702214400,
-      description: "Random Forest model for latency prediction",
-      latest_versions: [
-        { version: "2", stage: "Production", run_id: "jkl012" },
-        { version: "1", stage: "Archived", run_id: "mkl789" }
-      ]
-    }
-  ];
-
-  const isDefaultModel = (modelName) => {
+  const isDefaultModel = useCallback((modelName) => {
     if (!config?.inference_types) return false;
 
     return config.inference_types.some(inference => {
       const expectedName = `${inference.name}_${inference.default_model}_${inference.horizon}`;
       return modelName === expectedName;
     });
-  };
+  }, [config?.inference_types]);
 
   // Extract analytics type from model name (first part before underscore)
-  const getAnalyticsType = (modelName) => {
+  const getAnalyticsType = useCallback((modelName) => {
     const parts = modelName.split('_');
     return parts[0] || 'unknown';
-  };
+  }, []);
 
   // Extract horizon from model name (last numeric part)
-  const getHorizon = (modelName) => {
+  const getHorizon = useCallback((modelName) => {
     const parts = modelName.split('_');
     const lastPart = parts[parts.length - 1];
     const horizon = parseInt(lastPart);
     return !isNaN(horizon) ? horizon : null;
-  };
+  }, []);
 
-  const fetchModels = async () => {
+  const fetchModels = useCallback(async () => {
     try {
       setError(null);
       setLoading(true);
@@ -896,11 +1041,11 @@ const MLModels = () => {
       setModels([]);
       setLoading(false);
     }
-  };
+  }, [mlUrl, isDefaultModel]);
 
   useEffect(() => {
     fetchModels();
-  }, []);
+  }, [fetchModels]);
 
   // Re-sort models when config is loaded
   useEffect(() => {
@@ -919,9 +1064,9 @@ const MLModels = () => {
         setModels(sortedModels);
       }
     }
-  }, [config]);
+  }, [config, isDefaultModel, models]);
 
-  const fetchTrainingInfo = async (model) => {
+  const fetchTrainingInfo = useCallback(async (model) => {
     setLoadingTrainingInfo(true);
     setTrainingInfo(null);
 
@@ -948,9 +1093,9 @@ const MLModels = () => {
     } finally {
       setLoadingTrainingInfo(false);
     }
-  };
+  }, [mlUrl]);
 
-  const fetchModelDetails = async (model) => {
+  const fetchModelDetails = useCallback(async (model) => {
     setLoadingModelDetails(true);
     setModelDetails(null);
 
@@ -969,9 +1114,9 @@ const MLModels = () => {
     } finally {
       setLoadingModelDetails(false);
     }
-  };
+  }, [mlUrl]);
 
-  const handleModelTraining = async (model) => {
+  const handleModelTraining = useCallback(async (model) => {
     setIsTraining(true);
     setTrainingMessage(null);
 
@@ -995,9 +1140,9 @@ const MLModels = () => {
     } finally {
       setIsTraining(false);
     }
-  };
+  }, [mlUrl, fetchModels]);
 
-  const handleSetAsDefault = async (model) => {
+  const handleSetAsDefault = useCallback(async (model) => {
     // Extract analytics type, horizon, and model type from model name
     const parts = model.name.split('_');
     const analytics_type = parts[0] || 'latency';
@@ -1035,9 +1180,9 @@ const MLModels = () => {
         text: `Failed to set as default: ${err.message}`
       });
     }
-  };
+  }, [mlUrl, refetchConfig]);
 
-  const handleDeleteModel = async (model) => {
+  const handleDeleteModel = useCallback(async (model) => {
     if (!confirm(`Are you sure you want to delete ${model.name}? This action cannot be undone.`)) {
       return;
     }
@@ -1072,9 +1217,9 @@ const MLModels = () => {
         text: `Failed to delete model: ${err.message}`
       });
     }
-  };
+  }, [mlUrl, fetchModels, refetchConfig]);
 
-  const handleCreateModel = async (formData) => {
+  const handleCreateModel = useCallback(async (formData) => {
     setTrainingMessage(null);
 
     try {
@@ -1111,171 +1256,32 @@ const MLModels = () => {
       });
       return false;
     }
-  };
+  }, [mlUrl, fetchModels, refetchConfig]);
 
-  const ModelCard = ({ model }) => {
-    const latestVersion = model.latest_versions && model.latest_versions.length > 0 ? model.latest_versions[model.latest_versions.length - 1] : null;
+  // Stable handlers that accept model as parameter - these never change reference
+  const handleShowDetails = useCallback((model) => {
+    setSelectedModel(model);
+    setShowDetailsModal(true);
+    fetchModelDetails(model);
+  }, [fetchModelDetails]);
 
-    return (
-      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-semibold text-gray-900">{model.name || 'Unnamed Model'}</h3>
-              {isDefaultModel(model.name) && (
-                <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
-                  in use
-                </span>
-              )}
+  const handleShowInfo = useCallback((model) => {
+    setSelectedModel(model);
+    setShowModal(true);
+    fetchTrainingInfo(model);
+  }, [fetchTrainingInfo]);
 
-            </div>
-            <div className="flex items-center gap-2 mt-2">
-              <p className="text-sm text-gray-500">
-                Version: <span className="font-mono font-medium text-gray-900 bg-gray-100 px-2 py-0.5 rounded">v{latestVersion?.version || 'N/A'}</span>
-              </p>
-              <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">
-                {getAnalyticsType(model.name)}
-              </span>
-              {getHorizon(model.name) && (
-                <span className="px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-700 rounded">
-                  {getHorizon(model.name)}s
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-col gap-2">
-            <div className="flex gap-2 w-full">
-              <button
-                onClick={() => {
-                  setSelectedModel(model);
-                  setShowDetailsModal(true);
-                  fetchModelDetails(model);
-                }}
-                className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors flex items-center justify-center gap-1.5"
-                title="View model configuration"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Details
-              </button>
-              <button
-                onClick={() => {
-                  setSelectedModel(model);
-                  setShowModal(true);
-                  fetchTrainingInfo(model);
-                }}
-                className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center justify-center gap-1.5"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Info
-              </button>
-              <button
-                onClick={() => handleModelTraining(model)}
-                disabled={isTraining}
-                className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Train
-              </button>
-            </div>
-            <div className="flex gap-2 w-full">
-              {!isDefaultModel(model.name) && (
-                <button
-                  onClick={() => handleSetAsDefault(model)}
-                  className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1.5"
-                  title="Set as default model"
-                >
-                  Force
-                </button>
-              )}
-              <button
-                onClick={() => handleDeleteModel(model)}
-                className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center justify-center gap-1.5"
-                title="Delete model instance"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
+  const handleTrain = useCallback((model) => {
+    handleModelTraining(model);
+  }, [handleModelTraining]);
 
-        <div className="space-y-2 text-sm">
-          {model.creation_timestamp && (
-            <div className="flex justify-between">
-              <span className="text-gray-600">Created:</span>
-              <span className="font-medium text-gray-900">
-                {new Date(model.creation_timestamp).toLocaleDateString()}
-              </span>
-            </div>
-          )}
-          {model.last_updated_timestamp && (
-            <div className="flex justify-between">
-              <span className="text-gray-600">Last Updated:</span>
-              <span className="font-medium text-gray-900">
-                {new Date(model.last_updated_timestamp).toLocaleDateString()}
-              </span>
-            </div>
-          )}
-        </div>
+  const handleSetDefault = useCallback((model) => {
+    handleSetAsDefault(model);
+  }, [handleSetAsDefault]);
 
-        {model.description && (
-          <p className="mt-4 text-sm text-gray-600 border-t border-gray-200 pt-3">
-            {model.description}
-          </p>
-        )}
-
-        {/* Training Status Component - Gets data from parent WebSocket */}
-        <TrainingStatus
-          modelName={model.name}
-          trainingStatus={trainingStatus[model.name]}
-          trainingLogs={trainingLogs[model.name]}
-        />
-
-        {latestVersion && (
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <p className="text-xs font-semibold text-gray-700 mb-2">Latest Version</p>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-600">Version:</span>
-                <span className="font-mono font-medium text-gray-900 bg-gray-100 px-2 py-1 rounded">
-                  v{latestVersion.version}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-600">Stage:</span>
-                <span className={`px-2 py-1 rounded text-xs font-medium ${
-                  latestVersion.stage === 'Production'
-                    ? 'bg-green-100 text-green-800'
-                    : latestVersion.stage === 'Staging'
-                    ? 'bg-yellow-100 text-yellow-800'
-                    : 'bg-gray-100 text-gray-800'
-                }`}>
-                  {latestVersion.stage}
-                </span>
-              </div>
-              {latestVersion.run_id && (
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-600">Run ID:</span>
-                  <span className="font-mono text-gray-700 text-xs truncate max-w-[180px]" title={latestVersion.run_id}>
-                    {latestVersion.run_id}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
+  const handleDelete = useCallback((model) => {
+    handleDeleteModel(model);
+  }, [handleDeleteModel]);
 
   return (
     <>
@@ -1398,6 +1404,17 @@ const MLModels = () => {
               <ModelCard
                 key={model.name || model.id || index}
                 model={model}
+                onShowDetails={handleShowDetails}
+                onShowInfo={handleShowInfo}
+                onTrain={handleTrain}
+                onSetDefault={handleSetDefault}
+                onDelete={handleDelete}
+                isDefault={isDefaultModel(model.name)}
+                analyticsType={getAnalyticsType(model.name)}
+                horizon={getHorizon(model.name)}
+                isTraining={isTraining}
+                trainingStatus={trainingStatus}
+                trainingLogs={trainingLogs}
               />
             ))}
           </div>
