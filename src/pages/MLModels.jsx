@@ -212,17 +212,36 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [configOptions, setConfigOptions] = useState(null);
 
-  // Fetch config options on mount
+  // Fetch config options on mount (using /api/v1/config and transforming response)
   useEffect(() => {
     const fetchConfigOptions = async () => {
       try {
-        const response = await fetch(`${mlUrl}/api/v1/model/config-options`);
+        const response = await fetch(`${mlUrl}/api/v1/config`);
         if (response.ok) {
           const data = await response.json();
-          setConfigOptions(data);
+          // Transform config response to match expected format
+          const analyticsTypes = [...new Set(data.inference_types?.map(it => it.name) || [])];
+          const horizons = [...new Set(data.inference_types?.map(it => it.horizon) || [])];
+          setConfigOptions({
+            model_types: data.supported_model_types || ['lstm', 'ann'],
+            analytics_types: analyticsTypes.length > 0 ? analyticsTypes : ['latency'],
+            horizons: horizons.length > 0 ? horizons : [60, 300],
+            optimizers: ['adam', 'sgd', 'rmsprop'],
+            loss_functions: ['mse', 'mae', 'huber'],
+            activations: ['relu', 'tanh', 'sigmoid', 'leaky_relu']
+          });
         }
       } catch (err) {
         console.error('Failed to fetch config options:', err);
+        // Fallback defaults
+        setConfigOptions({
+          model_types: ['lstm', 'ann'],
+          analytics_types: ['latency'],
+          horizons: [60, 300],
+          optimizers: ['adam', 'sgd', 'rmsprop'],
+          loss_functions: ['mse', 'mae', 'huber'],
+          activations: ['relu', 'tanh', 'sigmoid', 'leaky_relu']
+        });
       }
     };
     fetchConfigOptions();
@@ -948,6 +967,11 @@ const MLModels = () => {
   const [modelDetails, setModelDetails] = useState(null);
   const [loadingModelDetails, setLoadingModelDetails] = useState(false);
 
+  // Default model selector state
+  const [selectedInferenceType, setSelectedInferenceType] = useState('');
+  const [selectedModelType, setSelectedModelType] = useState('');
+  const [isApplyingDefault, setIsApplyingDefault] = useState(false);
+
   // Training state
   const [isTraining, setIsTraining] = useState(false);
   const [trainingMessage, setTrainingMessage] = useState(null);
@@ -1009,11 +1033,92 @@ const MLModels = () => {
     return !isNaN(horizon) ? horizon : null;
   }, []);
 
+  // Get available model types for the selected inference type
+  const availableModelTypesForInference = useMemo(() => {
+    if (!selectedInferenceType || !models.length) return [];
+
+    const [analyticsType, horizon] = selectedInferenceType.split('_');
+    const matchingModels = models.filter(model => {
+      const parts = model.name.split('_');
+      return parts[0] === analyticsType && parts[parts.length - 1] === horizon;
+    });
+
+    // Extract model types (middle part of name)
+    const modelTypes = matchingModels.map(model => {
+      const parts = model.name.split('_');
+      return parts.slice(1, -1).join('_'); // Everything between analytics type and horizon
+    });
+
+    return [...new Set(modelTypes)]; // Remove duplicates
+  }, [selectedInferenceType, models]);
+
+  // Get current default for selected inference type
+  const currentDefaultForSelectedType = useMemo(() => {
+    if (!selectedInferenceType || !config?.inference_types) return '';
+
+    const [analyticsType, horizon] = selectedInferenceType.split('_');
+    const inferenceType = config.inference_types.find(
+      it => it.name === analyticsType && it.horizon === parseInt(horizon)
+    );
+
+    return inferenceType?.default_model || '';
+  }, [selectedInferenceType, config?.inference_types]);
+
+  // Handle applying the default model selection
+  const handleApplyDefault = useCallback(async () => {
+    if (!selectedInferenceType || !selectedModelType) return;
+
+    const [analyticsType, horizon] = selectedInferenceType.split('_');
+
+    setIsApplyingDefault(true);
+    setTrainingMessage(null);
+
+    try {
+      const response = await fetch(`${mlUrl}/api/v1/config`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          analytics_type: analyticsType,
+          horizon: parseInt(horizon),
+          model_type: selectedModelType
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+      }
+
+      setTrainingMessage({
+        type: 'success',
+        text: `Default model for ${analyticsType} (${horizon}s) set to ${selectedModelType}`
+      });
+
+      // Refresh config to get updated defaults
+      if (refetchConfig) {
+        await refetchConfig();
+      }
+    } catch (err) {
+      console.error('Failed to set default model:', err.message);
+      setTrainingMessage({
+        type: 'error',
+        text: `Failed to set default model: ${err.message}`
+      });
+    } finally {
+      setIsApplyingDefault(false);
+    }
+  }, [selectedInferenceType, selectedModelType, mlUrl, refetchConfig]);
+
+  // Reset model type selection when inference type changes
+  useEffect(() => {
+    setSelectedModelType('');
+  }, [selectedInferenceType]);
+
   const fetchModels = useCallback(async () => {
     try {
       setError(null);
       setLoading(true);
-      const response = await fetch(`${mlUrl}/api/v1/model/models`);
+      const response = await fetch(`${mlUrl}/ml/models`);
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -1310,7 +1415,7 @@ const MLModels = () => {
       <div className="space-y-6">
       {/* Header Section */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex-1">
             <h2 className="text-2xl font-bold text-gray-900">ML Registry</h2>
             <p className="text-sm text-gray-600 mt-1">
@@ -1354,6 +1459,74 @@ const MLModels = () => {
             </button>
           </div>
         </div>
+
+        {/* Default Model Selector */}
+        {config?.inference_types && config.inference_types.length > 0 && (
+          <div className="border-t border-gray-200 pt-4">
+            <div className="flex items-center gap-4 flex-wrap">
+              <span className="text-sm font-medium text-gray-700">Default Model:</span>
+
+              {/* Inference Type Dropdown */}
+              <select
+                value={selectedInferenceType}
+                onChange={(e) => setSelectedInferenceType(e.target.value)}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+              >
+                <option value="">Select inference type</option>
+                {config.inference_types.map((it) => (
+                  <option key={`${it.name}_${it.horizon}`} value={`${it.name}_${it.horizon}`}>
+                    {it.name} ({it.horizon}s)
+                  </option>
+                ))}
+              </select>
+
+              {/* Model Type Dropdown */}
+              <select
+                value={selectedModelType}
+                onChange={(e) => setSelectedModelType(e.target.value)}
+                disabled={!selectedInferenceType || availableModelTypesForInference.length === 0}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="">
+                  {!selectedInferenceType
+                    ? 'Select inference type first'
+                    : availableModelTypesForInference.length === 0
+                      ? 'No models available'
+                      : 'Select model type'}
+                </option>
+                {availableModelTypesForInference.map((modelType) => (
+                  <option key={modelType} value={modelType}>
+                    {modelType.toUpperCase()}
+                    {modelType === currentDefaultForSelectedType ? ' (current)' : ''}
+                  </option>
+                ))}
+              </select>
+
+              {/* Apply Button */}
+              <button
+                onClick={handleApplyDefault}
+                disabled={!selectedInferenceType || !selectedModelType || isApplyingDefault || selectedModelType === currentDefaultForSelectedType}
+                className="px-4 py-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {isApplyingDefault ? (
+                  <>
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                    Applying...
+                  </>
+                ) : (
+                  'Apply'
+                )}
+              </button>
+
+              {/* Current default indicator */}
+              {selectedInferenceType && currentDefaultForSelectedType && (
+                <span className="text-xs text-gray-500">
+                  Currently: <span className="font-medium text-gray-700">{currentDefaultForSelectedType.toUpperCase()}</span>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Training Status */}
