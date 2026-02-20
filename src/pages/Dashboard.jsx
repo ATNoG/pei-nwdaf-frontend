@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ServiceStatusOverview from '../components/ServiceStatusOverview';
 import DataTable from '../components/DataTable';
+import ProducerManager from '../components/ProducerManager';
 import { useWebSocket } from '../hooks/useWebSocket';
 
 const Dashboard = () => {
@@ -69,6 +70,9 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-8">
+
+      {/* Producers management */}
+      <ProducerManager apiBase={rawDataUrl} />
 
       {/* Real-time Data Section */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
