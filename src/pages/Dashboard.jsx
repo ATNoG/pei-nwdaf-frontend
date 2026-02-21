@@ -7,15 +7,18 @@ import { useWebSocket } from '../hooks/useWebSocket';
 const Dashboard = () => {
   //const rawDataUrl = import.meta.env.VITE_RAW_DATA_URL;
   const rawDataUrl = '/data-ingestion';
-  const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/data-ingestion/ws/ingestion`;
+  const wsBase = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/data-ingestion/ws/ingestion`;
   
   // State for real-time data
   const [realtimeData, setRealtimeData] = useState([]);
   const [wsConnected, setWsConnected] = useState(false);
+  const [producers, setProducers] = useState([]);
+  const [selectedSubscription, setSelectedSubscription] = useState('');
   
-  // WebSocket connection for data ingestion
+  // WebSocket connection for data ingestion - connect per selected subscription
+  const wsUrl = selectedSubscription ? `${wsBase}/${selectedSubscription}` : null;
   useWebSocket(wsUrl, {
-    enabled: true,
+    enabled: Boolean(wsUrl),
     onMessage: (message) => {
       if (message.type === 'data_ingested' && message.data) {
         setRealtimeData(prev => [message.data, ...prev].slice(0, 100)); // Keep last 100 entries
@@ -28,6 +31,36 @@ const Dashboard = () => {
       setWsConnected(false);
     }
   });
+
+  // Fetch available subscriptions so the user can select one for the WS
+  const fetchSubscriptions = async () => {
+    try {
+      const res = await fetch(`${rawDataUrl}/subscriptions`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const list = Array.isArray(data.producers) ? data.producers : [];
+      const parsed = list
+        .map((item) => {
+          const entries = Object.entries(item || {});
+          if (entries.length === 0) return null;
+          const [id, url] = entries[0];
+          return { id, url };
+        })
+        .filter(Boolean);
+      setProducers(parsed);
+      if (!selectedSubscription && parsed.length > 0) {
+        setSelectedSubscription(parsed[0].id);
+      }
+    } catch (err) {
+      console.error('Failed to fetch subscriptions', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchSubscriptions();
+    const id = setInterval(fetchSubscriptions, 5000);
+    return () => clearInterval(id);
+  }, []);
 
   
   // Column definitions for raw data table - All columns
@@ -73,6 +106,24 @@ const Dashboard = () => {
 
       {/* Producers management */}
       <ProducerManager apiBase={rawDataUrl} />
+
+      {/* Select active subscription for WebSocket updates */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm flex items-center gap-4">
+        <label className="text-sm font-medium text-gray-700">Active Producer:</label>
+        {producers.length > 0 ? (
+          <select
+            value={selectedSubscription}
+            onChange={(e) => setSelectedSubscription(e.target.value)}
+            className="px-3 py-2 border rounded-md"
+          >
+            {producers.map((p) => (
+              <option key={p.id} value={p.id}>{p.id} — {p.url}</option>
+            ))}
+          </select>
+        ) : (
+          <div className="text-sm text-gray-500">No producers available — add one above</div>
+        )}
+      </div>
 
       {/* Real-time Data Section */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">

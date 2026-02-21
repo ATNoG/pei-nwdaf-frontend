@@ -2,19 +2,28 @@ import React, { useState, useEffect } from 'react';
 
 const ProducerManager = ({ apiBase = '/data-ingestion' }) => {
   const [producers, setProducers] = useState([]);
-  const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const fetchProducers = async () => {
     try {
-      const res = await fetch(`${apiBase}/producers`);
+      const res = await fetch(`${apiBase}/subscriptions`);
       if (!res.ok) {
         throw new Error(`Failed to fetch producers: ${res.status}`);
       }
       const data = await res.json();
-      setProducers(Array.isArray(data) ? data : []);
+      // Expected format: { producers: [ { <id>: <url> }, ... ] }
+      const list = Array.isArray(data.producers) ? data.producers : [];
+      const parsed = list
+        .map((item) => {
+          const entries = Object.entries(item || {});
+          if (entries.length === 0) return null;
+          const [id, url] = entries[0];
+          return { id, url };
+        })
+        .filter(Boolean);
+      setProducers(parsed);
     } catch (err) {
       console.error(err);
       setError(err.message);
@@ -29,17 +38,18 @@ const ProducerManager = ({ apiBase = '/data-ingestion' }) => {
 
   const addProducer = async (e) => {
     e.preventDefault();
-    if (!name.trim() || !url.trim()) return;
+    if (!url.trim()) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${apiBase}/producers`, {
+      const res = await fetch(`${apiBase}/subscriptions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), url: url.trim() })
+        body: JSON.stringify({ producer_url: url.trim() })
       });
       if (!res.ok) throw new Error(`Failed to add producer: ${res.status}`);
-      setName('');
+      const data = await res.json();
+      // backend returns { id: <subscription_id> }
       setUrl('');
       await fetchProducers();
     } catch (err) {
@@ -53,7 +63,7 @@ const ProducerManager = ({ apiBase = '/data-ingestion' }) => {
   const removeProducer = async (id) => {
     if (!confirm('Remove this producer?')) return;
     try {
-      const res = await fetch(`${apiBase}/producers/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${apiBase}/subscriptions/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`Failed to delete: ${res.status}`);
       await fetchProducers();
     } catch (err) {
@@ -72,12 +82,6 @@ const ProducerManager = ({ apiBase = '/data-ingestion' }) => {
       </div>
 
       <form className="flex gap-2 mb-4" onSubmit={addProducer}>
-        <input
-          className="flex-1 px-3 py-2 border rounded-md"
-          placeholder="Producer name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
         <input
           className="flex-1 px-3 py-2 border rounded-md"
           placeholder="Producer URL (e.g. http://host:port)"
@@ -99,10 +103,8 @@ const ProducerManager = ({ apiBase = '/data-ingestion' }) => {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Subscription ID</th>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">URL</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Last Seen</th>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
             </tr>
           </thead>
@@ -113,19 +115,13 @@ const ProducerManager = ({ apiBase = '/data-ingestion' }) => {
               </tr>
             ) : (
               producers.map((p) => (
-                <tr key={p.id || p.name} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm text-gray-900">{p.name}</td>
+                <tr key={p.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 text-sm text-gray-900 break-all">{p.id}</td>
                   <td className="px-4 py-3 text-sm text-gray-700 break-all">{p.url}</td>
-                  <td className="px-4 py-3 text-sm">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${p.status === 'online' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                      {p.status || (p.last_seen ? 'online' : 'offline')}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{p.last_seen ? new Date(p.last_seen).toLocaleString() : '-'}</td>
                   <td className="px-4 py-3 text-sm">
                     <button
                       className="px-3 py-1 rounded-md bg-red-600 text-white hover:bg-red-700"
-                      onClick={() => removeProducer(p.id || p.name)}
+                      onClick={() => removeProducer(p.id)}
                     >
                       Remove
                     </button>
