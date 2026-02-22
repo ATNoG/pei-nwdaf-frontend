@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const ProducerManager = ({ apiBase = '/data-ingestion' }) => {
+const ProducerManager = ({ apiBase = '/data-ingestion', onRemove }) => {
   const [producers, setProducers] = useState([]);
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
@@ -66,6 +66,7 @@ const ProducerManager = ({ apiBase = '/data-ingestion' }) => {
       const res = await fetch(`${apiBase}/subscriptions/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`Failed to delete: ${res.status}`);
       await fetchProducers();
+      if (onRemove) onRemove(id);
     } catch (err) {
       console.error(err);
       setError(err.message);

@@ -17,7 +17,7 @@ const Dashboard = () => {
   
   // WebSocket connection for data ingestion - connect per selected subscription
   const wsUrl = selectedSubscription ? `${wsBase}/${selectedSubscription}` : null;
-  useWebSocket(wsUrl, {
+  const { disconnect: wsDisconnect } = useWebSocket(wsUrl, {
     enabled: Boolean(wsUrl),
     onMessage: (message) => {
       if (message.type === 'data_ingested' && message.data) {
@@ -32,35 +32,52 @@ const Dashboard = () => {
     }
   });
 
-  // Fetch available subscriptions so the user can select one for the WS
-  const fetchSubscriptions = async () => {
-    try {
-      const res = await fetch(`${rawDataUrl}/subscriptions`);
-      if (!res.ok) return;
-      const data = await res.json();
-      const list = Array.isArray(data.producers) ? data.producers : [];
-      const parsed = list
-        .map((item) => {
-          const entries = Object.entries(item || {});
-          if (entries.length === 0) return null;
-          const [id, url] = entries[0];
-          return { id, url };
-        })
-        .filter(Boolean);
-      setProducers(parsed);
-      if (!selectedSubscription && parsed.length > 0) {
-        setSelectedSubscription(parsed[0].id);
-      }
-    } catch (err) {
-      console.error('Failed to fetch subscriptions', err);
-    }
-  };
-
+  // When selected subscription is cleared, ensure realtime data is emptied
   useEffect(() => {
+    if (!selectedSubscription) {
+      setRealtimeData([]);
+      setWsConnected(false);
+      if (wsDisconnect) wsDisconnect();
+    }
+  }, [selectedSubscription, wsDisconnect]);
+
+  // Fetch available subscriptions so the user can select one for the WS
+  useEffect(() => {
+    const fetchSubscriptions = async () => {
+      try {
+        const res = await fetch(`${rawDataUrl}/subscriptions`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = Array.isArray(data.producers) ? data.producers : [];
+        const parsed = list
+          .map((item) => {
+            const entries = Object.entries(item || {});
+            if (entries.length === 0) return null;
+            const [id, url] = entries[0];
+            return { id, url };
+          })
+          .filter(Boolean);
+        setProducers(parsed);
+        
+        // Auto-select first producer if none selected
+        if (!selectedSubscription && parsed.length > 0) {
+          setSelectedSubscription(parsed[0].id);
+        }
+
+        // If the currently selected subscription was removed on the backend,
+        // clear the selection (this will trigger the effect above to clear data)
+        if (selectedSubscription && !parsed.find((p) => p.id === selectedSubscription)) {
+          setSelectedSubscription('');
+        }
+      } catch (err) {
+        console.error('Failed to fetch subscriptions', err);
+      }
+    };
+
     fetchSubscriptions();
     const id = setInterval(fetchSubscriptions, 5000);
     return () => clearInterval(id);
-  }, []);
+  }, [rawDataUrl, selectedSubscription]);
 
   
   // Column definitions for raw data table - All columns
@@ -105,7 +122,13 @@ const Dashboard = () => {
     <div className="space-y-8">
 
       {/* Producers management */}
-      <ProducerManager apiBase={rawDataUrl} />
+      <ProducerManager apiBase={rawDataUrl} onRemove={(id) => {
+        // If the removed producer was the active subscription, clear selection
+        // (the effect will handle clearing data and disconnecting WS)
+        if (id === selectedSubscription) {
+          setSelectedSubscription('');
+        }
+      }} />
 
       {/* Select active subscription for WebSocket updates */}
       <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm flex items-center gap-4">
