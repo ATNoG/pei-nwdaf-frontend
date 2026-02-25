@@ -1,20 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import ServiceStatusOverview from '../components/ServiceStatusOverview';
 import DataTable from '../components/DataTable';
+import ProducerManager from '../components/ProducerManager';
 import { useWebSocket } from '../hooks/useWebSocket';
 
 const Dashboard = () => {
   //const rawDataUrl = import.meta.env.VITE_RAW_DATA_URL;
   const rawDataUrl = '/data-ingestion';
-  const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/data-ingestion/ws/ingestion`;
+  const wsBase = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/data-ingestion/ws/ingestion`;
   
   // State for real-time data
   const [realtimeData, setRealtimeData] = useState([]);
   const [wsConnected, setWsConnected] = useState(false);
+  const [producers, setProducers] = useState([]);
+  const [selectedSubscription, setSelectedSubscription] = useState('');
   
-  // WebSocket connection for data ingestion
-  useWebSocket(wsUrl, {
-    enabled: true,
+  // WebSocket connection for data ingestion - connect per selected subscription
+  const wsUrl = selectedSubscription ? `${wsBase}/${selectedSubscription}` : null;
+  const { disconnect: wsDisconnect } = useWebSocket(wsUrl, {
+    enabled: Boolean(wsUrl),
     onMessage: (message) => {
       if (message.type === 'data_ingested' && message.data) {
         setRealtimeData(prev => [message.data, ...prev].slice(0, 100)); // Keep last 100 entries
@@ -27,6 +31,53 @@ const Dashboard = () => {
       setWsConnected(false);
     }
   });
+
+  // When selected subscription is cleared, ensure realtime data is emptied
+  useEffect(() => {
+    if (!selectedSubscription) {
+      setRealtimeData([]);
+      setWsConnected(false);
+      if (wsDisconnect) wsDisconnect();
+    }
+  }, [selectedSubscription, wsDisconnect]);
+
+  // Fetch available subscriptions so the user can select one for the WS
+  useEffect(() => {
+    const fetchSubscriptions = async () => {
+      try {
+        const res = await fetch(`${rawDataUrl}/subscriptions`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = Array.isArray(data.producers) ? data.producers : [];
+        const parsed = list
+          .map((item) => {
+            const entries = Object.entries(item || {});
+            if (entries.length === 0) return null;
+            const [id, url] = entries[0];
+            return { id, url };
+          })
+          .filter(Boolean);
+        setProducers(parsed);
+        
+        // Auto-select first producer if none selected
+        if (!selectedSubscription && parsed.length > 0) {
+          setSelectedSubscription(parsed[0].id);
+        }
+
+        // If the currently selected subscription was removed on the backend,
+        // clear the selection (this will trigger the effect above to clear data)
+        if (selectedSubscription && !parsed.find((p) => p.id === selectedSubscription)) {
+          setSelectedSubscription('');
+        }
+      } catch (err) {
+        console.error('Failed to fetch subscriptions', err);
+      }
+    };
+
+    fetchSubscriptions();
+    const id = setInterval(fetchSubscriptions, 5000);
+    return () => clearInterval(id);
+  }, [rawDataUrl, selectedSubscription]);
 
   
   // Column definitions for raw data table - All columns
@@ -69,6 +120,33 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-8">
+
+      {/* Producers management */}
+      <ProducerManager apiBase={rawDataUrl} onRemove={(id) => {
+        // If the removed producer was the active subscription, clear selection
+        // (the effect will handle clearing data and disconnecting WS)
+        if (id === selectedSubscription) {
+          setSelectedSubscription('');
+        }
+      }} />
+
+      {/* Select active subscription for WebSocket updates */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm flex items-center gap-4">
+        <label className="text-sm font-medium text-gray-700">Active Producer:</label>
+        {producers.length > 0 ? (
+          <select
+            value={selectedSubscription}
+            onChange={(e) => setSelectedSubscription(e.target.value)}
+            className="px-3 py-2 border rounded-md"
+          >
+            {producers.map((p) => (
+              <option key={p.id} value={p.id}>{p.id} — {p.url}</option>
+            ))}
+          </select>
+        ) : (
+          <div className="text-sm text-gray-500">No producers available — add one above</div>
+        )}
+      </div>
 
       {/* Real-time Data Section */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
