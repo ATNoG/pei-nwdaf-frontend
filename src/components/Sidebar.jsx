@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { FaHouse } from 'react-icons/fa6';
+import { FaHouse, FaBars, FaChevronLeft, FaChartLine, FaShieldHalved } from 'react-icons/fa6';
 import { FaRobot } from 'react-icons/fa';
 import { VscGraph } from 'react-icons/vsc';
-import { FaBars, FaChevronLeft, FaChartLine } from 'react-icons/fa';
 
 const Sidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(window.innerWidth < 1024);
@@ -13,6 +12,7 @@ const Sidebar = () => {
     { name: 'ML', icon: <FaRobot />, path: '/ml' },
     { name: 'Analytics', icon: <VscGraph />, path: '/analytics' },
     { name: 'Performance', icon: <FaChartLine />, path: '/performance' },
+    { name: 'Model Policy', icon: <FaShieldHalved />, path: '/model-policy' },
   ];
 
   // Auto-collapse on small screens

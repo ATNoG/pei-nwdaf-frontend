@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import MLModels from './pages/MLModels';
 import Analytics from './pages/Analytics';
 import Performance from './pages/Performance';
+import ModelPolicy from './pages/ModelPolicy';
 import { ConfigProvider } from './contexts/ConfigContext';
 
 function AppContent() {
@@ -21,6 +22,8 @@ function AppContent() {
         return 'Analytics';
       case '/performance':
         return 'Performance';
+      case '/model-policy':
+        return 'Model Policy';
       default:
         return 'AION';
     }
@@ -36,6 +39,8 @@ function AppContent() {
         return 'Cell Analytics Predictions & Insights';
       case '/performance':
         return 'Real-time ML Model Performance Monitoring';
+      case '/model-policy':
+        return 'Configure model expiry rules and view audit history';
       default:
         return '';
     }
@@ -63,6 +68,7 @@ function AppContent() {
             <Route path="/ml" element={<MLModels />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/performance" element={<Performance />} />
+            <Route path="/model-policy" element={<ModelPolicy />} />
           </Routes>
         </div>
       </div>
