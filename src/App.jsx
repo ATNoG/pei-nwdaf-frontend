@@ -5,7 +5,9 @@ import Dashboard from './pages/Dashboard';
 import MLModels from './pages/MLModels';
 import Analytics from './pages/Analytics';
 import Performance from './pages/Performance';
+import Settings from './pages/Settings';
 import { ConfigProvider } from './contexts/ConfigContext';
+import { AccessibilityProvider } from './contexts/AccessibilityContext';
 
 function AppContent() {
   const location = useLocation();
@@ -21,6 +23,8 @@ function AppContent() {
         return 'Analytics';
       case '/performance':
         return 'Performance';
+      case '/settings':
+        return 'Settings';
       default:
         return 'AION';
     }
@@ -36,6 +40,8 @@ function AppContent() {
         return 'Cell Analytics Predictions & Insights';
       case '/performance':
         return 'Real-time ML Model Performance Monitoring';
+      case '/settings':
+        return 'Accessibility & Display Preferences';
       default:
         return '';
     }
@@ -63,6 +69,7 @@ function AppContent() {
             <Route path="/ml" element={<MLModels />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/performance" element={<Performance />} />
+            <Route path="/settings" element={<Settings />} />
           </Routes>
         </div>
       </div>
@@ -73,9 +80,11 @@ function AppContent() {
 function App() {
   return (
     <Router>
-      <ConfigProvider>
-        <AppContent />
-      </ConfigProvider>
+      <AccessibilityProvider>
+        <ConfigProvider>
+          <AppContent />
+        </ConfigProvider>
+      </AccessibilityProvider>
     </Router>
   );
 }
