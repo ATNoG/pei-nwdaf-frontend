@@ -8,13 +8,13 @@ const Dashboard = () => {
   //const rawDataUrl = import.meta.env.VITE_RAW_DATA_URL;
   const rawDataUrl = '/data-ingestion';
   const wsBase = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/data-ingestion/ws/ingestion`;
-  
+
   // State for real-time data
   const [realtimeData, setRealtimeData] = useState([]);
   const [wsConnected, setWsConnected] = useState(false);
   const [producers, setProducers] = useState([]);
   const [selectedSubscription, setSelectedSubscription] = useState('');
-  
+
   // WebSocket connection for data ingestion - connect per selected subscription
   const wsUrl = selectedSubscription ? `${wsBase}/${selectedSubscription}` : null;
   const { disconnect: wsDisconnect } = useWebSocket(wsUrl, {
@@ -58,7 +58,7 @@ const Dashboard = () => {
           })
           .filter(Boolean);
         setProducers(parsed);
-        
+
         // Auto-select first producer if none selected
         if (!selectedSubscription && parsed.length > 0) {
           setSelectedSubscription(parsed[0].id);
@@ -79,7 +79,7 @@ const Dashboard = () => {
     return () => clearInterval(id);
   }, [rawDataUrl, selectedSubscription]);
 
-  
+
   // Column definitions for raw data table - All columns
   const rawDataColumns = [
     { header: 'Timestamp', accessor: 'timestamp' },
@@ -140,11 +140,11 @@ const Dashboard = () => {
             className="px-3 py-2 border rounded-md"
           >
             {producers.map((p) => (
-              <option key={p.id} value={p.id}>{p.id} — {p.url}</option>
+              <option key={p.id} value={p.id}>{p.id} - {p.url}</option>
             ))}
           </select>
         ) : (
-          <div className="text-sm text-gray-500">No producers available — add one above</div>
+          <div className="text-sm text-gray-500">No producers available - add one above</div>
         )}
       </div>
 
@@ -162,7 +162,7 @@ const Dashboard = () => {
             </span>
           </div>
         </div>
-        
+
         {realtimeData.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -180,8 +180,8 @@ const Dashboard = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {realtimeData.map((row, idx) => (
-                  <tr 
-                    key={idx} 
+                  <tr
+                    key={idx}
                     className={`hover:bg-gray-50 transition-colors ${idx === 0 ? 'bg-blue-50' : ''}`}
                   >
                     {rawDataColumns.map((col) => (

@@ -14,3 +14,148 @@
     color: #1f2937;
   }
 }
+
+/* Reduced Motion */
+html.reduced-motion *,
+html.reduced-motion *::before,
+html.reduced-motion *::after {
+  transition: none !important;
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Mode 1: Red-Green safe (Deuteranopia + Protanopia) */
+html.cvd-rg [class*="text-green-"]   { color: #005fa3 !important; }
+html.cvd-rg [class*="bg-green-50"]   { background-color: #e8f4fd !important; }
+html.cvd-rg [class*="bg-green-100"]  { background-color: #cce5f6 !important; }
+html.cvd-rg [class*="bg-green-500"],
+html.cvd-rg [class*="bg-green-600"]  { background-color: #0077bb !important; }
+html.cvd-rg [class*="border-green-"] { border-color: #0077bb !important; }
+
+html.cvd-rg [class*="text-red-"]     { color: #c43b00 !important; }
+html.cvd-rg [class*="bg-red-50"]     { background-color: #fff3ee !important; }
+html.cvd-rg [class*="bg-red-100"]    { background-color: #fdd9c8 !important; }
+html.cvd-rg [class*="bg-red-500"],
+html.cvd-rg [class*="bg-red-600"]    { background-color: #ee7733 !important; }
+html.cvd-rg [class*="border-red-"]   { border-color: #ee7733 !important; }
+
+/* Mode 2: Tritanopia safe (Blue-Yellow) */
+html.cvd-tritan [class*="text-yellow-"]   { color: #b0004e !important; }
+html.cvd-tritan [class*="bg-yellow-50"]   { background-color: #fce4ec !important; }
+html.cvd-tritan [class*="bg-yellow-100"]  { background-color: #f8bbd0 !important; }
+html.cvd-tritan [class*="border-yellow-"] { border-color: #d81b60 !important; }
+
+html.cvd-tritan [class*="text-purple-"]   { color: #bf360c !important; }
+html.cvd-tritan [class*="bg-purple-50"]   { background-color: #fbe9e7 !important; }
+html.cvd-tritan [class*="bg-purple-100"]  { background-color: #ffccbc !important; }
+html.cvd-tritan [class*="bg-purple-600"]  { background-color: #f4511e !important; }
+html.cvd-tritan [class*="border-purple-"] { border-color: #f4511e !important; }
+
+/* High Contrast */
+html.high-contrast {
+  --hc-bg: #ffffff;
+  --hc-fg: #000000;
+  --hc-border: #000000;
+}
+html.high-contrast body {
+  background-color: var(--hc-bg) !important;
+  color: var(--hc-fg) !important;
+}
+html.high-contrast .bg-white,
+html.high-contrast .bg-gray-50,
+html.high-contrast .bg-gray-100 {
+  background-color: var(--hc-bg) !important;
+  color: var(--hc-fg) !important;
+  border-color: var(--hc-border) !important;
+}
+html.high-contrast * {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+html.high-contrast [class*="bg-green-"],
+html.high-contrast [class*="bg-red-"],
+html.high-contrast [class*="bg-yellow-"],
+html.high-contrast [class*="bg-blue-"],
+html.high-contrast [class*="bg-purple-"] {
+  background-color: var(--hc-bg) !important;
+  border: 1px solid var(--hc-border) !important;
+}
+
+html.high-contrast .bg-blue-600,
+html.high-contrast .bg-blue-500,
+html.high-contrast .bg-indigo-600,
+html.high-contrast .bg-green-600,
+html.high-contrast .bg-purple-600,
+html.high-contrast .bg-red-600,
+html.high-contrast .bg-red-500,
+html.high-contrast .bg-orange-500,
+html.high-contrast .bg-orange-600 {
+  background-color: #000 !important;
+  color: #fff !important;
+  border: 2px solid #000 !important;
+}
+
+html.high-contrast [class*="from-blue-"],
+html.high-contrast [class*="from-green-"],
+html.high-contrast [class*="from-red-"] {
+  background-image: none !important;
+  background-color: #000 !important;
+  color: #fff !important;
+  border: 2px solid #000 !important;
+}
+html.high-contrast [class*="text-green-"],
+html.high-contrast [class*="text-red-"],
+html.high-contrast [class*="text-yellow-"],
+html.high-contrast [class*="text-blue-"],
+html.high-contrast [class*="text-gray-"] {
+  color: var(--hc-fg) !important;
+}
+html.high-contrast header {
+  background: #000 !important;
+  border-bottom: 2px solid #000 !important;
+}
+html.high-contrast [class*="border-"] {
+  border-color: var(--hc-border) !important;
+}
+html.high-contrast .bg-clip-text {
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  background-image: none !important;
+  color: var(--hc-fg) !important;
+}
+
+html.high-contrast header,
+html.high-contrast header * {
+  color: #fff !important;
+}
+
+html.high-contrast .bg-blue-600,    html.high-contrast .bg-blue-600 *,
+html.high-contrast .bg-blue-500,    html.high-contrast .bg-blue-500 *,
+html.high-contrast .bg-green-600,   html.high-contrast .bg-green-600 *,
+html.high-contrast .bg-indigo-600,  html.high-contrast .bg-indigo-600 *,
+html.high-contrast .bg-purple-600,  html.high-contrast .bg-purple-600 *,
+html.high-contrast .bg-red-600,     html.high-contrast .bg-red-600 *,
+html.high-contrast .bg-red-500,     html.high-contrast .bg-red-500 *,
+html.high-contrast .bg-orange-500,  html.high-contrast .bg-orange-500 *,
+html.high-contrast .bg-orange-600,  html.high-contrast .bg-orange-600 *,
+html.high-contrast [class*="from-blue-"], html.high-contrast [class*="from-blue-"] * {
+  color: #fff !important;
+}
+
+/* Font Size */
+html.font-size-s  { font-size: 13px; }
+html.font-size-l  { font-size: 19px; }
+html.font-size-xl { font-size: 22px; }
+
+/* ML Model card - responsive header */
+@container (max-width: 18rem) {
+  .model-card-actions {
+    flex: 0 0 100%;
+  }
+}

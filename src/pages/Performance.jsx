@@ -23,7 +23,18 @@ const COLORS = [
   'rgb(236, 72, 153)',
 ];
 
+// Base shapes per model - ensures each series is identifiable by shape alone,
+const POINT_SHAPES = ['circle', 'triangle', 'rect', 'star', 'cross', 'crossRot'];
+
 const METRICS = ['rmse', 'mae', 'mse', 'r2'];
+
+const TIME_WINDOWS = [
+  { label: '1h',  ms: 60 * 60 * 1000 },
+  { label: '6h',  ms: 6 * 60 * 60 * 1000 },
+  { label: '24h', ms: 24 * 60 * 60 * 1000 },
+  { label: '7d',  ms: 7 * 24 * 60 * 60 * 1000 },
+  { label: 'All', ms: null },
+];
 
 
 const StateBadge = ({ state }) => {
@@ -59,6 +70,8 @@ const Performance = () => {
   // Actions
   const [metric, setMetric] = useState('rmse');
   const [triggerFilter, setTriggerFilter] = useState(null);
+  const [timeWindow, setTimeWindow] = useState(null);
+  const [visibleModels, setVisibleModels] = useState(null); // null = default (best model only)
   const [actionLoading, setActionLoading] = useState(null);
   const [actionMsg, setActionMsg] = useState(null);
 
@@ -145,6 +158,17 @@ const Performance = () => {
     actionMsgTimerRef.current = setTimeout(() => setActionMsg(null), 4000);
   }, []);
 
+  const toggleModel = useCallback((modelId) => {
+    setVisibleModels(prev => {
+      const bestId = bestModel?.model_id;
+      const base = prev ?? new Set(bestId ? [bestId] : []);
+      const next = new Set(base);
+      if (next.has(modelId)) next.delete(modelId);
+      else next.add(modelId);
+      return next;
+    });
+  }, [bestModel?.model_id]);
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -174,6 +198,7 @@ const Performance = () => {
     setHistory(null);
     setModels([]);
     setActiveJobs({});
+    setVisibleModels(null);
 
     setLoadingData(true);
 
@@ -249,7 +274,11 @@ const Performance = () => {
 
   const chartData = useMemo(() => {
     const allEntries = history?.entries ?? [];
-    const entries = triggerFilter ? allEntries.filter(e => e.trigger === triggerFilter) : allEntries;
+    const now = Date.now();
+    const timeFiltered = timeWindow
+      ? allEntries.filter(e => new Date(e.measured_at).getTime() >= now - timeWindow)
+      : allEntries;
+    const entries = triggerFilter ? timeFiltered.filter(e => e.trigger === triggerFilter) : timeFiltered;
     if (!entries.length) return null;
 
     const bestModelId = bestModel?.model_id;
@@ -262,24 +291,36 @@ const Performance = () => {
 
     // All timestamps as labels (union, sorted)
     const allTimes = [...new Set(entries.map(e => e.measured_at))].sort();
-    const labels = allTimes.map(t => new Date(t).toLocaleTimeString());
+    const labels = allTimes.map(t => {
+      const d = new Date(t);
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const hh = String(d.getHours()).padStart(2, '0');
+      const min = String(d.getMinutes()).padStart(2, '0');
+      return `${dd}/${mm} ${hh}:${min}`;
+    });
 
+    const modelMeta = [];
     const alignedDatasets = Object.entries(byModel).map(([modelId, pts], i) => {
       const modelName = models.find(m => m.id === modelId)?.name ?? modelId.slice(0, 8);
       const isBest = modelId === bestModelId;
+      const color = COLORS[i % COLORS.length];
+      modelMeta.push({ modelId, modelName, color, isBest });
       const ptMap = Object.fromEntries(pts.map(p => [p.measured_at, p]));
       const aligned = allTimes.map(t => ptMap[t] ? ptMap[t].score : null);
+      const baseShape = POINT_SHAPES[i % POINT_SHAPES.length];
       const styles = allTimes.map(t => ptMap[t]
-        ? (ptMap[t].trigger === 'evaluate' ? 'rectRot' : 'circle')
-        : 'circle');
+        ? (ptMap[t].trigger === 'evaluate' ? 'rectRot' : baseShape)
+        : baseShape);
       const radii = allTimes.map(t => ptMap[t]
         ? (ptMap[t].trigger === 'evaluate' ? 7 : ptMap[t].trigger === 'monitor' ? 4 : 3)
         : 0);
+      const isVisible = visibleModels ? visibleModels.has(modelId) : isBest;
       return {
         label: modelName,
         data: aligned,
-        borderColor: COLORS[i % COLORS.length],
-        backgroundColor: COLORS[i % COLORS.length] + '33',
+        borderColor: color,
+        backgroundColor: color + '33',
         pointStyle: styles,
         pointRadius: radii,
         pointHoverRadius: 6,
@@ -287,34 +328,51 @@ const Performance = () => {
         fill: false,
         spanGaps: false,
         showLine: false,
-        hidden: !isBest,
+        hidden: !isVisible,
       };
     });
 
-    return { labels, datasets: alignedDatasets };
-  }, [history, models, bestModel, triggerFilter]);
+    return { labels, datasets: alignedDatasets, _models: modelMeta, _times: allTimes };
+  }, [history, models, bestModel, triggerFilter, timeWindow, visibleModels]);
 
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-      x: {
-        title: { display: true, text: 'Time' },
-        ticks: { maxRotation: 45, maxTicksLimit: 12 },
+  const chartOptions = useMemo(() => {
+    const times = chartData?._times ?? [];
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          title: { display: true, text: 'Time' },
+          ticks: { maxRotation: 45, maxTicksLimit: 12 },
+        },
+        y: {
+          title: { display: true, text: metric.toUpperCase() },
+        },
       },
-      y: {
-        title: { display: true, text: metric.toUpperCase() },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          callbacks: {
+            title: (items) => {
+              const raw = times[items[0]?.dataIndex];
+              if (!raw) return '';
+              const d = new Date(raw);
+              const dd = String(d.getDate()).padStart(2, '0');
+              const mm = String(d.getMonth() + 1).padStart(2, '0');
+              const yyyy = d.getFullYear();
+              const hh = String(d.getHours()).padStart(2, '0');
+              const min = String(d.getMinutes()).padStart(2, '0');
+              const sec = String(d.getSeconds()).padStart(2, '0');
+              return `${dd}/${mm}/${yyyy} ${hh}:${min}:${sec}`;
+            },
+          },
+        },
       },
-    },
-    plugins: {
-      legend: { position: 'top' },
-      tooltip: {
-        mode: 'index',
-        intersect: false,
-      },
-    },
-    interaction: { mode: 'nearest', axis: 'x', intersect: false },
-  };
+      interaction: { mode: 'nearest', axis: 'x', intersect: false },
+    };
+  }, [chartData?._times, metric]);
 
   if (loadingFields) {
     return (
@@ -406,26 +464,73 @@ const Performance = () => {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-semibold text-gray-900">Score History</h3>
-              <div className="flex gap-1">
-                {[null, 'evaluate', 'monitor', 'auto_monitor'].map(t => (
-                  <button
-                    key={t ?? 'all'}
-                    onClick={() => setTriggerFilter(t)}
-                    className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                      triggerFilter === t
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    {t ?? 'All'}
-                  </button>
-                ))}
+            <div className="mb-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-semibold text-gray-900">Score History</h3>
+                <div className="flex gap-1">
+                  {TIME_WINDOWS.map(w => (
+                    <button
+                      key={w.label}
+                      onClick={() => setTimeWindow(w.ms)}
+                      className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                        timeWindow === w.ms
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {w.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400">Trigger</span>
+                <div className="flex gap-1">
+                  {[null, 'evaluate', 'monitor', 'auto_monitor'].map(t => (
+                    <button
+                      key={t ?? 'all'}
+                      onClick={() => setTriggerFilter(t)}
+                      className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                        triggerFilter === t
+                          ? 'bg-gray-700 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {t ?? 'All'}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
             {chartData ? (
               <>
+                {/* Model visibility selector */}
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {chartData._models.map(({ modelId, modelName, color, isBest }) => {
+                    const isActive = visibleModels ? visibleModels.has(modelId) : isBest;
+                    return (
+                      <button
+                        key={modelId}
+                        onClick={() => toggleModel(modelId)}
+                        title={modelId}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border-2 transition-colors ${
+                          isActive
+                            ? 'text-white border-transparent'
+                            : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                        }`}
+                        style={isActive ? { backgroundColor: color, borderColor: color } : {}}
+                      >
+                        <span
+                          className="inline-block w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: isActive ? 'rgba(255,255,255,0.7)' : color }}
+                        />
+                        {modelName}
+                        {isBest && <span className={`text-xs ${isActive ? 'opacity-70' : 'text-gray-400'}`}>★</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+
                 <div className="h-80">
                   <Line data={chartData} options={chartOptions} />
                 </div>
