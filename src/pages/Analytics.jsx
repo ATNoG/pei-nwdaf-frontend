@@ -1,18 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useConfig } from '../contexts/ConfigContext';
 import SearchableDropdown from '../components/SearchableDropdown';
 
 const Analytics = () => {
-  //const dataStorageUrl = import.meta.env.VITE_DATA_STORAGE_URL;
-  const dataStorageUrl = '/data-storage';
- ///const mlUrl = import.meta.env.VITE_ML_URL;
-  const mlUrl = '/pei-ml'
-  const { config, loading: configLoading } = useConfig();
+  const dataStorageUrl ='/' + import.meta.env.VITE_DATA_STORAGE_HOST;
+  const mlUrl = '/' + import.meta.env.VITE_ML_HOST;
 
   const [formData, setFormData] = useState({
-    analytics_type: 'latency',
+    output_field: '',
     cell_index: 26379009,
-    horizon: 60
+    model_id: null,
   });
 
   const [prediction, setPrediction] = useState(null);
@@ -21,7 +17,12 @@ const Analytics = () => {
   const [cellList, setCellList] = useState([]);
   const [loadingCells, setLoadingCells] = useState(true);
 
+  const [fields, setFields] = useState([]);
+  const [loadingFields, setLoadingFields] = useState(true);
+  const [fieldsWithModels, setFieldsWithModels] = useState(new Set());
 
+  const [models, setModels] = useState([]);
+  const [loadingModels, setLoadingModels] = useState(false);
 
   // Fetch available cells on mount
   useEffect(() => {
@@ -44,51 +45,114 @@ const Analytics = () => {
     fetchCells();
   }, []);
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: name === 'cell_index' || name === 'horizon' ? Number.parseInt(value) : value,
-    }));
+  // Fetch available output fields on mount (with model status)
+  useEffect(() => {
+    const fetchFields = async () => {
+      try {
+        const response = await fetch(`${mlUrl}/v1/fields?include_model_status=true`);
+        if (!response.ok) return;
+        const data = await response.json();
+        const fieldList = (data.fields ?? []).map(f => f.name);
+        setFields(fieldList);
+        setFieldsWithModels(new Set(
+          (data.fields ?? []).filter(f => f.has_models).map(f => f.name)
+        ));
+        if (fieldList.length > 0) {
+          setFormData(prev => ({ ...prev, output_field: fieldList[0] }));
+        }
+      } finally {
+        setLoadingFields(false);
+      }
+    };
+    fetchFields();
+  }, []);
+
+  // Fetch models when output_field changes, only if that field has trained models
+  useEffect(() => {
+    if (!formData.output_field) return;
+
+    setModels([]);
+    setFormData(prev => ({ ...prev, model_id: null }));
+
+    if (!fieldsWithModels.has(formData.output_field)) return;
+
+    const fetchModels = async () => {
+      setLoadingModels(true);
+      try {
+        const response = await fetch(
+          `${mlUrl}/v1/models?output_field=${encodeURIComponent(formData.output_field)}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setModels(data);
+        }
+      } finally {
+        setLoadingModels(false);
+      }
+    };
+    fetchModels();
+  }, [formData.output_field, fieldsWithModels]);
+
+  const handleFieldChange = (e) => {
+    setFormData(prev => ({ ...prev, output_field: e.target.value }));
   };
 
-
+  const handleModelChange = (e) => {
+    const val = e.target.value;
+    setFormData(prev => ({ ...prev, model_id: val === '' ? null : val }));
+  };
 
   const fetchPrediction = async (e) => {
     e.preventDefault();
-
-    // Check if analytics type is supported
-    if (formData.analytics_type !== 'latency') {
-      setError(`${formData.analytics_type.charAt(0).toUpperCase() + formData.analytics_type.slice(1)} analytics type will be supported in the future. Currently only 'Latency' is available.`);
-      return;
-    }
-
     setLoading(true);
     setError(null);
     setPrediction(null);
 
     try {
-      const response = await fetch(`${mlUrl}/api/v1/analytics`, {
+      const response = await fetch(`${mlUrl}/v1/inference`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          output_field: formData.output_field,
+          cell_id: formData.cell_index,
+          model_id: formData.model_id,
+        }),
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        let errMsg;
+        try {
+          const errBody = await response.json();
+          if (response.status === 404) {
+            errMsg = `No best model found for ${formData.output_field}. Run an evaluation first.`;
+          } else if (response.status === 422) {
+            errMsg = errBody.detail
+              ? (Array.isArray(errBody.detail)
+                  ? errBody.detail.map(d => `${d.loc?.join('.')}: ${d.msg}`).join('; ')
+                  : errBody.detail)
+              : 'Validation error.';
+          } else if (response.status === 500) {
+            errMsg = errBody.detail ?? 'Internal server error during inference.';
+          } else {
+            errMsg = `Unexpected error: HTTP ${response.status}`;
+          }
+        } catch {
+          errMsg = `Unexpected error: HTTP ${response.status}`;
+        }
+        setError(errMsg);
+        return;
       }
 
       const data = await response.json();
       setPrediction(data);
     } catch (err) {
-      console.error('Error fetching prediction:', err.message);
       setError(`Failed to fetch prediction: ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
+
+  const noModelsAvailable = !loadingModels && models.length === 0 && formData.output_field;
 
   return (
     <div className="space-y-6">
@@ -96,7 +160,7 @@ const Analytics = () => {
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Analytics Predictions</h2>
         <p className="text-sm text-gray-600">
-          Get ML predictions for analytics including latency and more
+          Get ML predictions for network metrics including latency, throughput and more
         </p>
       </div>
 
@@ -105,31 +169,39 @@ const Analytics = () => {
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Request Parameters</h3>
         <form onSubmit={fetchPrediction} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Analytics Type */}
+            {/* Output Field */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Analytics Type
+                Output Field
               </label>
               <select
-                name="analytics_type"
-                value={formData.analytics_type}
-                onChange={handleInputChange}
+                name="output_field"
+                value={formData.output_field}
+                onChange={handleFieldChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                disabled={configLoading}
+                disabled={loadingFields}
               >
-                {configLoading ? (
+                {loadingFields ? (
                   <option>Loading...</option>
-                ) : config?.inference_types ? (
-                  [...new Set(config.inference_types.map(t => t.name))].map(name => (
-                    <option key={name} value={name}>
-                      {name.charAt(0).toUpperCase() + name.slice(1)}
-                    </option>
-                  ))
-                ) : (
+                ) : fields.length > 0 ? (
                   <>
-                    <option value="latency">Latency</option>
-                    <option value="throughput">Throughput</option>
+                    {fields.some(f => fieldsWithModels.has(f)) && (
+                      <optgroup label="With trained models">
+                        {fields.filter(f => fieldsWithModels.has(f)).map(f => (
+                          <option key={f} value={f}>{f}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {fields.some(f => !fieldsWithModels.has(f)) && (
+                      <optgroup label="No trained models">
+                        {fields.filter(f => !fieldsWithModels.has(f)).map(f => (
+                          <option key={f} value={f}>{f}</option>
+                        ))}
+                      </optgroup>
+                    )}
                   </>
+                ) : (
+                  <option value="">No fields available</option>
                 )}
               </select>
             </div>
@@ -147,13 +219,12 @@ const Analytics = () => {
                 disabled={loadingCells}
                 loading={loadingCells}
                 formatOption={(cell) => cell.toString()}
-                filterOption={(cell, searchTerm) =>
-                  cell.toString().includes(searchTerm)
-                }
+                filterOption={(cell, searchTerm) => cell.toString().includes(searchTerm)}
               />
             </div>
 
-            {/* Horizon */}
+            {/* HORIZON - commented out, may be re-enabled later */}
+            {/*
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Horizon (seconds)
@@ -183,12 +254,43 @@ const Analytics = () => {
                 )}
               </select>
             </div>
+            */}
+
+            {/* Model (optional) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Model <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <select
+                name="model_id"
+                value={formData.model_id ?? ''}
+                onChange={handleModelChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                disabled={loadingModels || noModelsAvailable}
+              >
+                {loadingModels ? (
+                  <option value="">Loading models...</option>
+                ) : (
+                  <>
+                    <option value="">Best model (auto)</option>
+                    {models.map(m => (
+                      <option key={m.id} value={m.id}>{m.name} - {m.id}</option>
+                    ))}
+                  </>
+                )}
+              </select>
+              {noModelsAvailable && (
+                <p className="mt-1 text-sm text-yellow-700">
+                  No trained models available for this field.
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || noModelsAvailable}
             className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
@@ -223,73 +325,69 @@ const Analytics = () => {
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-green-50 to-blue-50">
             <h3 className="text-lg font-semibold text-gray-900">Prediction Results</h3>
-            <p className="text-sm text-gray-600">Analytics prediction for Cell ID: {formData.cell_index}</p>
+            <p className="text-sm text-gray-600">Inference for Cell ID: {formData.cell_index}</p>
           </div>
 
-          <div className="p-6">
-            {/* Key Metrics (neutral styling) */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-              <div className="bg-white rounded-lg p-4 border border-gray-200">
-                <p className="text-sm text-gray-600 font-medium mb-1">Predicted Value</p>
-                <p className="text-3xl font-bold text-gray-900">
-                  {prediction.predicted_value?.toFixed(2) ?? 'N/A'}
-                </p>
-              </div>
-
-              <div className="bg-white rounded-lg p-4 border border-gray-200">
-                <p className="text-sm text-gray-600 font-medium mb-1">Confidence</p>
-                <p className="text-3xl font-bold text-gray-900">
-                  {prediction.confidence ? `${(prediction.confidence * 100).toFixed(1)}%` : 'N/A'}
-                </p>
-              </div>
-
-              <div className="bg-white rounded-lg p-4 border border-gray-200">
-                <p className="text-sm text-gray-600 font-medium mb-1">Interval</p>
-                <p className="text-3xl font-bold text-gray-900">
-                  {prediction.interval || 'N/A'}
-                </p>
-              </div>
-
-              <div className="bg-white rounded-lg p-4 border border-gray-200">
-                <p className="text-sm text-gray-600 font-medium mb-1">Used Model</p>
-                <p className="text-lg font-bold text-gray-900 truncate" title={prediction.used_model || 'N/A'}>
-                  {prediction.used_model || 'N/A'}
-                </p>
-              </div>
+          <div className="p-6 space-y-6">
+            {/* Model info + timing summary */}
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <dl className="space-y-2 text-sm">
+                <div className="flex gap-2">
+                  <dt className="w-32 text-gray-500 shrink-0">Model</dt>
+                  <dd className="text-gray-900 font-medium">
+                    {prediction.model_name} (v{prediction.model_version}, {prediction.architecture})
+                    {prediction.model_id && (
+                      <span className="ml-2 text-gray-400 font-normal text-xs">{prediction.model_id}</span>
+                    )}
+                  </dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="w-32 text-gray-500 shrink-0">Lookahead</dt>
+                  <dd className="text-gray-900">
+                    {prediction.forecast_steps} steps x {prediction.window_duration_seconds}s
+                    {' '}= <span className="font-medium">{prediction.forecast_steps * prediction.window_duration_seconds}s total</span>
+                  </dd>
+                </div>
+                <div className="flex gap-2">
+                  <dt className="w-32 text-gray-500 shrink-0">History used</dt>
+                  <dd className="text-gray-900">
+                    {prediction.lookback_steps} x {prediction.window_duration_seconds}s
+                    {' '}= <span className="font-medium">{prediction.lookback_steps * prediction.window_duration_seconds}s lookback</span>
+                  </dd>
+                </div>
+              </dl>
             </div>
 
-            {/* Time Range */}
-            {(prediction.target_start_time || prediction.target_end_time) && (
-              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 mb-6">
-                <h4 className="text-sm font-semibold text-gray-700 mb-3">Time Window</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {prediction.target_start_time && (
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">Start Time</p>
-                      <p className="text-sm font-medium text-gray-900">
-                        {new Date(prediction.target_start_time * 1000).toLocaleString()}
-                      </p>
-                    </div>
-                  )}
-                  {prediction.target_end_time && (
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">End Time</p>
-                      <p className="text-sm font-medium text-gray-900">
-                        {new Date(prediction.target_end_time * 1000).toLocaleString()}
-                      </p>
-                    </div>
-                  )}
+            {/* Predictions list */}
+            {prediction.predictions?.length > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                  Predictions - <span className="font-normal text-gray-500">{formData.output_field}</span>
+                </h4>
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Step</th>
+                        <th className="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Value</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {prediction.predictions.map((p) => (
+                        <tr key={p.step} className="hover:bg-gray-50">
+                          <td className="px-4 py-2 text-gray-600">
+                            +{p.step * prediction.window_duration_seconds}s
+                          </td>
+                          <td className="px-4 py-2 text-right font-mono text-gray-900">
+                            {p.values[formData.output_field] != null
+                              ? p.values[formData.output_field].toFixed(4)
+                              : 'N/A'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
-            )}
-
-            {/* Used Data */}
-            {prediction.data && Object.keys(prediction.data).length > 0 && (
-              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                <h4 className="text-sm font-semibold text-gray-700 mb-3">Used Data</h4>
-                <pre className="text-xs bg-white p-4 rounded border border-gray-200 overflow-auto max-h-64">
-                  {JSON.stringify(prediction.data, null, 2)}
-                </pre>
               </div>
             )}
           </div>
