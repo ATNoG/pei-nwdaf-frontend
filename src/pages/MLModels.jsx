@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useConfig } from '../contexts/ConfigContext';
-import { useWebSocket } from '../hooks/useWebSocket';
-import TrainingStatus from '../components/TrainingStatus';
 
 // ModelCard
-const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefault, onDelete, isDefault, isTraining, trainingStatus, trainingLogs }) => {
+const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefault, onDelete, isDefault, isTraining }) => {
   const isBestForAny = model.best_for_fields?.length > 0;
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
@@ -115,13 +113,6 @@ const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefaul
           </div>
         )}
       </div>
-
-      {/* TODO: Training Status Component - Gets data from parent WebSocket */}
-      <TrainingStatus
-        modelName={model.name}
-        trainingStatus={trainingStatus[model.name]}
-        trainingLogs={trainingLogs[model.name]}
-      />
     </div>
   );
 }, (prevProps, nextProps) => {
@@ -130,11 +121,9 @@ const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefaul
                    prevProps.model.latest_version === nextProps.model.latest_version &&
                    prevProps.model.architecture === nextProps.model.architecture &&
                    JSON.stringify(prevProps.model.best_for_fields) === JSON.stringify(nextProps.model.best_for_fields);
-  const trainingStatusSame = JSON.stringify(prevProps.trainingStatus[prevProps.model.name]) === JSON.stringify(nextProps.trainingStatus[nextProps.model.name]);
-  const trainingLogsSame = JSON.stringify(prevProps.trainingLogs[prevProps.model.name]) === JSON.stringify(nextProps.trainingLogs[nextProps.model.name]);
   const isDefaultSame = prevProps.isDefault === nextProps.isDefault;
   const isTrainingSame = prevProps.isTraining === nextProps.isTraining;
-  return modelSame && trainingStatusSame && trainingLogsSame && isDefaultSame && isTrainingSame;
+  return modelSame && isDefaultSame && isTrainingSame;
 });
 
 // CreateModelModal
@@ -263,10 +252,12 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
             <input
               type="text"
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value.replace(/ /g, '_') })}
               placeholder="e.g. latency_ann_60"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               required
+              pattern="\S+"
+              title="Model name cannot contain spaces"
             />
           </div>
 
@@ -832,7 +823,6 @@ const TrainModal = ({ model, lookbackSeconds, setLookbackSeconds, onConfirm, onC
 const MLModels = () => {
   const mlUrl = '/' + import.meta.env.VITE_ML_HOST;
   const mlflowUrl = import.meta.env.VITE_MLFLOW_URL || 'http://localhost:5000';
-  const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/pei-ml/api/v1/websocket/training/status`;
   const { config, loading: configLoading, refetch: refetchConfig } = useConfig();
 
   const [models, setModels] = useState([]);
@@ -870,27 +860,6 @@ const MLModels = () => {
   const [trainTarget, setTrainTarget] = useState(null);
   const [lookbackSeconds, setLookbackSeconds] = useState(3600);
   const pollingRef = useRef(null);
-
-  // WebSocket training status (kept alongside polling)
-  const [trainingStatus, setTrainingStatus] = useState({});
-  const [trainingLogs, setTrainingLogs] = useState({});
-
-  useWebSocket(wsUrl, {
-    enabled: true,
-    onMessage: (message) => {
-      if (message.type === 'initial_status') {
-        setTrainingStatus(message.data || {});
-      } else if (message.type === 'training_update') {
-        const { model_name, data } = message;
-        setTrainingStatus(prev => ({ ...prev, [model_name]: data }));
-        setTrainingLogs(prev => ({
-          ...prev,
-          [model_name]: [...(prev[model_name] || []), { timestamp: new Date(), ...data }],
-        }));
-      }
-    },
-    onError: (err) => console.error('WebSocket error:', err),
-  });
 
   const isDefaultModel = useCallback((modelName) => {
     if (!config?.inference_types) return false;
@@ -1041,7 +1010,8 @@ const MLModels = () => {
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+        const detail = errorData.detail;
+        throw new Error((detail && typeof detail === 'object' ? detail.message : detail) || `HTTP error! status: ${response.status}`);
       }
       setTrainingMessage({ type: 'success', text: `${model.name} is now the best model for ${outputField}` });
     } catch (err) {
@@ -1078,7 +1048,8 @@ const MLModels = () => {
       const response = await fetch(`${mlUrl}/v1/models/${model.id}`, { method: 'DELETE' });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+        const detail = errorData.detail;
+        throw new Error((detail && typeof detail === 'object' ? detail.message : detail) || `HTTP error! status: ${response.status}`);
       }
       setTrainingMessage({ type: 'success', text: `Model ${model.name} deleted successfully` });
       await fetchModels(filterField);
@@ -1098,7 +1069,8 @@ const MLModels = () => {
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+        const detail = errorData.detail;
+        throw new Error((detail && typeof detail === 'object' ? detail.message : detail) || `HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
       setTrainingMessage({ type: 'success', text: `Model ${data.name} created successfully` });
@@ -1302,8 +1274,6 @@ const MLModels = () => {
                   onDelete={handleDelete}
                   isDefault={isDefaultModel(model.name)}
                   isTraining={trainingModelIds.has(model.id)}
-                  trainingStatus={trainingStatus}
-                  trainingLogs={trainingLogs}
                 />
               ))}
             </div>
