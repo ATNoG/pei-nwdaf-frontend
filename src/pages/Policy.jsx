@@ -1,0 +1,831 @@
+import React, { useState, useEffect } from 'react';
+import { FaShieldAlt, FaPlus, FaTrash, FaEdit, FaSave, FaSearch, FaSync, FaTimes, FaArrowRight } from 'react-icons/fa';
+import FieldDiscoveryPanel from '../components/FieldDiscoveryPanel';
+import TransformerStepEditor from '../components/TransformerStepEditor';
+
+// Use Vite proxy - requests go from frontend container to policy-service container
+const POLICY_SERVICE_URL = '/policy-api';
+
+// Available components in the system - can be overridden via VITE_AVAILABLE_COMPONENTS env var
+// Format: JSON array of {id, name, group} objects
+//
+// Components can also declare resourceTypes (sink types) they support.
+// For example, data-storage supports "influx" (raw data) and "clickhouse" (processed data).
+// When creating a pipeline, you can select: "data-storage:influx" or "data-storage:clickhouse"
+const DEFAULT_AVAILABLE_COMPONENTS = [
+  { id: 'ingestion-service', name: 'Ingestion Service', group: 'Data' },
+  { id: 'data-processor-60s', name: 'Data Processor (60s)', group: 'Processing' },
+  { id: 'data-processor-300s', name: 'Data Processor (300s)', group: 'Processing' },
+  {
+    id: 'data-storage',
+    name: 'Data Storage',
+    group: 'Storage',
+    resourceTypes: [
+      { id: 'influx', name: 'Raw Data (InfluxDB)', description: 'Raw network measurements' },
+      { id: 'clickhouse', name: 'Processed Data (ClickHouse)', description: 'Aggregated metrics' }
+    ]
+  },
+  { id: 'ml-service', name: 'ML Service', group: 'ML' },
+  { id: 'decision', name: 'Decision Service', group: 'Decision' },
+  { id: 'kafka', name: 'Kafka', group: 'Messaging' },
+  { id: 'frontend', name: 'Frontend', group: 'UI' },
+  { id: 'grafana', name: 'Grafana', group: 'Monitoring' },
+  { id: 'mlflow-server', name: 'MLflow', group: 'ML' },
+];
+
+const parseAvailableComponents = () => {
+  try {
+    const envComponents = import.meta.env.VITE_AVAILABLE_COMPONENTS;
+    if (envComponents) {
+      return JSON.parse(envComponents);
+    }
+  } catch (e) {
+    console.warn('Failed to parse VITE_AVAILABLE_COMPONENTS:', e);
+  }
+  return DEFAULT_AVAILABLE_COMPONENTS;
+};
+
+// Fetch registered components from Policy Service
+// This ensures only components that have actually registered with Policy are shown
+// Also extracts dynamic resource types from allowed_fields (e.g., "data-storage:influx")
+const fetchRegisteredComponents = async () => {
+  try {
+    const response = await fetch(`${POLICY_SERVICE_URL}/components`);
+    if (!response.ok) throw new Error('Failed to fetch components');
+    const data = await response.json();
+
+    // Transform registered components into the format expected by the UI
+    return data.components.map(comp => {
+      const base = {
+        id: comp.component_id,
+        name: comp.component_id.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+        group: comp.component_type || 'General'
+      };
+
+      // Extract resourceTypes from allowed_fields keys that match pattern "{component_id}:"
+      // e.g., "data-storage:influx" -> resourceType: "influx" for data-storage component
+      //       "ingestion-service:producer_label" -> resourceType: "producer_label" for ingestion-service
+      const componentPrefix = `${comp.component_id}:`;
+      if (comp.allowed_fields && Object.keys(comp.allowed_fields).length > 0) {
+        base.resourceTypes = Object.keys(comp.allowed_fields)
+          .filter(key => key.startsWith(componentPrefix))
+          .map(key => {
+            const resourceType = key.substring(componentPrefix.length);
+            return {
+              id: resourceType,
+              name: resourceType.charAt(0).toUpperCase() + resourceType.slice(1),
+              description: `Category: ${resourceType}`
+            };
+          });
+      }
+
+      return base;
+    });
+  } catch (e) {
+    console.warn('Failed to fetch registered components, using defaults:', e);
+    return parseAvailableComponents();
+  }
+};
+
+// Start with defaults, will be updated with fetched components
+let AVAILABLE_COMPONENTS = parseAvailableComponents();
+
+// Field categories for grouping
+const FIELD_CATEGORIES = {
+  location: {
+    label: 'Location',
+    fields: ['latitude', 'longitude', 'altitude', 'location_accuracy', 'velocity', 'velocity_accuracy', 'bearing', 'bearing_accuracy']
+  },
+  signal: {
+    label: 'Signal Quality',
+    fields: ['rsrp', 'rsrq', 'rssi', 'sinr', 'ta', 'cqi', 'ss_rsrp', 'ss_rsrq', 'ss_sinr']
+  },
+  network: {
+    label: 'Network',
+    fields: ['network', 'mcc', 'mnc', 'earfcn', 'cell_index', 'physical_cellid', 'tracking_area_code', 'primary_bandwidth', 'ul_bandwidth', 'cellbandwidths']
+  },
+  latency: {
+    label: 'Latency',
+    fields: ['mean_latency', 'min_latency', 'max_latency', 'mean_dev_latency']
+  },
+  other: {
+    label: 'Other',
+    fields: ['packet_loss', 'no_pings', 'server_ip', 'device', 'MNO', 'timestamp']
+  }
+};
+
+// Available transformer types
+const TRANSFORMER_TYPES = [
+  { type: 'filter', label: 'Filter', description: 'Filter fields by whitelist or blacklist' },
+  { type: 'hashing', label: 'Hashing', description: 'Hash specified fields (preserves data type)' },
+  { type: 'redaction', label: 'Redaction', description: 'Redact sensitive field values (preserves data type)' }
+];
+
+const Policy = () => {
+  // Pipeline selection
+  const [pipelines, setPipelines] = useState({});
+  const [selectedPipeline, setSelectedPipeline] = useState('');
+
+  // Field discovery state
+  const [discoveredFields, setDiscoveredFields] = useState([]);
+  const [fieldSyncStatus, setFieldSyncStatus] = useState(null);
+  const [isLoadingFields, setIsLoadingFields] = useState(false);
+
+  // Pipeline configuration state
+  const [pipelineSteps, setPipelineSteps] = useState([]);
+  const [selectedFields, setSelectedFields] = useState(new Set());
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isNewPipeline, setIsNewPipeline] = useState(false);
+
+  // UI state
+  const [showStepEditor, setShowStepEditor] = useState(false);
+  const [editingStepIndex, setEditingStepIndex] = useState(null);
+  const [showNewPipelineModal, setShowNewPipelineModal] = useState(false);
+  const [newPipelineSource, setNewPipelineSource] = useState('');
+  const [newPipelineSink, setNewPipelineSink] = useState('');
+  const [newPipelineSinkResourceType, setNewPipelineSinkResourceType] = useState('');
+  const [notification, setNotification] = useState(null);
+  const [availableComponents, setAvailableComponents] = useState(parseAvailableComponents());
+
+  // Fetch all pipelines on mount
+  useEffect(() => {
+    fetchPipelines();
+    fetchRegisteredComponents().then(components => {
+      setAvailableComponents(components);
+    });
+  }, []);
+
+  // Fetch discovered fields when pipeline is selected
+  useEffect(() => {
+    if (selectedPipeline) {
+      fetchDiscoveredFields();
+      loadPipelineConfiguration();
+    }
+  }, [selectedPipeline]);
+
+  const fetchPipelines = async () => {
+    try {
+      const response = await fetch(`${POLICY_SERVICE_URL}/transformers`);
+      if (!response.ok) throw new Error('Failed to fetch pipelines');
+      const data = await response.json();
+      setPipelines(data);
+    } catch (error) {
+      showNotification('error', `Failed to load pipelines: ${error.message}`);
+    }
+  };
+
+  const fetchDiscoveredFields = async () => {
+    setIsLoadingFields(true);
+    try {
+      const [source, sink] = parsePipelineId(selectedPipeline);
+      const response = await fetch(
+        `${POLICY_SERVICE_URL}/transformers/fields/${source}/${sink}`
+      );
+      if (!response.ok) throw new Error('Failed to discover fields');
+      const fields = await response.json();
+      setDiscoveredFields(fields);
+      // Initialize selected fields with all fields
+      setSelectedFields(new Set(fields.map(f => f.name)));
+    } catch (error) {
+      showNotification('error', `Field discovery failed: ${error.message}`);
+      setDiscoveredFields([]);
+    } finally {
+      setIsLoadingFields(false);
+    }
+  };
+
+  const loadPipelineConfiguration = async () => {
+    try {
+      const response = await fetch(`${POLICY_SERVICE_URL}/transformers/${selectedPipeline}`);
+      if (!response.ok) {
+        if (response.status === 404) {
+          // Pipeline doesn't exist yet, start fresh
+          setPipelineSteps([]);
+          return;
+        }
+        throw new Error('Failed to load pipeline');
+      }
+      const data = await response.json();
+      setPipelineSteps(data.steps || []);
+
+      // Extract selected fields from filter steps (whitelist mode)
+      const filterStep = data.steps?.find(s => s.type === 'filter' && s.params?.mode === 'whitelist');
+      if (filterStep?.params?.fields) {
+        setSelectedFields(new Set(filterStep.params.fields));
+      }
+    } catch (error) {
+      showNotification('error', `Failed to load pipeline config: ${error.message}`);
+    }
+  };
+
+  const syncFieldsToPermit = async () => {
+    setIsLoadingFields(true);
+    try {
+      const [source, sink] = parsePipelineId(selectedPipeline);
+      const response = await fetch(`${POLICY_SERVICE_URL}/transformers/fields/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source, sink })
+      });
+      if (!response.ok) throw new Error('Failed to sync fields');
+      const result = await response.json();
+      setFieldSyncStatus(result);
+      showNotification('success', `Synced ${result.created_attributes?.length || 0} field attributes to Permit.io`);
+    } catch (error) {
+      showNotification('error', `Field sync failed: ${error.message}`);
+    } finally {
+      setIsLoadingFields(false);
+    }
+  };
+
+  const savePipeline = async () => {
+    setIsSaving(true);
+    try {
+      const steps = [];
+
+      // Add filter step for field selection
+      if (selectedFields.size < discoveredFields.length) {
+        steps.push({
+          type: 'filter',
+          params: {
+            mode: 'whitelist',
+            fields: Array.from(selectedFields)
+          }
+        });
+      }
+
+      // Add any additional transformer steps
+      steps.push(...pipelineSteps);
+
+      const response = await fetch(`${POLICY_SERVICE_URL}/transformers/${selectedPipeline}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pipeline_id: selectedPipeline, steps })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        throw new Error(errorData.detail?.message || errorData.detail || 'Failed to save pipeline');
+      }
+
+      showNotification('success', 'Pipeline saved successfully');
+      setHasUnsavedChanges(false);
+      setIsNewPipeline(false);
+      await fetchPipelines(); // Refresh pipeline list
+    } catch (error) {
+      showNotification('error', `Failed to save pipeline: ${error.message}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const deletePipeline = async () => {
+    if (!confirm(`Delete pipeline "${selectedPipeline}"?`)) return;
+
+    try {
+      const response = await fetch(`${POLICY_SERVICE_URL}/transformers/${selectedPipeline}`, {
+        method: 'DELETE'
+      });
+      if (!response.ok) throw new Error('Failed to delete pipeline');
+      showNotification('success', 'Pipeline deleted');
+      setSelectedPipeline('');
+      setPipelineSteps([]);
+      setDiscoveredFields([]);
+      setIsNewPipeline(false);
+      await fetchPipelines();
+    } catch (error) {
+      showNotification('error', `Failed to delete pipeline: ${error.message}`);
+    }
+  };
+
+  const addStep = (step) => {
+    if (editingStepIndex !== null) {
+      const updated = [...pipelineSteps];
+      updated[editingStepIndex] = step;
+      setPipelineSteps(updated);
+      setEditingStepIndex(null);
+    } else {
+      setPipelineSteps([...pipelineSteps, step]);
+    }
+    setHasUnsavedChanges(true);
+    setShowStepEditor(false);
+  };
+
+  const editStep = (index) => {
+    setEditingStepIndex(index);
+    setShowStepEditor(true);
+  };
+
+  const deleteStep = (index) => {
+    setPipelineSteps(pipelineSteps.filter((_, i) => i !== index));
+    setHasUnsavedChanges(true);
+  };
+
+  const toggleField = (fieldName) => {
+    const newSelected = new Set(selectedFields);
+    if (newSelected.has(fieldName)) {
+      newSelected.delete(fieldName);
+    } else {
+      newSelected.add(fieldName);
+    }
+    setSelectedFields(newSelected);
+    setHasUnsavedChanges(true);
+  };
+
+  const toggleCategory = (category) => {
+    const newSelected = new Set(selectedFields);
+    const fieldsInCategory = fieldsByCategory[category] || [];
+    const allSelected = fieldsInCategory.every(f => newSelected.has(f));
+
+    if (allSelected) {
+      // Deselect all in category
+      fieldsInCategory.forEach(f => newSelected.delete(f));
+    } else {
+      // Select all in category
+      fieldsInCategory.forEach(f => newSelected.add(f));
+    }
+    setSelectedFields(newSelected);
+    setHasUnsavedChanges(true);
+  };
+
+  const parsePipelineId = (pipelineId) => {
+    // Parse "source_to_sink" or "source_to_sink:resourceType" format
+    const match = pipelineId.match(/^(.+)_to_(.+)$/);
+    if (match) {
+      return [match[1], match[2]];
+    }
+    return ['unknown', 'unknown'];
+  };
+
+  const createNewPipeline = () => {
+    setShowNewPipelineModal(true);
+  };
+
+  const confirmNewPipeline = () => {
+    if (!newPipelineSource || !newPipelineSink) {
+      showNotification('error', 'Please select both source and sink components');
+      return;
+    }
+    if (newPipelineSource === newPipelineSink) {
+      showNotification('error', 'Source and sink cannot be the same');
+      return;
+    }
+
+    // Check if sink requires a resource type selection
+    const sinkComponent = availableComponents.find(c => c.id === newPipelineSink);
+    const requiresResourceType = sinkComponent?.resourceTypes?.length > 0;
+
+    if (requiresResourceType && !newPipelineSinkResourceType) {
+      showNotification('error', `Please select a resource type for ${sinkComponent.name}`);
+      return;
+    }
+
+    // Build pipeline ID with resource type if selected: "source_to_sink:resourceType"
+    const sinkPart = newPipelineSinkResourceType
+      ? `${newPipelineSink}:${newPipelineSinkResourceType}`
+      : newPipelineSink;
+
+    const newId = `${newPipelineSource}_to_${sinkPart}`;
+    setSelectedPipeline(newId);
+    setPipelineSteps([]);
+    setDiscoveredFields([]);
+    setSelectedFields(new Set());
+    setHasUnsavedChanges(true);
+    setIsNewPipeline(true);
+    setShowNewPipelineModal(false);
+    setNewPipelineSource('');
+    setNewPipelineSink('');
+    setNewPipelineSinkResourceType('');
+  };
+
+  const showNotification = (type, message) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 5000);
+  };
+
+  // Group discovered fields by category - use discovered fields directly
+  const fieldsByCategory = React.useMemo(() => {
+    const grouped = {};
+    discoveredFields.forEach(field => {
+      const category = field.category || 'other';
+      if (!grouped[category]) {
+        grouped[category] = [];
+      }
+      grouped[category].push(field.name);
+    });
+    return grouped;
+  }, [discoveredFields]);
+
+  return (
+    <div className="space-y-6">
+      {/* Notification */}
+      {notification && (
+        <div className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg z-[100] ${
+          notification.type === 'error' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+        }`}>
+          {notification.message}
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="p-3 bg-blue-100 rounded-lg">
+              <FaShieldAlt className="text-2xl text-blue-600" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Policy Configuration</h2>
+              <p className="text-sm text-gray-600">Configure transformer pipelines and field permissions</p>
+            </div>
+          </div>
+          <button
+            onClick={createNewPipeline}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <FaPlus />
+            <span>New Pipeline</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Pipeline Selector */}
+      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Select Pipeline</label>
+        <div className="flex items-center space-x-4">
+          <select
+            value={selectedPipeline}
+            onChange={(e) => {
+              if (hasUnsavedChanges && !confirm('You have unsaved changes. Are you sure you want to switch pipelines?')) {
+                return;
+              }
+              setSelectedPipeline(e.target.value);
+            }}
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">-- Select a pipeline --</option>
+            {Object.keys(pipelines).map(id => (
+              <option key={id} value={id}>{id}</option>
+            ))}
+          </select>
+          {selectedPipeline && (
+            <div className="flex items-center space-x-2">
+              {isNewPipeline ? (
+                <span className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
+                  New - Unsaved
+                </span>
+              ) : (
+                <button
+                  onClick={deletePipeline}
+                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  title="Delete pipeline"
+                >
+                  <FaTrash />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {selectedPipeline && (
+        <>
+          {/* Field Discovery Panel */}
+          <FieldDiscoveryPanel
+            fieldsByCategory={fieldsByCategory}
+            selectedFields={selectedFields}
+            onToggleField={toggleField}
+            onToggleCategory={toggleCategory}
+            onRefresh={fetchDiscoveredFields}
+            onSync={syncFieldsToPermit}
+            syncStatus={fieldSyncStatus}
+            isLoading={isLoadingFields}
+          />
+
+          {/* Transformer Steps */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Transformer Steps</h3>
+              <button
+                onClick={() => { setEditingStepIndex(null); setShowStepEditor(true); }}
+                className="flex items-center space-x-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                <FaPlus />
+                <span>Add Step</span>
+              </button>
+            </div>
+
+            {pipelineSteps.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <p>No transformer steps configured.</p>
+                <p className="text-sm">Field filtering is handled automatically based on your selections above.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {pipelineSteps.map((step, index) => (
+                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3">
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded">
+                          {step.type}
+                        </span>
+                        <span className="text-sm text-gray-600">
+                          {TRANSFORMER_TYPES.find(t => t.type === step.type)?.description || step.type}
+                        </span>
+                      </div>
+                      {step.params && (
+                        <div className="mt-2 text-xs text-gray-500">
+                          {Object.entries(step.params).map(([key, value]) => (
+                            <span key={key} className="mr-3">
+                              <span className="font-medium">{key}:</span> {JSON.stringify(value)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => editStep(index)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Edit step"
+                      >
+                        <FaEdit />
+                      </button>
+                      <button
+                        onClick={() => deleteStep(index)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete step"
+                      >
+                        <FaTrash />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Save Button */}
+          <div className="flex justify-end space-x-3">
+            {hasUnsavedChanges && (
+              <button
+                onClick={() => {
+                  if (confirm('Discard unsaved changes?')) {
+                    setSelectedPipeline('');
+                    setPipelineSteps([]);
+                    setDiscoveredFields([]);
+                    setSelectedFields(new Set());
+                    setHasUnsavedChanges(false);
+                    setIsNewPipeline(false);
+                  }
+                }}
+                className="flex items-center space-x-2 px-6 py-3 rounded-lg font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <FaTimes />
+                <span>Cancel</span>
+              </button>
+            )}
+            <button
+              onClick={savePipeline}
+              disabled={isSaving}
+              className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-colors ${
+                isSaving
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+              }`}
+            >
+              <FaSave />
+              <span>{isSaving ? 'Saving...' : 'Save Pipeline'}</span>
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Step Editor Modal */}
+      {showStepEditor && (
+        <TransformerStepEditor
+          step={editingStepIndex !== null ? pipelineSteps[editingStepIndex] : null}
+          onSave={addStep}
+          onCancel={() => { setShowStepEditor(false); setEditingStepIndex(null); }}
+          availableFields={discoveredFields.map(f => f.name)}
+        />
+      )}
+
+      {/* New Pipeline Modal */}
+      {showNewPipelineModal && (
+        <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex items-center space-x-4">
+                <h2 className="text-xl font-semibold text-gray-900">Create New Pipeline</h2>
+                <button
+                  onClick={async () => {
+                    const components = await fetchRegisteredComponents();
+                    setAvailableComponents(components);
+                    showNotification('success', 'Component list refreshed');
+                  }}
+                  className="flex items-center space-x-1 px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  title="Refresh available components"
+                >
+                  <FaSync />
+                  <span>Refresh Components</span>
+                </button>
+              </div>
+              <button
+                onClick={() => {
+                  setShowNewPipelineModal(false);
+                  setNewPipelineSource('');
+                  setNewPipelineSink('');
+                  setNewPipelineSinkResourceType('');
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <p className="text-gray-600 mb-6">Select the source and sink components for this data pipeline:</p>
+
+              {/* Pipeline Flow Visualization */}
+              <div className="flex items-center justify-center gap-4 mb-6">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Source Component</label>
+                  <select
+                    value={newPipelineSource}
+                    onChange={(e) => setNewPipelineSource(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Select source...</option>
+                    {availableComponents.map(comp => (
+                      <option key={comp.id} value={comp.id} disabled={comp.id === newPipelineSink}>
+                        {comp.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-center pt-6">
+                  <FaArrowRight className="text-2xl text-gray-400" />
+                </div>
+
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Sink Component</label>
+                  <select
+                    value={newPipelineSink}
+                    onChange={(e) => {
+                      setNewPipelineSink(e.target.value);
+                      setNewPipelineSinkResourceType(''); // Reset resource type when sink changes
+                    }}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Select sink...</option>
+                    {availableComponents.map(comp => (
+                      <option key={comp.id} value={comp.id} disabled={comp.id === newPipelineSource}>
+                        {comp.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Resource Type Selector - shown only when sink has resourceTypes */}
+              {newPipelineSink && (() => {
+                const sinkComponent = availableComponents.find(c => c.id === newPipelineSink);
+                const resourceTypes = sinkComponent?.resourceTypes;
+
+                if (!resourceTypes || resourceTypes.length === 0) {
+                  return null;
+                }
+
+                return (
+                  <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Select Resource Type for {sinkComponent.name}
+                    </label>
+                    <p className="text-xs text-gray-500 mb-3">
+                      {sinkComponent.name} supports multiple data types. Select which type this pipeline should handle.
+                    </p>
+                    <div className="grid grid-cols-1 gap-3">
+                      {resourceTypes.map(resourceType => (
+                        <label
+                          key={resourceType.id}
+                          className={`flex items-start p-3 border rounded-lg cursor-pointer transition-colors ${
+                            newPipelineSinkResourceType === resourceType.id
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-gray-300 hover:border-gray-400'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="resourceType"
+                            value={resourceType.id}
+                            checked={newPipelineSinkResourceType === resourceType.id}
+                            onChange={(e) => setNewPipelineSinkResourceType(e.target.value)}
+                            className="mt-1 mr-3"
+                          />
+                          <div>
+                            <div className="font-medium text-gray-900">{resourceType.name}</div>
+                            {resourceType.description && (
+                              <div className="text-sm text-gray-500">{resourceType.description}</div>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Pipeline Preview */}
+              {(newPipelineSource || newPipelineSink) && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h3 className="text-sm font-medium text-blue-900 mb-2">Pipeline Preview</h3>
+                  <div className="flex items-center justify-center gap-3 text-blue-800">
+                    <span className="font-medium">
+                      {newPipelineSource || '(source)'}
+                    </span>
+                    <span className="text-blue-400">→</span>
+                    <span className="font-medium">
+                      {newPipelineSink
+                        ? (newPipelineSinkResourceType
+                            ? `${newPipelineSink}:${newPipelineSinkResourceType}`
+                            : newPipelineSink)
+                        : '(sink)'}
+                    </span>
+                  </div>
+                  {(newPipelineSource && newPipelineSink) && (
+                    <p className="text-sm text-blue-600 mt-2 text-center">
+                      Pipeline ID: <code className="bg-blue-100 px-2 py-1 rounded">
+                        {newPipelineSource}_to_{newPipelineSink}{newPipelineSinkResourceType ? `:${newPipelineSinkResourceType}` : ''}
+                      </code>
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Existing Pipelines Warning */}
+              {newPipelineSource && newPipelineSink && (() => {
+                const sinkPart = newPipelineSinkResourceType
+                  ? `${newPipelineSink}:${newPipelineSinkResourceType}`
+                  : newPipelineSink;
+                const existingPipelineId = `${newPipelineSource}_to_${sinkPart}`;
+
+                if (pipelines[existingPipelineId]) {
+                  return (
+                    <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <p className="text-sm text-yellow-800">
+                        ⚠️ A pipeline from <strong>{newPipelineSource}</strong> to <strong>{sinkPart}</strong> already exists.
+                        It will be replaced with the new configuration.
+                      </p>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNewPipelineModal(false);
+                  setNewPipelineSource('');
+                  setNewPipelineSink('');
+                  setNewPipelineSinkResourceType('');
+                }}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmNewPipeline}
+                disabled={!newPipelineSource || !newPipelineSink || (() => {
+                  const sinkComponent = availableComponents.find(c => c.id === newPipelineSink);
+                  return sinkComponent?.resourceTypes?.length > 0 && !newPipelineSinkResourceType;
+                })()}
+                className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+                  !newPipelineSource || !newPipelineSink || (() => {
+                    const sinkComponent = availableComponents.find(c => c.id === newPipelineSink);
+                    return sinkComponent?.resourceTypes?.length > 0 && !newPipelineSinkResourceType;
+                  })()
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
+              >
+                Create Pipeline
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Policy;

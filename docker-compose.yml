@@ -45,6 +45,7 @@ services:
       - VITE_RAW_DATA_URL=${VITE_RAW_DATA_URL}
       - VITE_DATA_STORAGE_URL=${VITE_DATA_STORAGE_URL}
       - VITE_ML_URL=${VITE_ML_URL}
+      - VITE_POLICY_SERVICE_URL=${VITE_POLICY_SERVICE_URL}
     working_dir: /app
     networks:
       - nwdaf-network
