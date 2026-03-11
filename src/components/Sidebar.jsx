@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { FaHouse } from 'react-icons/fa6';
 import { FaRobot, FaShieldAlt } from 'react-icons/fa';
 import { VscGraph } from 'react-icons/vsc';
-import { FaBars, FaChevronLeft, FaChartLine } from 'react-icons/fa';
+import { FaBars, FaChevronLeft, FaChartLine, FaCog } from 'react-icons/fa';
 
 const Sidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(window.innerWidth < 1024);
@@ -73,7 +73,7 @@ const Sidebar = () => {
 
       {/* Footer */}
       <div className="p-4 border-t border-gray-200">
-        <div className={`flex items-center ${isCollapsed ? 'justify-center px-0' : 'space-x-3 px-4'} py-2`}>
+        <div className={`flex items-center ${isCollapsed ? 'justify-center px-0' : 'px-4'} py-2 gap-2`}>
           <div className="w-8 h-8 min-w-[2rem] bg-blue-600 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0">U</div>
           {!isCollapsed && (
             <div className="flex-1 min-w-0">
@@ -81,6 +81,17 @@ const Sidebar = () => {
               <p className="text-xs text-gray-500 truncate">Admin</p>
             </div>
           )}
+          <NavLink
+            to="/settings"
+            title="Settings"
+            className={({ isActive }) =>
+              `p-1.5 rounded-lg transition-colors flex-shrink-0 ${
+                isActive ? 'text-blue-600 bg-blue-50' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+              }`
+            }
+          >
+            <FaCog className="text-base" />
+          </NavLink>
         </div>
       </div>
     </div>

@@ -1,347 +1,323 @@
-import React, { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useConfig } from '../contexts/ConfigContext';
-import { useWebSocket } from '../hooks/useWebSocket';
-import TrainingStatus from '../components/TrainingStatus';
 
-// Memoized ModelCard component - defined outside parent to prevent re-creation on each render
-const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefault, onDelete, isDefault, analyticsType, horizon, isTraining, trainingStatus, trainingLogs }) => {
-  const latestVersion = model.latest_versions && model.latest_versions.length > 0 ? model.latest_versions[model.latest_versions.length - 1] : null;
+// ModelCard
+const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefault, onDelete, isDefault, isTraining }) => {
+  const isBestForAny = model.best_for_fields?.length > 0;
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow [container-type:inline-size]">
+      {/* Header: name+badges left, buttons right - stacks when card is narrow (large font sizes) */}
+      <div className="flex flex-wrap items-start gap-3 mb-3">
+        <div className="flex-1 min-w-0">
+          <h3 className="text-lg font-semibold text-gray-900 break-words">{model.name || 'Unnamed Model'}</h3>
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-700 rounded font-mono">
+              v{model.latest_version ?? 'N/A'}
+            </span>
+            {model.architecture && (
+              <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded uppercase">
+                {model.architecture}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1 mt-2 min-h-[22px]">
+            {isBestForAny && model.best_for_fields.map(field => (
+              <span key={field} className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
+                Best for: {field}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="model-card-actions shrink-0 flex flex-col gap-2">
+        <div className="flex gap-2">
+          <button
+            onClick={() => onShowDetails(model)}
+            className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors flex items-center justify-center gap-1.5"
+            title="View model configuration"
+          >
+            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Details
+          </button>
+          <button
+            onClick={() => onShowInfo(model)}
+            className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center justify-center gap-1.5"
+          >
+            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Info
+          </button>
+          <button
+            onClick={() => onTrain(model)}
+            disabled={isTraining}
+            className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Train
+          </button>
+        </div>
+        <div className="flex gap-2">
+          {!isBestForAny && (
+            <button
+              onClick={() => onSetDefault(model)}
+              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1.5"
+              title="Set as default model"
+            >
+              Force
+            </button>
+          )}
+          <button
+            onClick={() => onDelete(model)}
+            className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center justify-center gap-1.5"
+            title="Delete model instance"
+          >
+            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Delete
+          </button>
+        </div>
+        {/* /model-card-actions */}
+        </div>
+      {/* /flex-wrap header */}
+      </div>
+
+      <hr className="border-gray-200 mt-1 mb-3" />
+      <div className="space-y-2 text-sm">
+        {model.created_at && (
+          <div className="flex justify-between">
+            <span className="text-gray-600">Created at:</span>
+            <span className="font-medium text-gray-900">
+              {new Date(model.created_at).toLocaleDateString()}
+            </span>
+          </div>
+        )}
+        {model.last_trained_at && (
+          <div className="flex justify-between">
+            <span className='text-gray-600'>Last trained at:</span>
+            <span className="font-medium text-gray-900">
+              {new Date(model.last_trained_at).toLocaleString()}
+            </span>
+          </div>
+        )}
+        {model.id && (
+          <div className="flex justify-between">
+            <span className='text-gray-600'>ID:</span>
+            <span className="font-medium text-gray-900 truncate ml-2" title={model.id}>
+              {model.id}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  const modelSame = prevProps.model.id === nextProps.model.id &&
+                   prevProps.model.created_at === nextProps.model.created_at &&
+                   prevProps.model.latest_version === nextProps.model.latest_version &&
+                   prevProps.model.architecture === nextProps.model.architecture &&
+                   JSON.stringify(prevProps.model.best_for_fields) === JSON.stringify(nextProps.model.best_for_fields);
+  const isDefaultSame = prevProps.isDefault === nextProps.isDefault;
+  const isTrainingSame = prevProps.isTraining === nextProps.isTraining;
+  return modelSame && isDefaultSame && isTrainingSame;
+});
+
+// CreateModelModal
+const FieldCheckboxes = ({ fieldKey, label, fields, loadingFields, selected, onToggle }) => {
+  const allSelected = fields.length > 0 && fields.every(f => selected.includes(f));
+  const toggleAll = () => onToggle(allSelected ? [] : [...fields], fieldKey, true);
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h3 className="text-lg font-semibold text-gray-900">{model.name || 'Unnamed Model'}</h3>
-            {isDefault && (
-              <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
-                in use
-              </span>
-            )}
-
-          </div>
-          <div className="flex items-center gap-2 mt-2">
-            <p className="text-sm text-gray-500">
-              Version: <span className="font-mono font-medium text-gray-900 bg-gray-100 px-2 py-0.5 rounded">v{latestVersion?.version || 'N/A'}</span>
-            </p>
-            <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">
-              {analyticsType}
-            </span>
-            {horizon && (
-              <span className="px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-700 rounded">
-                {horizon}s
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="flex flex-col gap-2">
-          <div className="flex gap-2 w-full">
-            <button
-              onClick={() => onShowDetails(model)}
-              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors flex items-center justify-center gap-1.5"
-              title="View model configuration"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Details
-            </button>
-            <button
-              onClick={() => onShowInfo(model)}
-              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center justify-center gap-1.5"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Info
-            </button>
-            <button
-              onClick={() => onTrain(model)}
-              disabled={isTraining}
-              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Train
-            </button>
-          </div>
-          <div className="flex gap-2 w-full">
-            {!isDefault && (
-              <button
-                onClick={() => onSetDefault(model)}
-                className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1.5"
-                title="Set as default model"
-              >
-                Force
-              </button>
-            )}
-            <button
-              onClick={() => onDelete(model)}
-              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center justify-center gap-1.5"
-              title="Delete model instance"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-              Delete
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-2 text-sm">
-        {model.creation_timestamp && (
-          <div className="flex justify-between">
-            <span className="text-gray-600">Created:</span>
-            <span className="font-medium text-gray-900">
-              {new Date(model.creation_timestamp).toLocaleDateString()}
-            </span>
-          </div>
-        )}
-        {model.last_updated_timestamp && (
-          <div className="flex justify-between">
-            <span className="text-gray-600">Last Updated:</span>
-            <span className="font-medium text-gray-900">
-              {new Date(model.last_updated_timestamp).toLocaleDateString()}
-            </span>
-          </div>
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <label className="block text-sm font-medium text-gray-700">{label} <span className="text-red-500">*</span></label>
+        {!loadingFields && fields.length > 0 && (
+          <button
+            type="button"
+            onClick={toggleAll}
+            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+          >
+            {allSelected ? 'Deselect all' : 'Select all'}
+          </button>
         )}
       </div>
-
-      {model.description && (
-        <p className="mt-4 text-sm text-gray-600 border-t border-gray-200 pt-3">
-          {model.description}
-        </p>
-      )}
-
-      {/* Training Status Component - Gets data from parent WebSocket */}
-      <TrainingStatus
-        modelName={model.name}
-        trainingStatus={trainingStatus[model.name]}
-        trainingLogs={trainingLogs[model.name]}
-      />
-
-      {latestVersion && (
-        <div className="mt-4 pt-4 border-t border-gray-200">
-          <p className="text-xs font-semibold text-gray-700 mb-2">Latest Version</p>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-600">Version:</span>
-              <span className="font-mono font-medium text-gray-900 bg-gray-100 px-2 py-1 rounded">
-                v{latestVersion.version}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-600">Stage:</span>
-              <span className={`px-2 py-1 rounded text-xs font-medium ${
-                latestVersion.stage === 'Production'
-                  ? 'bg-green-100 text-green-800'
-                  : latestVersion.stage === 'Staging'
-                  ? 'bg-yellow-100 text-yellow-800'
-                  : 'bg-gray-100 text-gray-800'
-              }`}>
-                {latestVersion.stage}
-              </span>
-            </div>
-            {latestVersion.run_id && (
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-600">Run ID:</span>
-                <span className="font-mono text-gray-700 text-xs truncate max-w-[180px]" title={latestVersion.run_id}>
-                  {latestVersion.run_id}
-                </span>
-              </div>
-            )}
+      {loadingFields ? (
+        <p className="text-sm text-gray-500">Loading fields...</p>
+      ) : (
+        <div className="border border-gray-200 rounded-lg p-3 max-h-48 overflow-y-auto bg-gray-50">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+            {fields.map(f => (
+              <label key={f} className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(f)}
+                  onChange={() => onToggle(f, fieldKey)}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
+                />
+                <span className="text-gray-700 truncate">{f}</span>
+              </label>
+            ))}
           </div>
         </div>
       )}
     </div>
   );
-}, (prevProps, nextProps) => {
-  // Custom comparison function - only return true (skip re-render) if:
-  // 1. The model object is the same (shallow comparison of key properties)
-  // 2. The training status for THIS model hasn't changed
-  // 3. The training logs for THIS model haven't changed
-  // 4. The isDefault status hasn't changed
-  // 5. The isTraining state hasn't changed
-  // Note: We DON'T compare handler functions (onShowInfo, onTrain, etc.) because
-  // even though they're stable references, the inline () => fn(model) creates new closures.
-  // The key is that model data is what drives re-renders, not handler references.
+};
 
-  const modelSame = prevProps.model.name === nextProps.model.name &&
-                   prevProps.model.creation_timestamp === nextProps.model.creation_timestamp &&
-                   prevProps.model.last_updated_timestamp === nextProps.model.last_updated_timestamp &&
-                   prevProps.model.description === nextProps.model.description &&
-                   JSON.stringify(prevProps.model.latest_versions) === JSON.stringify(nextProps.model.latest_versions);
-
-  const trainingStatusSame = JSON.stringify(prevProps.trainingStatus[prevProps.model.name]) === JSON.stringify(nextProps.trainingStatus[nextProps.model.name]);
-  const trainingLogsSame = JSON.stringify(prevProps.trainingLogs[prevProps.model.name]) === JSON.stringify(nextProps.trainingLogs[nextProps.model.name]);
-  const isDefaultSame = prevProps.isDefault === nextProps.isDefault;
-  const isTrainingSame = prevProps.isTraining === nextProps.isTraining;
-
-  return modelSame && trainingStatusSame && trainingLogsSame && isDefaultSame && isTrainingSame;
-});
-
-// Create Model Modal Component - Extracted to prevent re-mounting on parent re-render
-const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCreateModel, config, mlUrl }) => {
+const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCreateModel, mlUrl }) => {
   const [formData, setFormData] = useState({
-    analytics_type: 'latency',
-    horizon: 60,
-    model_type: 'lstm',
     name: '',
-    config: {
-      training: {
-        learning_rate: 0.001,
-        optimizer: 'adam',
-        loss_function: 'mse',
-        max_epochs: 50,
-      },
-      architecture: {
-        hidden_size: 32,
-        num_layers: 2,
-        dropout: 0.2,
-        activation: 'relu',
-      },
-      sequence: {
-        sequence_length: 5,
-      }
-    }
+    architecture: 'ann',
+    input_fields: [],
+    output_fields: [],
+    window_duration_seconds: 60,
+    lookback_steps: 30,
+    forecast_steps: 5,
   });
   const [isCreating, setIsCreating] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [configOptions, setConfigOptions] = useState(null);
+  const [hiddenSize, setHiddenSize] = useState(32);
+  const [fields, setFields] = useState([]);
+  const [loadingFields, setLoadingFields] = useState(true);
 
-  // Fetch config options on mount
   useEffect(() => {
-    const fetchConfigOptions = async () => {
+    if (!showCreateModal) return;
+    const fetchFields = async () => {
+      setLoadingFields(true);
       try {
-        const response = await fetch(`${mlUrl}/api/v1/model/config-options`);
+        const response = await fetch(`${mlUrl}/v1/fields`);
         if (response.ok) {
           const data = await response.json();
-          setConfigOptions(data);
+          setFields((data.fields ?? []).map(f => (typeof f === 'object' ? f.name : f)));
         }
-      } catch (err) {
-        console.error('Failed to fetch config options:', err);
+      } finally {
+        setLoadingFields(false);
       }
     };
-    fetchConfigOptions();
-  }, [mlUrl]);
+    fetchFields();
+  }, [showCreateModal, mlUrl]);
 
   if (!showCreateModal) return null;
+
+  const toggleField = (field, key, bulk = false) => {
+    setFormData(prev => ({
+      ...prev,
+      [key]: bulk ? field : prev[key].includes(field) ? prev[key].filter(f => f !== field) : [...prev[key], field],
+    }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsCreating(true);
-
-    const requestBody = {
-      analytics_type: formData.analytics_type,
-      horizon: parseInt(formData.horizon),
-      model_type: formData.model_type,
+    const body = {
       name: formData.name,
+      config: {
+        architecture: formData.architecture,
+        input_fields: formData.input_fields,
+        output_fields: formData.output_fields,
+        window_duration_seconds: parseInt(formData.window_duration_seconds),
+        lookback_steps: parseInt(formData.lookback_steps),
+        forecast_steps: parseInt(formData.forecast_steps),
+        ...(showAdvanced ? { hidden_size: parseInt(hiddenSize) } : {}),
+      },
     };
-
-    // Only include config if user opened advanced settings
-    if (showAdvanced) {
-      requestBody.config = formData.config;
-    }
-
-    const success = await handleCreateModel(requestBody);
-
+    await handleCreateModel(body);
     setIsCreating(false);
   };
 
-  const availableModelTypes = configOptions?.model_types || [];
-  const availableAnalyticsTypes = configOptions?.analytics_types || [];
-  const availableHorizons = configOptions?.horizons || [];
 
   return (
     <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full flex flex-col max-h-[90vh]">
-        {/* Header */}
         <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-lg flex-shrink-0">
           <div>
             <h3 className="text-xl font-bold text-gray-900">Create new Instance</h3>
             <p className="text-sm text-gray-600 mt-1">Instantiate a model</p>
           </div>
-          <button
-            onClick={() => setShowCreateModal(false)}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
+          <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        {/* Form - Scrollable */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
-          {/* Model Name */}
+          {/* Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Model Name <span className="text-red-500">*</span>
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Model Name <span className="text-red-500">*</span></label>
             <input
               type="text"
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="my_custom_model"
+              onChange={(e) => setFormData({ ...formData, name: e.target.value.replace(/ /g, '_') })}
+              placeholder="e.g. latency_ann_60"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               required
+              pattern="\S+"
+              title="Model name cannot contain spaces"
             />
           </div>
 
-          {/* Analytics Type */}
+          {/* Architecture */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Analytics Type
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Architecture <span className="text-red-500">*</span></label>
             <select
-              value={formData.analytics_type}
-              onChange={(e) => setFormData({ ...formData, analytics_type: e.target.value })}
+              value={formData.architecture}
+              onChange={(e) => setFormData({ ...formData, architecture: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               required
             >
-              {[...new Set(availableAnalyticsTypes)].map(type => (
-                <option key={type} value={type}>{type}</option>
-              ))}
+              <option value="ann">ANN</option>
+              <option value="lstm">LSTM</option>
             </select>
           </div>
 
-          {/* Horizon */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Horizon (seconds)
-            </label>
-            <select
-              value={formData.horizon}
-              onChange={(e) => setFormData({ ...formData, horizon: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required
-            >
-              {[...new Set(availableHorizons)].map(horizon => (
-                <option key={horizon} value={horizon}>{horizon}s</option>
-              ))}
-            </select>
-          </div>
+          {/* Input Fields */}
+          <FieldCheckboxes fieldKey="input_fields" label="Input Fields" fields={fields} loadingFields={loadingFields} selected={formData.input_fields} onToggle={toggleField} />
 
-          {/* Model Type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Model Type
-            </label>
-            <select
-              value={formData.model_type}
-              onChange={(e) => setFormData({ ...formData, model_type: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required
-            >
-              {availableModelTypes.map(type => (
-                <option key={type} value={type}>
-                  {type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')}
-                </option>
-              ))}
-            </select>
+          {/* Output Fields */}
+          <FieldCheckboxes fieldKey="output_fields" label="Output Fields" fields={fields} loadingFields={loadingFields} selected={formData.output_fields} onToggle={toggleField} />
+
+          {/* Steps grid */}
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Window (s) <span className="text-red-500">*</span></label>
+              <input
+                type="number"
+                min="1"
+                value={formData.window_duration_seconds}
+                onChange={(e) => setFormData({ ...formData, window_duration_seconds: e.target.value })}
+                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Lookback steps <span className="text-red-500">*</span></label>
+              <input
+                type="number"
+                min="1"
+                value={formData.lookback_steps}
+                onChange={(e) => setFormData({ ...formData, lookback_steps: e.target.value })}
+                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Forecast steps <span className="text-red-500">*</span></label>
+              <input
+                type="number"
+                min="1"
+                value={formData.forecast_steps}
+                onChange={(e) => setFormData({ ...formData, forecast_steps: e.target.value })}
+                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
+            </div>
           </div>
 
           {/* Advanced Settings Toggle */}
@@ -351,201 +327,28 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
               onClick={() => setShowAdvanced(!showAdvanced)}
               className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
             >
-              <svg
-                className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-90' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
+              <svg className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
               Advanced Settings
             </button>
           </div>
 
-          {/* Advanced Settings Panel */}
           {showAdvanced && (
-            <div className="border border-gray-200 rounded-lg p-4 space-y-4 bg-gray-50">
-              {/* Training Config */}
+            <div className="border border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50">
               <div>
-                <h4 className="text-sm font-semibold text-gray-900 mb-3">Training</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Learning Rate</label>
-                    <input
-                      type="number"
-                      step="0.0001"
-                      value={formData.config.training.learning_rate}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        config: {
-                          ...formData.config,
-                          training: { ...formData.config.training, learning_rate: parseFloat(e.target.value) }
-                        }
-                      })}
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Optimizer</label>
-                    <select
-                      value={formData.config.training.optimizer}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        config: {
-                          ...formData.config,
-                          training: { ...formData.config.training, optimizer: e.target.value }
-                        }
-                      })}
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      {configOptions?.optimizers?.map(opt => (
-                        <option key={opt} value={opt}>{opt.charAt(0).toUpperCase() + opt.slice(1)}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Loss Function</label>
-                    <select
-                      value={formData.config.training.loss_function}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        config: {
-                          ...formData.config,
-                          training: { ...formData.config.training, loss_function: e.target.value }
-                        }
-                      })}
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      {configOptions?.loss_functions?.map(fn => (
-                        <option key={fn} value={fn}>{fn.toUpperCase()}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Max Epochs</label>
-                    <input
-                      type="number"
-                      value={formData.config.training.max_epochs}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        config: {
-                          ...formData.config,
-                          training: { ...formData.config.training, max_epochs: parseInt(e.target.value) }
-                        }
-                      })}
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Architecture Config */}
-              <div>
-                <h4 className="text-sm font-semibold text-gray-900 mb-3">Architecture</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Hidden Size</label>
-                    <input
-                      type="number"
-                      value={formData.config.architecture.hidden_size}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        config: {
-                          ...formData.config,
-                          architecture: { ...formData.config.architecture, hidden_size: parseInt(e.target.value) }
-                        }
-                      })}
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Num Layers</label>
-                    <input
-                      type="number"
-                      value={formData.config.architecture.num_layers}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        config: {
-                          ...formData.config,
-                          architecture: { ...formData.config.architecture, num_layers: parseInt(e.target.value) }
-                        }
-                      })}
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Dropout</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      max="1"
-                      value={formData.config.architecture.dropout}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        config: {
-                          ...formData.config,
-                          architecture: { ...formData.config.architecture, dropout: parseFloat(e.target.value) }
-                        }
-                      })}
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Activation</label>
-                    <select
-                      value={formData.config.architecture.activation}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        config: {
-                          ...formData.config,
-                          architecture: { ...formData.config.architecture, activation: e.target.value }
-                        }
-                      })}
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      {configOptions?.activations?.map(act => (
-                        <option key={act} value={act}>{act.charAt(0).toUpperCase() + act.slice(1).replace('_', ' ')}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Sequence Config */}
-              <div>
-                <h4 className="text-sm font-semibold text-gray-900 mb-3">Sequence</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Sequence Length</label>
-                    <input
-                      type="number"
-                      value={formData.config.sequence.sequence_length}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        config: {
-                          ...formData.config,
-                          sequence: { ...formData.config.sequence, sequence_length: parseInt(e.target.value) }
-                        }
-                      })}
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                </div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Hidden Size (default 32)</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={hiddenSize}
+                  onChange={(e) => setHiddenSize(e.target.value)}
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
               </div>
             </div>
           )}
 
-          {/* Preview */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <p className="text-xs text-blue-600 font-medium mb-1">Model Name:</p>
-            <p className="text-sm font-mono text-blue-900">
-              {formData.name || `${formData.analytics_type}_${formData.model_type}_${formData.horizon}`}
-            </p>
-          </div>
-
-          {/* Buttons */}
           <div className="flex gap-3 pt-4 flex-shrink-0 border-t border-gray-200 -mx-6 px-6 -mb-6 pb-6 bg-white">
             <button
               type="button"
@@ -557,17 +360,12 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
             </button>
             <button
               type="submit"
-              disabled={isCreating}
+              disabled={isCreating || formData.input_fields.length === 0 || formData.output_fields.length === 0}
               className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isCreating ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  Creating...
-                </>
-              ) : (
-                'Create Model'
-              )}
+                <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>Creating...</>
+              ) : 'Create Model'}
             </button>
           </div>
         </form>
@@ -576,102 +374,231 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
   );
 });
 
-// Training Info Modal Component - Extracted to prevent re-mounting on parent re-render
-const TrainingInfoModal = memo(({ showModal, setShowModal, selectedModel, loadingTrainingInfo, trainingInfo }) => {
+// ForceFieldPickerModal
+const ForceFieldPickerModal = ({ model, fields, onConfirm, onCancel }) => {
+  const [selected, setSelected] = useState(fields[0] ?? '');
+  if (!model) return null;
+  return (
+    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 space-y-4">
+        <h3 className="text-lg font-bold text-gray-900">Set Best Model</h3>
+        <p className="text-sm text-gray-600">
+          <span className="font-medium">{model.name}</span> has multiple output fields. Choose which field to set this model as best for:
+        </p>
+        <select
+          value={selected}
+          onChange={(e) => setSelected(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+        >
+          {fields.map(f => <option key={f} value={f}>{f}</option>)}
+        </select>
+        <div className="flex gap-3">
+          <button onClick={onCancel} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm">
+            Cancel
+          </button>
+          <button onClick={() => onConfirm(selected)} className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors text-sm">
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// AllJobsModal
+
+const AllJobsModal = ({ showModal, setShowModal, mlUrl, onJobsUpdate }) => {
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const intervalRef = useRef(null);
+
+  const fetchJobs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${mlUrl}/v1/training/jobs`);
+      if (response.ok) {
+        const data = await response.json();
+        const sorted = [...(Array.isArray(data) ? data : [])].sort((a, b) => {
+          const aActive = a.status === 'running' || a.status === 'pending';
+          const bActive = b.status === 'running' || b.status === 'pending';
+          if (aActive !== bActive) return aActive ? -1 : 1;
+          return new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0);
+        });
+        setJobs(sorted);
+        onJobsUpdate?.(sorted.filter(j => j.status === 'running' || j.status === 'pending').length);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [mlUrl, onJobsUpdate]);
+
+  useEffect(() => {
+    if (!showModal) return;
+    fetchJobs();
+    intervalRef.current = setInterval(fetchJobs, 5000);
+    return () => clearInterval(intervalRef.current);
+  }, [showModal, fetchJobs]);
+
+  if (!showModal) return null;
+
+  const statusBadge = (status) => {
+    const base = 'px-2 py-0.5 rounded text-xs font-medium';
+    if (status === 'completed') return `${base} bg-green-100 text-green-800`;
+    if (status === 'failed')    return `${base} bg-red-100 text-red-800`;
+    if (status === 'running')   return `${base} bg-yellow-100 text-yellow-800`;
+    return `${base} bg-gray-100 text-gray-700`;
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900">Training Jobs</h3>
+            <p className="text-sm text-gray-600 mt-1">All training jobs across all models</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={fetchJobs}
+              disabled={loading}
+              className="px-3 py-1.5 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              {loading ? 'Refreshing…' : 'Refresh'}
+            </button>
+            <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6 overflow-y-auto flex-1">
+          {loading && jobs.length === 0 ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+            </div>
+          ) : jobs.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">No training jobs found.</div>
+          ) : (
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Job ID</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Model ID</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Created</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Started</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {jobs.map((job) => (
+                    <tr key={job.job_id} className="hover:bg-gray-50">
+                      <td className="px-4 py-2 font-mono text-xs text-gray-600" title={job.job_id}>
+                        {job.job_id?.slice(0, 8)}…
+                      </td>
+                      <td className="px-4 py-2 font-mono text-xs text-gray-600" title={job.model_id}>
+                        {job.model_id?.slice(0, 8)}…
+                      </td>
+                      <td className="px-4 py-2">
+                        <span className={statusBadge(job.status)}>{job.status}</span>
+                      </td>
+                      <td className="px-4 py-2 text-gray-600 text-xs">
+                        {job.created_at ? new Date(job.created_at).toLocaleString() : '-'}
+                      </td>
+                      <td className="px-4 py-2 text-gray-600 text-xs">
+                        {job.started_at ? new Date(job.started_at).toLocaleString() : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-3 flex-shrink-0">
+          <p className="text-xs text-gray-500 text-center">Auto-refreshes every 5s while open</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// JobHistoryModal
+const JobHistoryModal = memo(({ showModal, setShowModal, selectedModel, jobs, loadingJobs }) => {
   if (!showModal || !selectedModel) return null;
+
+  const statusBadge = (status) => {
+    const base = 'px-2 py-0.5 rounded text-xs font-medium';
+    if (status === 'completed') return `${base} bg-green-100 text-green-800`;
+    if (status === 'failed') return `${base} bg-red-100 text-red-800`;
+    if (status === 'running') return `${base} bg-yellow-100 text-yellow-800`;
+    return `${base} bg-gray-100 text-gray-700`;
+  };
 
   return (
     <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
           <div>
-            <h3 className="text-xl font-bold text-gray-900">Last Training Session Info</h3>
+            <h3 className="text-xl font-bold text-gray-900">Training Job History</h3>
             <p className="text-sm text-gray-600 mt-1">{selectedModel.name}</p>
           </div>
-          <button
-            onClick={() => setShowModal(false)}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
+          <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6 space-y-6">
-          {loadingTrainingInfo ? (
+        <div className="p-6">
+          {loadingJobs ? (
             <div className="flex items-center justify-center py-12">
               <div className="text-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="mt-4 text-sm text-gray-600">Loading training info...</p>
+                <p className="mt-4 text-sm text-gray-600">Loading job history...</p>
               </div>
             </div>
-          ) : trainingInfo ? (
-            <>
-              {/* Model Info */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <span className="text-sm font-semibold text-blue-900">Model: {trainingInfo.model_name}</span>
-                </div>
-              </div>
-
-              {/* Training Info Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-xs text-gray-600 mb-1">Last Training Time</p>
-                  <p className="text-sm font-medium text-gray-900">
-                    {new Date(trainingInfo.last_training_time * 1000).toLocaleString()}
-                  </p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-xs text-gray-600 mb-1">Model Version</p>
-                  <p className="text-sm font-medium text-gray-900">
-                    v{trainingInfo.model_version}
-                  </p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-xs text-gray-600 mb-1">Samples Used</p>
-                  <p className="text-sm font-medium text-gray-900">{trainingInfo.samples_used?.toLocaleString()}</p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-xs text-gray-600 mb-1">Features Used</p>
-                  <p className="text-sm font-medium text-gray-900">{trainingInfo.features_used}</p>
-                </div>
-              </div>
-
-              {/* Performance Metrics */}
-              <div>
-                <h4 className="text-sm font-semibold text-gray-900 mb-3">Training Metrics</h4>
-                <div className="grid grid-cols-1 gap-4">
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                    <p className="text-xs text-gray-600 mb-1">Training Loss</p>
-                    <p className="text-2xl font-bold text-gray-900">{trainingInfo.training_loss?.toFixed(4)}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Run ID */}
-              <div>
-                <h4 className="text-sm font-semibold text-gray-900 mb-3">MLflow Run Details</h4>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-600">Run ID:</span>
-                    <span className="font-mono text-gray-900 text-xs break-all">{trainingInfo.run_id}</span>
-                  </div>
-                </div>
-              </div>
-            </>
-          ) : (
+          ) : jobs.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-gray-500">No training information available</p>
+              <p className="text-gray-500">No training jobs found for this model.</p>
+            </div>
+          ) : (
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Job ID</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Created</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Started</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {jobs.map((job) => (
+                    <tr key={job.job_id} className="hover:bg-gray-50">
+                      <td className="px-4 py-2 font-mono text-xs text-gray-600 truncate max-w-[120px]" title={job.job_id}>
+                        {job.job_id?.slice(0, 8)}…
+                      </td>
+                      <td className="px-4 py-2">
+                        <span className={statusBadge(job.status)}>{job.status}</span>
+                      </td>
+                      <td className="px-4 py-2 text-gray-600 text-xs">
+                        {job.created_at ? new Date(job.created_at).toLocaleString() : '-'}
+                      </td>
+                      <td className="px-4 py-2 text-gray-600 text-xs">
+                        {job.started_at ? new Date(job.started_at).toLocaleString() : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
 
-        {/* Footer */}
         <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4">
           <button
             onClick={() => setShowModal(false)}
@@ -685,7 +612,7 @@ const TrainingInfoModal = memo(({ showModal, setShowModal, selectedModel, loadin
   );
 });
 
-// Model Details Modal Component - Shows full model configuration
+// Model Details Modal
 const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadingDetails, modelDetails, mlUrl }) => {
   if (!showModal || !selectedModel) return null;
 
@@ -710,12 +637,7 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
         <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
           <div className="p-12 text-center">
             <p className="text-gray-500">No model details available</p>
-            <button
-              onClick={() => setShowModal(false)}
-              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              Close
-            </button>
+            <button onClick={() => setShowModal(false)} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Close</button>
           </div>
         </div>
       </div>
@@ -727,142 +649,81 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
   return (
     <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
-        {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div>
             <h3 className="text-xl font-bold text-gray-900">Model Details</h3>
             <p className="text-sm text-gray-600 mt-1">{modelDetails.name}</p>
           </div>
-          <button
-            onClick={() => setShowModal(false)}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
+          <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        {/* Content - Scrollable */}
         <div className="p-6 space-y-6 overflow-y-auto flex-1">
           {/* Basic Info */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <h4 className="text-sm font-semibold text-blue-900 mb-3">Basic Information</h4>
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
-                <span className="text-gray-600">Model Type:</span>
-                <span className="ml-2 font-medium text-gray-900">{modelDetails.model_type?.toUpperCase()}</span>
+                <span className="text-gray-600">ID:</span>
+                <span className="ml-2 font-mono text-xs text-gray-900 break-all">{modelDetails.id}</span>
               </div>
               <div>
-                <span className="text-gray-600">Analytics Type:</span>
-                <span className="ml-2 font-medium text-gray-900">{modelDetails.analytics_type}</span>
+                <span className="text-gray-600">Architecture:</span>
+                <span className="ml-2 font-medium text-gray-900 uppercase">{modelDetails.architecture ?? config.architecture ?? 'N/A'}</span>
               </div>
               <div>
-                <span className="text-gray-600">Horizon:</span>
-                <span className="ml-2 font-medium text-gray-900">{modelDetails.horizon}s</span>
+                <span className="text-gray-600">Version:</span>
+                <span className="ml-2 font-medium text-gray-900">v{modelDetails.latest_version ?? 'N/A'}</span>
               </div>
               <div>
-                <span className="text-gray-600">Stage:</span>
-                <span className={`ml-2 px-2 py-0.5 rounded text-xs font-medium ${
-                  modelDetails.stage === 'Production'
-                    ? 'bg-green-100 text-green-800'
-                    : modelDetails.stage === 'Staging'
-                    ? 'bg-yellow-100 text-yellow-800'
-                    : 'bg-gray-100 text-gray-800'
-                }`}>
-                  {modelDetails.stage || 'N/A'}
+                <span className="text-gray-600">Created:</span>
+                <span className="ml-2 font-medium text-gray-900">
+                  {modelDetails.created_at ? new Date(modelDetails.created_at).toLocaleString() : 'N/A'}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Training Config */}
-          {config.training && (
+          {/* Config */}
+          {Object.keys(config).length > 0 && (
             <div>
-              <h4 className="text-sm font-semibold text-gray-900 mb-3">Training Configuration</h4>
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <div className="grid grid-cols-2 gap-3 text-sm">
+              <h4 className="text-sm font-semibold text-gray-900 mb-3">Configuration</h4>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3 text-sm">
+                {config.input_fields?.length > 0 && (
                   <div>
-                    <span className="text-gray-600">Learning Rate:</span>
-                    <span className="ml-2 font-mono font-medium text-gray-900">{config.training.learning_rate}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Optimizer:</span>
-                    <span className="ml-2 font-medium text-gray-900">{config.training.optimizer}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Loss Function:</span>
-                    <span className="ml-2 font-medium text-gray-900">{config.training.loss_function}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Max Epochs:</span>
-                    <span className="ml-2 font-medium text-gray-900">{config.training.max_epochs}</span>
-                  </div>
-                  {config.training.batch_size && (
-                    <div>
-                      <span className="text-gray-600">Batch Size:</span>
-                      <span className="ml-2 font-medium text-gray-900">{config.training.batch_size}</span>
+                    <span className="text-gray-600">Input Fields:</span>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {config.input_fields.map(f => (
+                        <span key={f} className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-mono">{f}</span>
+                      ))}
                     </div>
+                  </div>
+                )}
+                {config.output_fields?.length > 0 && (
+                  <div>
+                    <span className="text-gray-600">Output Fields:</span>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {config.output_fields.map(f => (
+                        <span key={f} className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-mono">{f}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  {config.window_duration_seconds != null && (
+                    <div><span className="text-gray-600">Window:</span> <span className="font-medium text-gray-900">{config.window_duration_seconds}s</span></div>
                   )}
-                  {config.training.early_stopping_patience && (
-                    <div>
-                      <span className="text-gray-600">Early Stopping:</span>
-                      <span className="ml-2 font-medium text-gray-900">{config.training.early_stopping_patience}</span>
-                    </div>
+                  {config.lookback_steps != null && (
+                    <div><span className="text-gray-600">Lookback:</span> <span className="font-medium text-gray-900">{config.lookback_steps} steps</span></div>
                   )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Architecture Config */}
-          {config.architecture && (
-            <div>
-              <h4 className="text-sm font-semibold text-gray-900 mb-3">Architecture Configuration</h4>
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <span className="text-gray-600">Hidden Size:</span>
-                    <span className="ml-2 font-medium text-gray-900">{config.architecture.hidden_size}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Num Layers:</span>
-                    <span className="ml-2 font-medium text-gray-900">{config.architecture.num_layers}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Dropout:</span>
-                    <span className="ml-2 font-medium text-gray-900">{config.architecture.dropout}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Activation:</span>
-                    <span className="ml-2 font-medium text-gray-900">{config.architecture.activation}</span>
-                  </div>
-                  {config.architecture.hidden_layers && (
-                    <div className="col-span-2">
-                      <span className="text-gray-600">Hidden Layers:</span>
-                      <span className="ml-2 font-mono text-xs text-gray-900">[{config.architecture.hidden_layers.join(', ')}]</span>
-                    </div>
+                  {config.forecast_steps != null && (
+                    <div><span className="text-gray-600">Forecast:</span> <span className="font-medium text-gray-900">{config.forecast_steps} steps</span></div>
                   )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Sequence Config */}
-          {config.sequence && (
-            <div>
-              <h4 className="text-sm font-semibold text-gray-900 mb-3">Sequence Configuration</h4>
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <span className="text-gray-600">Sequence Length:</span>
-                    <span className="ml-2 font-medium text-gray-900">{config.sequence.sequence_length}</span>
-                  </div>
-                  {config.sequence.prediction_horizon && (
-                    <div>
-                      <span className="text-gray-600">Prediction Horizon:</span>
-                      <span className="ml-2 font-medium text-gray-900">{config.sequence.prediction_horizon}</span>
-                    </div>
+                  {config.hidden_size != null && (
+                    <div><span className="text-gray-600">Hidden Size:</span> <span className="font-medium text-gray-900">{config.hidden_size}</span></div>
                   )}
                 </div>
               </div>
@@ -870,40 +731,37 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
           )}
 
           {/* Training Info */}
-          {modelDetails.last_training_time && (
+          {(modelDetails.last_trained_at || modelDetails.training_loss != null || modelDetails.mlflow_run_id) && (
             <div>
               <h4 className="text-sm font-semibold text-gray-900 mb-3">Training Information</h4>
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <div className="grid grid-cols-1 gap-3 text-sm">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2 text-sm">
+                {modelDetails.last_trained_at && (
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Last Training:</span>
-                    <span className="font-medium text-gray-900">
-                      {new Date(modelDetails.last_training_time * 1000).toLocaleString()}
-                    </span>
+                    <span className="text-gray-600">Last Trained:</span>
+                    <span className="font-medium text-gray-900">{new Date(modelDetails.last_trained_at).toLocaleString()}</span>
                   </div>
-                  {modelDetails.training_loss !== null && modelDetails.training_loss !== undefined && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Training Loss:</span>
-                      <span className="font-medium text-gray-900">{modelDetails.training_loss?.toFixed(4)}</span>
-                    </div>
-                  )}
-                  {modelDetails.run_id && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Run ID:</span>
-                      <span className="font-mono text-xs text-gray-900">{modelDetails.run_id}</span>
-                    </div>
-                  )}
-                </div>
+                )}
+                {modelDetails.training_loss != null && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Training Loss:</span>
+                    <span className="font-medium text-gray-900">{modelDetails.training_loss?.toFixed(4)}</span>
+                  </div>
+                )}
+                {modelDetails.mlflow_run_id && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">MLflow Run ID:</span>
+                    <span className="font-mono text-xs text-gray-900">{modelDetails.mlflow_run_id}</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
         </div>
 
-        {/* Footer */}
         <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex-shrink-0">
           <div className="flex gap-3">
             <a
-              href={`${mlUrl}/api/v1/model/instance/${modelDetails.name}`}
+              href={`${mlUrl}/v1/models/${modelDetails.id}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-center text-sm"
@@ -923,342 +781,311 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
   );
 });
 
-const MLModels = () => {
-  //const mlUrl = import.meta.env.VITE_ML_URL;
-  const mlUrl = '/pei-ml'
-  const mlflowUrl = import.meta.env.VITE_MLFLOW_URL || 'http://localhost:5000';
-  const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/pei-ml/api/v1/websocket/training/status`;
-  const { config, loading: configLoading, error: configError, refetch: refetchConfig } = useConfig();
+// Train Modal
+const TrainModal = ({ model, lookbackSeconds, setLookbackSeconds, onConfirm, onCancel, isTraining }) => {
+  if (!model) return null;
+  return (
+    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 space-y-4">
+        <h3 className="text-lg font-bold text-gray-900">Train Model</h3>
+        <p className="text-sm text-gray-600">{model.name}</p>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Lookback window (seconds)</label>
+          <input
+            type="number"
+            min="1"
+            value={lookbackSeconds}
+            onChange={(e) => setLookbackSeconds(parseInt(e.target.value))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+          <p className="mt-1 text-xs text-gray-500">Amount of historical data to train on.</p>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+            disabled={isTraining}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isTraining}
+            className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {isTraining ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>Starting...</> : 'Start Training'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
-  //console.log('Config:', config, 'Loading:', configLoading, 'Error:', configError);
+// Main MLModels page
+const MLModels = () => {
+  const mlUrl = '/' + import.meta.env.VITE_ML_HOST;
+  const mlflowUrl = import.meta.env.VITE_MLFLOW_URL || 'http://localhost:5000';
+  const { config, loading: configLoading, refetch: refetchConfig } = useConfig();
 
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
 
+  // Field filter
+  const [filterField, setFilterField] = useState('');
+  const [fields, setFields] = useState([]);
+  const [loadingFields, setLoadingFields] = useState(true);
+
   // Modal state
-  const [showModal, setShowModal] = useState(false);
-  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showJobHistoryModal, setShowJobHistoryModal] = useState(false);
+  const [showAllJobsModal, setShowAllJobsModal] = useState(false);
+  const [forceTarget, setForceTarget] = useState(null);
+  const [forceFields, setForceFields] = useState([]);
+  const [activeJobCount, setActiveJobCount] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedModel, setSelectedModel] = useState(null);
-  const [trainingInfo, setTrainingInfo] = useState(null);
-  const [loadingTrainingInfo, setLoadingTrainingInfo] = useState(false);
+
+  // Job history
+  const [jobs, setJobs] = useState([]);
+  const [loadingJobs, setLoadingJobs] = useState(false);
+
+  // Model details
   const [modelDetails, setModelDetails] = useState(null);
   const [loadingModelDetails, setLoadingModelDetails] = useState(false);
 
-  // Training state
-  const [isTraining, setIsTraining] = useState(false);
+  // Training
+  const [trainingModelIds, setTrainingModelIds] = useState(new Set());
   const [trainingMessage, setTrainingMessage] = useState(null);
-
-  // Single WebSocket for all training status
-  const [trainingStatus, setTrainingStatus] = useState({});
-  const [trainingLogs, setTrainingLogs] = useState({});
-
-  useWebSocket(wsUrl, {
-    enabled: true,
-    onMessage: (message) => {
-      if (message.type === 'initial_status') {
-        setTrainingStatus(message.data || {});
-      } else if (message.type === 'training_update') {
-        const { model_name, data } = message;
-
-        setTrainingStatus(prev => ({
-          ...prev,
-          [model_name]: data
-        }));
-
-        setTrainingLogs(prev => ({
-          ...prev,
-          [model_name]: [
-            ...(prev[model_name] || []),
-            {
-              timestamp: new Date(),
-              ...data
-            }
-          ]
-        }));
-      }
-    },
-    onError: (error) => {
-      console.error('WebSocket error:', error);
-    }
-  });
+  const [trainModalOpen, setTrainModalOpen] = useState(false);
+  const [trainTarget, setTrainTarget] = useState(null);
+  const [lookbackSeconds, setLookbackSeconds] = useState(3600);
+  const pollingRef = useRef(null);
 
   const isDefaultModel = useCallback((modelName) => {
     if (!config?.inference_types) return false;
-
     return config.inference_types.some(inference => {
       const expectedName = `${inference.name}_${inference.default_model}_${inference.horizon}`;
       return modelName === expectedName;
     });
   }, [config?.inference_types]);
 
-  // Extract analytics type from model name (first part before underscore)
-  const getAnalyticsType = useCallback((modelName) => {
-    const parts = modelName.split('_');
-    return parts[0] || 'unknown';
-  }, []);
+  // Fetch fields on mount
+  useEffect(() => {
+    const fetchFields = async () => {
+      try {
+        const response = await fetch(`${mlUrl}/v1/fields?include_model_status=true`);
+        if (response.ok) {
+          const data = await response.json();
+          setFields((data.fields ?? []).map(f => (typeof f === 'object' ? f.name : f)));
+        }
+      } finally {
+        setLoadingFields(false);
+      }
+    };
+    fetchFields();
+  }, [mlUrl]);
 
-  // Extract horizon from model name (last numeric part)
-  const getHorizon = useCallback((modelName) => {
-    const parts = modelName.split('_');
-    const lastPart = parts[parts.length - 1];
-    const horizon = parseInt(lastPart);
-    return !isNaN(horizon) ? horizon : null;
-  }, []);
-
-  const fetchModels = useCallback(async () => {
+  const fetchModels = useCallback(async (field = filterField) => {
     try {
       setError(null);
       setLoading(true);
-      const response = await fetch(`${mlUrl}/api/v1/model/models`);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
+      const url = field
+        ? `${mlUrl}/v1/models?output_field=${encodeURIComponent(field)}&include_details=true`
+        : `${mlUrl}/v1/models?include_details=true`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
       const modelsArray = Array.isArray(data) ? data : [data];
-
-      // Sort models: default models first, then alphabetically
-      const sortedModels = [...modelsArray].sort((a, b) => {
-        const aIsDefault = isDefaultModel(a.name);
-        const bIsDefault = isDefaultModel(b.name);
-
-        if (aIsDefault && !bIsDefault) return -1;
-        if (!aIsDefault && bIsDefault) return 1;
-        return a.name.localeCompare(b.name);
-      });
-
-      setModels(sortedModels);
+      setModels([...modelsArray].sort((a, b) => (a.name || '').localeCompare(b.name || '')));
       setLastUpdated(new Date());
-      setLoading(false);
     } catch (err) {
       console.error('Failed to fetch models:', err.message);
-      setError(`Failed to load models from ML service: ${err.message}`);
+      setError(`Failed to load models: ${err.message}`);
       setModels([]);
+    } finally {
       setLoading(false);
     }
-  }, [mlUrl, isDefaultModel]);
+  }, [mlUrl, filterField]);
 
   useEffect(() => {
-    fetchModels();
-  }, [fetchModels]);
+    fetchModels(filterField);
+  }, [filterField]);
 
-  // Re-sort models when config is loaded
-  useEffect(() => {
-    if (config && models.length > 0) {
-      const sortedModels = [...models].sort((a, b) => {
-        const aIsDefault = isDefaultModel(a.name);
-        const bIsDefault = isDefaultModel(b.name);
-
-        if (aIsDefault && !bIsDefault) return -1;
-        if (!aIsDefault && bIsDefault) return 1;
-        return a.name.localeCompare(b.name);
-      });
-
-      // Only update if the order actually changed
-      if (JSON.stringify(sortedModels.map(m => m.name)) !== JSON.stringify(models.map(m => m.name))) {
-        setModels(sortedModels);
-      }
-    }
-  }, [config, isDefaultModel, models]);
-
-  const fetchTrainingInfo = useCallback(async (model) => {
-    setLoadingTrainingInfo(true);
-    setTrainingInfo(null);
-
+  const fetchJobHistory = useCallback(async (model) => {
+    setLoadingJobs(true);
+    setJobs([]);
     try {
-      // Extract analytics type, horizon, and model type from model name
-      // Expected format: analytics_model_horizon (e.g., latency_lstm_60)
-      const parts = model.name.split('_');
-      const analytics_type = parts[0] || 'latency';
-      const model_type = parts[1] || 'xgboost';
-      const horizon = parts[2] || '60';
-
-      const response = await fetch(`${mlUrl}/api/v1/training/${analytics_type}/${horizon}/${model_type}`);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      const response = await fetch(`${mlUrl}/v1/training/jobs?model_id=${model.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        const raw = Array.isArray(data) ? data : [];
+        setJobs(raw.sort((a, b) => {
+          const aActive = a.status === 'running' || a.status === 'pending';
+          const bActive = b.status === 'running' || b.status === 'pending';
+          if (aActive !== bActive) return aActive ? -1 : 1;
+          return new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0);
+        }));
       }
-
-      const data = await response.json();
-      setTrainingInfo(data);
     } catch (err) {
-      console.error('Failed to fetch training info:', err.message);
-      setTrainingInfoError(`Failed to load training information: ${err.message}`);
-      setTrainingInfo(null);
+      console.error('Failed to fetch job history:', err.message);
     } finally {
-      setLoadingTrainingInfo(false);
+      setLoadingJobs(false);
     }
   }, [mlUrl]);
 
   const fetchModelDetails = useCallback(async (model) => {
     setLoadingModelDetails(true);
     setModelDetails(null);
-
     try {
-      const response = await fetch(`${mlUrl}/api/v1/model/instance/${model.name}`);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      setModelDetails(data);
+      const response = await fetch(`${mlUrl}/v1/models/${model.id}`);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      setModelDetails(await response.json());
     } catch (err) {
       console.error('Failed to fetch model details:', err.message);
-      setModelDetails(null);
     } finally {
       setLoadingModelDetails(false);
     }
   }, [mlUrl]);
 
-  const handleModelTraining = useCallback(async (model) => {
-    setIsTraining(true);
-    setTrainingMessage(null);
+  const startPollingJob = useCallback((jobId, modelId, modelName) => {
+    pollingRef.current = pollingRef.current || {};
+    if (pollingRef.current[modelId]) clearInterval(pollingRef.current[modelId]);
+    pollingRef.current[modelId] = setInterval(async () => {
+      try {
+        const response = await fetch(`${mlUrl}/v1/training/jobs/${jobId}`);
+        if (!response.ok) return;
+        const job = await response.json();
+        setTrainingMessage({ type: 'info', text: `Training job ${jobId.slice(0, 8)}… - ${job.status} (${modelName})` });
+        if (job.status === 'completed' || job.status === 'failed') {
+          clearInterval(pollingRef.current[modelId]);
+          delete pollingRef.current[modelId];
+          setTrainingModelIds(prev => { const next = new Set(prev); next.delete(modelId); return next; });
+          setTrainingMessage({
+            type: job.status === 'completed' ? 'success' : 'error',
+            text: job.status === 'completed'
+              ? `Training completed for ${modelName}`
+              : `Training failed for ${modelName}: ${job.error_message || 'unknown error'}`,
+          });
+          fetchModels(filterField);
+        }
+      } catch (err) {
+        console.error('Polling error:', err);
+      }
+    }, 3000);
+  }, [mlUrl, fetchModels, filterField]);
 
+  // Cleanup all polling intervals on unmount
+  useEffect(() => () => {
+    if (pollingRef.current) Object.values(pollingRef.current).forEach(clearInterval);
+  }, []);
+
+  const handleModelTraining = useCallback(async () => {
+    if (!trainTarget) return;
+    setTrainingModelIds(prev => new Set([...prev, trainTarget.id]));
+    setTrainingMessage(null);
     try {
-      const response = await fetch(`${mlUrl}/api/v1/training`, {
+      const response = await fetch(`${mlUrl}/v1/training/train`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model_name: model.name }),
+        body: JSON.stringify({ model_id: trainTarget.id, lookback_seconds: lookbackSeconds }),
       });
-
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
       const data = await response.json();
-      setTrainingMessage({ type: 'success', text: `Training started for ${model.name}` });
-
-      // Refresh models after a delay
-      setTimeout(fetchModels, 2000);
+      setTrainingMessage({ type: 'info', text: `Training started for ${trainTarget.name} (job ${data.job_id?.slice(0, 8)}…)` });
+      setTrainModalOpen(false);
+      startPollingJob(data.job_id, trainTarget.id, trainTarget.name);
     } catch (err) {
       console.error('Failed to start training:', err.message);
-      setTrainingMessage({ type: 'error', text: `Failed to start training for ${model.name}: ${err.message}` });
-    } finally {
-      setIsTraining(false);
+      setTrainingMessage({ type: 'error', text: `Failed to start training: ${err.message}` });
+      setTrainingModelIds(prev => { const next = new Set(prev); next.delete(trainTarget.id); return next; });
+      setTrainModalOpen(false);
     }
-  }, [mlUrl, fetchModels]);
+  }, [mlUrl, trainTarget, lookbackSeconds, startPollingJob]);
+
+  const setModelAsBest = useCallback(async (model, outputField) => {
+    setTrainingMessage(null);
+    try {
+      const response = await fetch(`${mlUrl}/v1/performance/${encodeURIComponent(outputField)}/set-best/${model.id}`, {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const detail = errorData.detail;
+        throw new Error((detail && typeof detail === 'object' ? detail.message : detail) || `HTTP error! status: ${response.status}`);
+      }
+      setTrainingMessage({ type: 'success', text: `${model.name} is now the best model for ${outputField}` });
+    } catch (err) {
+      setTrainingMessage({ type: 'error', text: `Failed to set best model: ${err.message}` });
+    }
+  }, [mlUrl]);
 
   const handleSetAsDefault = useCallback(async (model) => {
-    // Extract analytics type, horizon, and model type from model name
-    const parts = model.name.split('_');
-    const analytics_type = parts[0] || 'latency';
-    const model_type = parts[1] || 'xgboost';
-    const horizon = parseInt(parts[2]) || 60;
-
     setTrainingMessage(null);
-
     try {
-      const response = await fetch(`${mlUrl}/api/v1/config`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ analytics_type, horizon, model_type }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+      const response = await fetch(`${mlUrl}/v1/models/${model.id}`);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const details = await response.json();
+      const outputFields = details.config?.output_fields ?? [];
+      if (outputFields.length === 0) {
+        setTrainingMessage({ type: 'error', text: `Model ${model.name} has no output fields defined.` });
+        return;
       }
-
-      const data = await response.json();
-      setTrainingMessage({
-        type: 'success',
-        text: `${model.name} is now the default model for ${analytics_type} with ${horizon}s horizon`
-      });
-
-      // Refresh config from context to get updated default models
-      if (refetchConfig) {
-        await refetchConfig();
+      if (outputFields.length === 1) {
+        await setModelAsBest(model, outputFields[0]);
+      } else {
+        setForceTarget(model);
+        setForceFields(outputFields);
       }
     } catch (err) {
-      console.error('Failed to force model:', err.message);
-      setTrainingMessage({
-        type: 'error',
-        text: `Failed to set as default: ${err.message}`
-      });
+      setTrainingMessage({ type: 'error', text: `Failed to fetch model details: ${err.message}` });
     }
-  }, [mlUrl, refetchConfig]);
+  }, [mlUrl, setModelAsBest]);
 
   const handleDeleteModel = useCallback(async (model) => {
-    if (!confirm(`Are you sure you want to delete ${model.name}? This action cannot be undone.`)) {
-      return;
-    }
-
+    if (!confirm(`Are you sure you want to delete ${model.name}? This action cannot be undone.`)) return;
     setTrainingMessage(null);
-
     try {
-      const response = await fetch(`${mlUrl}/api/v1/model/instance/${model.name}`, {
-        method: 'DELETE',
-      });
-
+      const response = await fetch(`${mlUrl}/v1/models/${model.id}`, { method: 'DELETE' });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+        const detail = errorData.detail;
+        throw new Error((detail && typeof detail === 'object' ? detail.message : detail) || `HTTP error! status: ${response.status}`);
       }
-
-      const data = await response.json();
-      setTrainingMessage({
-        type: 'success',
-        text: `Model ${model.name} deleted successfully`
-      });
-
-      // Refresh models list and config
-      await fetchModels();
-      if (refetchConfig) {
-        await refetchConfig();
-      }
+      setTrainingMessage({ type: 'success', text: `Model ${model.name} deleted successfully` });
+      await fetchModels(filterField);
+      if (refetchConfig) await refetchConfig();
     } catch (err) {
-      console.error('Failed to delete model:', err.message);
-      setTrainingMessage({
-        type: 'error',
-        text: `Failed to delete model: ${err.message}`
-      });
+      setTrainingMessage({ type: 'error', text: `Failed to delete model: ${err.message}` });
     }
-  }, [mlUrl, fetchModels, refetchConfig]);
+  }, [mlUrl, fetchModels, filterField, refetchConfig]);
 
   const handleCreateModel = useCallback(async (formData) => {
     setTrainingMessage(null);
-
     try {
-      const response = await fetch(`${mlUrl}/api/v1/model/instance`, {
+      const response = await fetch(`${mlUrl}/v1/models`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
-
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+        const detail = errorData.detail;
+        throw new Error((detail && typeof detail === 'object' ? detail.message : detail) || `HTTP error! status: ${response.status}`);
       }
-
       const data = await response.json();
-      setTrainingMessage({
-        type: 'success',
-        text: `Model ${data.model_name} created successfully`
-      });
-
-      // Close modal and refresh
+      setTrainingMessage({ type: 'success', text: `Model ${data.name} created successfully` });
       setShowCreateModal(false);
-      await fetchModels();
-      if (refetchConfig) {
-        await refetchConfig();
-      }
-
+      await fetchModels(filterField);
+      if (refetchConfig) await refetchConfig();
       return true;
     } catch (err) {
-      console.error('Failed to create model:', err.message);
-      setTrainingMessage({
-        type: 'error',
-        text: `Failed to create model: ${err.message}`
-      });
+      setTrainingMessage({ type: 'error', text: `Failed to create model: ${err.message}` });
       return false;
     }
-  }, [mlUrl, fetchModels, refetchConfig]);
+  }, [mlUrl, fetchModels, filterField, refetchConfig]);
 
-  // Stable handlers that accept model as parameter - these never change reference
   const handleShowDetails = useCallback((model) => {
     setSelectedModel(model);
     setShowDetailsModal(true);
@@ -1267,21 +1094,17 @@ const MLModels = () => {
 
   const handleShowInfo = useCallback((model) => {
     setSelectedModel(model);
-    setShowModal(true);
-    fetchTrainingInfo(model);
-  }, [fetchTrainingInfo]);
+    setShowJobHistoryModal(true);
+    fetchJobHistory(model);
+  }, [fetchJobHistory]);
 
   const handleTrain = useCallback((model) => {
-    handleModelTraining(model);
-  }, [handleModelTraining]);
+    setTrainTarget(model);
+    setTrainModalOpen(true);
+  }, []);
 
-  const handleSetDefault = useCallback((model) => {
-    handleSetAsDefault(model);
-  }, [handleSetAsDefault]);
-
-  const handleDelete = useCallback((model) => {
-    handleDeleteModel(model);
-  }, [handleDeleteModel]);
+  const handleSetDefault = useCallback((model) => handleSetAsDefault(model), [handleSetAsDefault]);
+  const handleDelete = useCallback((model) => handleDeleteModel(model), [handleDeleteModel]);
 
   return (
     <>
@@ -1289,15 +1112,31 @@ const MLModels = () => {
         showCreateModal={showCreateModal}
         setShowCreateModal={setShowCreateModal}
         handleCreateModel={handleCreateModel}
-        config={config}
         mlUrl={mlUrl}
       />
-      <TrainingInfoModal
-        showModal={showModal}
-        setShowModal={setShowModal}
+      {forceTarget && (
+        <ForceFieldPickerModal
+          model={forceTarget}
+          fields={forceFields}
+          onConfirm={async (field) => {
+            setForceTarget(null);
+            await setModelAsBest(forceTarget, field);
+          }}
+          onCancel={() => setForceTarget(null)}
+        />
+      )}
+      <AllJobsModal
+        showModal={showAllJobsModal}
+        setShowModal={setShowAllJobsModal}
+        mlUrl={mlUrl}
+        onJobsUpdate={setActiveJobCount}
+      />
+      <JobHistoryModal
+        showModal={showJobHistoryModal}
+        setShowModal={setShowJobHistoryModal}
         selectedModel={selectedModel}
-        loadingTrainingInfo={loadingTrainingInfo}
-        trainingInfo={trainingInfo}
+        jobs={jobs}
+        loadingJobs={loadingJobs}
       />
       <ModelDetailsModal
         showModal={showDetailsModal}
@@ -1307,126 +1146,147 @@ const MLModels = () => {
         modelDetails={modelDetails}
         mlUrl={mlUrl}
       />
+      {trainModalOpen && (
+        <TrainModal
+          model={trainTarget}
+          lookbackSeconds={lookbackSeconds}
+          setLookbackSeconds={setLookbackSeconds}
+          onConfirm={handleModelTraining}
+          onCancel={() => setTrainModalOpen(false)}
+          isTraining={trainTarget ? trainingModelIds.has(trainTarget.id) : false}
+        />
+      )}
+
       <div className="space-y-6">
-      {/* Header Section */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex-1">
-            <h2 className="text-2xl font-bold text-gray-900">ML Registry</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              Browse and manage ML models
-            </p>
-          </div>
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              New Instance
-            </button>
+        {/* Header */}
+        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex-1">
+              <h2 className="text-2xl font-bold text-gray-900">ML Registry</h2>
+              <p className="text-sm text-gray-600 mt-1">Browse and manage ML models</p>
+            </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Field filter */}
+              <select
+                value={filterField}
+                onChange={(e) => setFilterField(e.target.value)}
+                disabled={loadingFields}
+                className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+              >
+                <option value="">All fields</option>
+                {fields.map(f => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
 
-            <a
-              href={mlflowUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 rounded-lg transition-all shadow-sm hover:shadow-md flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5zm0 2.18l8 4v8.82c0 4.52-3.13 8.74-8 9.82-4.87-1.08-8-5.3-8-9.82V8.18l8-4zM11 7v2h2V7h-2zm0 4v6h2v-6h-2z"/>
-              </svg>
-              Open in MLflow
-            </a>
+              <button
+                onClick={() => setShowAllJobsModal(true)}
+                className="px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                Training Jobs{activeJobCount > 0 && ` (${activeJobCount})`}
+              </button>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                New Instance
+              </button>
 
-            {lastUpdated && (
-              <span className="text-xs text-gray-500">
-                Updated: {lastUpdated.toLocaleTimeString()}
-              </span>
-            )}
-            <button
-              onClick={fetchModels}
-              disabled={loading}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Refreshing...' : 'Refresh'}
-            </button>
-          </div>
-        </div>
-      </div>
+              <a
+                href={mlflowUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 rounded-lg transition-all shadow-sm hover:shadow-md flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5zm0 2.18l8 4v8.82c0 4.52-3.13 8.74-8 9.82-4.87-1.08-8-5.3-8-9.82V8.18l8-4zM11 7v2h2V7h-2zm0 4v6h2v-6h-2z" />
+                </svg>
+                Open in MLflow
+              </a>
 
-      {/* Training Status */}
-      {trainingMessage && (
-        <div className={`p-3 rounded-lg ${
-          trainingMessage.type === 'success'
-            ? 'bg-green-50 border border-green-200 text-green-800'
-            : trainingMessage.type === 'info'
-            ? 'bg-blue-50 border border-blue-200 text-blue-800'
-            : 'bg-red-50 border border-red-200 text-red-800'
-        }`}>
-          <p className="text-sm font-medium">{trainingMessage.text}</p>
-        </div>
-      )}
-
-      {/* Models Grid */}
-      {loading && models.length === 0 ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-sm text-gray-600">Loading models...</p>
+              {lastUpdated && (
+                <span className="text-xs text-gray-500">Updated: {lastUpdated.toLocaleTimeString()}</span>
+              )}
+              <button
+                onClick={() => fetchModels(filterField)}
+                disabled={loading}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Refreshing...' : 'Refresh'}
+              </button>
+            </div>
           </div>
         </div>
-      ) : error ? (
-        <div className="bg-white rounded-lg border border-red-200 p-8 shadow-sm">
-          <div className="text-center">
-            <p className="text-lg font-medium text-gray-900 mb-2">Error Loading Models</p>
-            <p className="text-sm text-gray-600 mb-4">{error}</p>
-            <button
-              onClick={fetchModels}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-            >
-              Try Again
-            </button>
-          </div>
-        </div>
-      ) : models.length === 0 ? (
-        <div className="bg-white rounded-lg border border-gray-200 p-12 shadow-sm text-center">
-          <p className="text-lg font-medium text-gray-900 mb-2">No Models Found</p>
-          <p className="text-sm text-gray-600">
-            No ML models are currently registered in the MLFlow registry
-          </p>
-        </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {models.map((model, index) => (
-              <ModelCard
-                key={model.name || model.id || index}
-                model={model}
-                onShowDetails={handleShowDetails}
-                onShowInfo={handleShowInfo}
-                onTrain={handleTrain}
-                onSetDefault={handleSetDefault}
-                onDelete={handleDelete}
-                isDefault={isDefaultModel(model.name)}
-                analyticsType={getAnalyticsType(model.name)}
-                horizon={getHorizon(model.name)}
-                isTraining={isTraining}
-                trainingStatus={trainingStatus}
-                trainingLogs={trainingLogs}
-              />
-            ))}
-          </div>
 
+        {/* Training Status Message */}
+        {trainingMessage && (
+          <div className={`p-3 rounded-lg ${
+            trainingMessage.type === 'success'
+              ? 'bg-green-50 border border-green-200 text-green-800'
+              : trainingMessage.type === 'info'
+              ? 'bg-blue-50 border border-blue-200 text-blue-800'
+              : 'bg-red-50 border border-red-200 text-red-800'
+          }`}>
+            <p className="text-sm font-medium">{trainingMessage.text}</p>
+          </div>
+        )}
 
-          <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 text-center">
+        {/* Models Grid */}
+        {loading && models.length === 0 ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-4 text-sm text-gray-600">Loading models...</p>
+            </div>
+          </div>
+        ) : error ? (
+          <div className="bg-white rounded-lg border border-red-200 p-8 shadow-sm">
+            <div className="text-center">
+              <p className="text-lg font-medium text-gray-900 mb-2">Error Loading Models</p>
+              <p className="text-sm text-gray-600 mb-4">{error}</p>
+              <button onClick={() => fetchModels(filterField)} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+                Try Again
+              </button>
+            </div>
+          </div>
+        ) : models.length === 0 ? (
+          <div className="bg-white rounded-lg border border-gray-200 p-12 shadow-sm text-center">
+            <p className="text-lg font-medium text-gray-900 mb-2">No Models Found</p>
             <p className="text-sm text-gray-600">
-              Total Models: <span className="font-semibold text-gray-900">{models.length}</span>
+              {filterField ? `No models trained for field "${filterField}"` : 'No ML models are currently registered'}
             </p>
           </div>
-        </>
-      )}
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {models.map((model) => (
+                <ModelCard
+                  key={model.id || model.name}
+                  model={model}
+                  onShowDetails={handleShowDetails}
+                  onShowInfo={handleShowInfo}
+                  onTrain={handleTrain}
+                  onSetDefault={handleSetDefault}
+                  onDelete={handleDelete}
+                  isDefault={isDefaultModel(model.name)}
+                  isTraining={trainingModelIds.has(model.id)}
+                />
+              ))}
+            </div>
+            <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 text-center">
+              <p className="text-sm text-gray-600">
+                Total Models: <span className="font-semibold text-gray-900">{models.length}</span>
+                {filterField && <span className="ml-2 text-gray-400">filtered by <span className="font-mono">{filterField}</span></span>}
+              </p>
+            </div>
+          </>
+        )}
       </div>
     </>
   );

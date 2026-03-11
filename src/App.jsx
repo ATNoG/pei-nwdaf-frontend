@@ -5,8 +5,13 @@ import Dashboard from './pages/Dashboard';
 import MLModels from './pages/MLModels';
 import Analytics from './pages/Analytics';
 import Performance from './pages/Performance';
+<<<<<<< HEAD
 import Policy from './pages/Policy';
+=======
+import Settings from './pages/Settings';
+>>>>>>> dev
 import { ConfigProvider } from './contexts/ConfigContext';
+import { AccessibilityProvider } from './contexts/AccessibilityContext';
 
 function AppContent() {
   const location = useLocation();
@@ -22,8 +27,13 @@ function AppContent() {
         return 'Analytics';
       case '/performance':
         return 'Performance';
+<<<<<<< HEAD
       case '/policy':
         return 'Policy';
+=======
+      case '/settings':
+        return 'Settings';
+>>>>>>> dev
       default:
         return 'AION';
     }
@@ -39,8 +49,13 @@ function AppContent() {
         return 'Cell Analytics Predictions & Insights';
       case '/performance':
         return 'Real-time ML Model Performance Monitoring';
+<<<<<<< HEAD
       case '/policy':
         return 'Data transformation and field permissions';
+=======
+      case '/settings':
+        return 'Accessibility & Display Preferences';
+>>>>>>> dev
       default:
         return '';
     }
@@ -68,7 +83,11 @@ function AppContent() {
             <Route path="/ml" element={<MLModels />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/performance" element={<Performance />} />
+<<<<<<< HEAD
             <Route path="/policy" element={<Policy />} />
+=======
+            <Route path="/settings" element={<Settings />} />
+>>>>>>> dev
           </Routes>
         </div>
       </div>
@@ -79,9 +98,11 @@ function AppContent() {
 function App() {
   return (
     <Router>
-      <ConfigProvider>
-        <AppContent />
-      </ConfigProvider>
+      <AccessibilityProvider>
+        <ConfigProvider>
+          <AppContent />
+        </ConfigProvider>
+      </AccessibilityProvider>
     </Router>
   );
 }

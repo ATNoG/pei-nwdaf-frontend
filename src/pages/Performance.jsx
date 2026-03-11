@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -12,312 +11,691 @@ import {
   Legend,
   Filler
 } from 'chart.js';
-import { MdSignalWifiConnectedNoInternet4, MdSignalWifiStatusbar4Bar } from 'react-icons/md';
-import { useWebSocket } from '../hooks/useWebSocket';
 
-// Register ChartJS components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
+
+const COLORS = [
+  'rgb(59, 130, 246)',
+  'rgb(16, 185, 129)',
+  'rgb(245, 158, 11)',
+  'rgb(239, 68, 68)',
+  'rgb(139, 92, 246)',
+  'rgb(236, 72, 153)',
+];
+
+// Base shapes per model - ensures each series is identifiable by shape alone,
+const POINT_SHAPES = ['circle', 'triangle', 'rect', 'star', 'cross', 'crossRot'];
+
+const METRICS = ['rmse', 'mae', 'mse', 'r2'];
+
+const TIME_WINDOWS = [
+  { label: '1h',  ms: 60 * 60 * 1000 },
+  { label: '6h',  ms: 6 * 60 * 60 * 1000 },
+  { label: '24h', ms: 24 * 60 * 60 * 1000 },
+  { label: '7d',  ms: 7 * 24 * 60 * 60 * 1000 },
+  { label: 'All', ms: null },
+];
+
+
+const StateBadge = ({ state }) => {
+  const cfg = {
+    MONITORING:  { cls: 'bg-green-100 text-green-800', label: 'Monitoring' },
+    EVALUATING:  { cls: 'bg-yellow-100 text-yellow-800 animate-pulse', label: 'Evaluating…' },
+    RETRAINING:  { cls: 'bg-blue-100 text-blue-800 animate-pulse', label: 'Retraining' },
+  }[state] ?? { cls: 'bg-gray-100 text-gray-600', label: state ?? 'Unknown' };
+  return (
+    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${cfg.cls}`}>
+      {cfg.label}
+    </span>
+  );
+};
 
 const Performance = () => {
-  const [performanceData, setPerformanceData] = useState({});
-  const [windowSizes, setWindowSizes] = useState([]);
-  const [error, setError] = useState(null);
-  const pingIntervalRef = useRef(null);
+  const mlUrl = '/' + import.meta.env.VITE_ML_HOST;
 
-  // Use the same WebSocket URL pattern as other parts of the app
-  const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/pei-ml/v1/ws/performance/status`;
+  const [fields, setFields] = useState([]);
+  const [activeField, setActiveField] = useState('');
 
-  // Extract window sizes from the data
-  const extractWindowSizes = (data) => {
-    const windowSizes = new Set();
-    Object.keys(data).forEach(key => {
-      const match = key.match(/window_(\d+)/);
-      if (match) {
-        windowSizes.add(parseInt(match[1], 10));
-      }
-    });
-    return Array.from(windowSizes).sort((a, b) => a - b);
-  };
+  // Per-field data
+  const [status, setStatus] = useState(null);
+  const [bestModel, setBestModel] = useState(null);
+  const [history, setHistory] = useState(null);
+  const [models, setModels] = useState([]);
+  const [activeJobs, setActiveJobs] = useState({});
 
-  // Use WebSocket connection
-  const { isConnected, sendMessage } = useWebSocket(wsUrl, {
-    enabled: true,
-    reconnectInterval: 3000,
-    maxReconnectAttempts: 10,
-    onOpen: () => {
-      console.log('Performance WebSocket connected');
-      // Start sending ping messages every 30 seconds to keep connection alive
-      pingIntervalRef.current = setInterval(() => {
-        sendMessage({ type: 'ping' });
-      }, 30000);
-    },
-    onClose: () => {
-      console.log('Performance WebSocket disconnected');
-      // Clear ping interval when connection closes
-      if (pingIntervalRef.current) {
-        clearInterval(pingIntervalRef.current);
-      }
-      setError('Disconnected from WebSocket. Attempting to reconnect...');
-    },
-    onError: (err) => {
-      console.error('Performance WebSocket error:', err);
-      setError('Error connecting to WebSocket. Please check your network connection and ensure the ML service is running.');
-    },
-    onMessage: (message) => {
-      try {
-        if (message.type === 'initial_status' || message.type === 'status_response') {
-          // Only process if we have actual data
-          if (message.data && Object.keys(message.data).length > 0) {
-            setPerformanceData(message.data);
-            const sizes = extractWindowSizes(message.data);
-            setWindowSizes(sizes);
-            setError(null); // Clear any previous errors when we receive data
-          }
-        } else if (message.type === 'performance_update') {
-          // Only process if we have actual data
-          if (message.data && message.model_key) {
-            setPerformanceData(prevData => {
-              const updatedData = { ...prevData };
-              updatedData[message.model_key] = message.data;
+  // Loading states
+  const [loadingFields, setLoadingFields] = useState(true);
+  const [loadingData, setLoadingData] = useState(false);
 
-              // If new window size detected, add to window sizes
-              const allSizes = extractWindowSizes(updatedData);
-              setWindowSizes(allSizes);
+  // Actions
+  const [metric, setMetric] = useState('rmse');
+  const [triggerFilter, setTriggerFilter] = useState(null);
+  const [timeWindow, setTimeWindow] = useState(null);
+  const [visibleModels, setVisibleModels] = useState(null); // null = default (best model only)
+  const [actionLoading, setActionLoading] = useState(null);
+  const [actionMsg, setActionMsg] = useState(null);
 
-              return updatedData;
-            });
-            setError(null); // Clear any previous errors when we receive updates
-          }
-        } else if (message.type === 'pong') {
-          // Heartbeat response received
-          console.log('WebSocket heartbeat');
-        }
-      } catch (err) {
-        console.error('Error parsing WebSocket message:', err);
-        setError('Error processing WebSocket data. Please try refreshing the page.');
-      }
-    }
-  });
+  // Intervals / timers
+  const statusIntervalRef = useRef(null);
+  const refreshTimeoutRef = useRef(null);
+  const actionMsgTimerRef = useRef(null);
 
-  // Prepare chart data for a specific window size
-  const prepareChartData = (windowSize) => {
-    // Filter cells by window size
-    const cellKeys = Object.keys(performanceData).filter(key =>
-      key.includes(`window_${windowSize}`)
+  const fetchStatus = useCallback(async (field) => {
+    try {
+      const res = await fetch(`${mlUrl}/v1/performance/${encodeURIComponent(field)}/status`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setStatus(data);
+      return data;
+    } catch { /* ignore */ }
+  }, [mlUrl]);
+
+  const fetchBest = useCallback(async (field) => {
+    try {
+      const res = await fetch(`${mlUrl}/v1/performance/${encodeURIComponent(field)}/best`);
+      if (!res.ok) { setBestModel(null); return; }
+      setBestModel(await res.json());
+    } catch { setBestModel(null); }
+  }, [mlUrl]);
+
+  const fetchHistory = useCallback(async (field) => {
+    try {
+      const res = await fetch(`${mlUrl}/v1/performance/${encodeURIComponent(field)}/history`);
+      if (!res.ok) { setHistory(null); return; }
+      setHistory(await res.json());
+    } catch { setHistory(null); }
+  }, [mlUrl]);
+
+  const fetchModels = useCallback(async (field) => {
+    try {
+      const res = await fetch(`${mlUrl}/v1/models?output_field=${encodeURIComponent(field)}`);
+      if (!res.ok) return;
+      setModels(await res.json());
+    } catch { /* ignore */ }
+  }, [mlUrl]);
+
+  const fetchJobDetails = useCallback(async (jobIds) => {
+    if (!jobIds?.length) { setActiveJobs({}); return; }
+    const results = await Promise.all(
+      jobIds.map(id =>
+        fetch(`${mlUrl}/v1/training/jobs/${id}`)
+          .then(r => r.ok ? r.json() : null)
+          .catch(() => null)
+      )
     );
+    const map = {};
+    results.forEach((job, i) => { if (job) map[jobIds[i]] = job; });
+    setActiveJobs(map);
+  }, [mlUrl]);
 
-    if (cellKeys.length === 0) {
-      return null;
-    }
+  useEffect(() => {
+    clearTimeout(refreshTimeoutRef.current);
+    if (!status?.last_checked_at || !status?.monitoring_interval_seconds || !activeField) return;
 
-    // Extract all timestamps across all cells for this window size
-    const allTimestamps = new Set();
-    const cellData = {};
+    const prevLastCheckedAt = status.last_checked_at;
+    const nextCheckAt = new Date(prevLastCheckedAt).getTime() + status.monitoring_interval_seconds * 1000;
+    const delay = Math.max(0, nextCheckAt - Date.now());
 
-    cellKeys.forEach(key => {
-      const cell = performanceData[key];
-      const cellId = cell.cell_index;
-
-      cellData[cellId] = {
-        data: [],
-        latest_mse: cell.latest_mse
-      };
-
-      cell.history.forEach(item => {
-        allTimestamps.add(item.timestamp);
-        cellData[cellId].data.push({
-          x: item.timestamp,
-          y: item.mse
-        });
-      });
-    });
-
-    // Sort timestamps
-    const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b);
-
-    // Prepare datasets for each cell
-    const datasets = [];
-    const colors = [
-      'rgb(75, 192, 192)',
-      'rgb(54, 162, 235)',
-      'rgb(153, 102, 255)',
-      'rgb(255, 159, 64)',
-      'rgb(255, 99, 132)',
-      'rgb(201, 203, 207)',
-      'rgb(75, 192, 192)',
-      'rgb(54, 162, 235)',
-      'rgb(153, 102, 255)',
-      'rgb(255, 159, 64)'
-    ];
-
-    let colorIndex = 0;
-    Object.keys(cellData).sort((a, b) => parseInt(a, 10) - parseInt(b, 10)).forEach(cellId => {
-      const cell = cellData[cellId];
-
-      // Sort data by timestamp
-      const sortedData = [...cell.data].sort((a, b) => a.x - b.x);
-
-      datasets.push({
-        label: `Cell ${cellId}`,
-        data: sortedData,
-        borderColor: colors[colorIndex % colors.length],
-        backgroundColor: colors[colorIndex % colors.length] + '20', // Add transparency
-        tension: 0.2,
-        fill: false,
-        pointRadius: 3,
-        pointHoverRadius: 5
-      });
-
-      colorIndex++;
-    });
-
-    return {
-      labels: sortedTimestamps,
-      datasets
+    const doRefresh = async () => {
+      const data = await fetchStatus(activeField);
+      fetchBest(activeField);
+      fetchHistory(activeField);
+      if (data?.active_job_ids?.length) fetchJobDetails(data.active_job_ids);
+      // If last_checked_at hasn't advanced yet (backend still processing), retry in 15s
+      if (data?.last_checked_at === prevLastCheckedAt) {
+        refreshTimeoutRef.current = setTimeout(doRefresh, 15000);
+      }
+      // Otherwise the useEffect re-runs with the new last_checked_at and reschedules naturally
     };
-  };
 
-  // Format timestamp for display
-  const formatTimestamp = (timestamp) => {
-    return new Date(timestamp * 1000).toLocaleTimeString();
-  };
+    refreshTimeoutRef.current = setTimeout(doRefresh, delay);
+    return () => clearTimeout(refreshTimeoutRef.current);
+  }, [status?.last_checked_at, status?.monitoring_interval_seconds, activeField, fetchStatus, fetchBest, fetchHistory, fetchJobDetails]);
 
-  // Chart options
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-      x: {
-        type: 'linear',
-        title: {
-          display: true,
-          text: 'Time'
-        },
-        ticks: {
-          callback: formatTimestamp
-        }
-      },
-      y: {
-        title: {
-          display: true,
-          text: 'MSE'
-        },
-        beginAtZero: true
+  const showActionMsg = useCallback((type, text) => {
+    setActionMsg({ type, text });
+    if (actionMsgTimerRef.current) clearTimeout(actionMsgTimerRef.current);
+    actionMsgTimerRef.current = setTimeout(() => setActionMsg(null), 4000);
+  }, []);
+
+  const toggleModel = useCallback((modelId) => {
+    setVisibleModels(prev => {
+      const bestId = bestModel?.model_id;
+      const base = prev ?? new Set(bestId ? [bestId] : []);
+      const next = new Set(base);
+      if (next.has(modelId)) next.delete(modelId);
+      else next.add(modelId);
+      return next;
+    });
+  }, [bestModel?.model_id]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch(`${mlUrl}/v1/fields`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = (data.fields ?? []).map(f => f.name ?? f);
+        setFields(list);
+        if (list.length > 0) setActiveField(list[0]);
+      } finally {
+        setLoadingFields(false);
       }
-    },
-    plugins: {
-      legend: {
-        position: 'top'
-      },
-      tooltip: {
-        mode: 'index',
-        intersect: false,
-        callbacks: {
-          title: (context) => {
-            return `Time: ${formatTimestamp(context[0].parsed.x)}`;
-          },
-          label: (context) => {
-            return `${context.dataset.label}: ${context.parsed.y.toFixed(2)}`;
-          }
-        }
+    };
+    load();
+  }, [mlUrl]);
+
+  useEffect(() => {
+    if (!activeField) return;
+
+    // Clear previous intervals
+    clearInterval(statusIntervalRef.current);
+    clearTimeout(refreshTimeoutRef.current);
+
+    // Reset state
+    setStatus(null);
+    setBestModel(null);
+    setHistory(null);
+    setModels([]);
+    setActiveJobs({});
+    setVisibleModels(null);
+
+    setLoadingData(true);
+
+    // Parallel initial fetch
+    Promise.all([
+      fetchStatus(activeField),
+      fetchBest(activeField),
+      fetchHistory(activeField),
+      fetchModels(activeField),
+    ]).then(([statusData]) => {
+      if (statusData?.active_job_ids?.length) {
+        fetchJobDetails(statusData.active_job_ids);
       }
-    },
-    interaction: {
-      mode: 'nearest',
-      axis: 'x',
-      intersect: false
+    }).finally(() => setLoadingData(false));
+
+    // 60s status poll
+    statusIntervalRef.current = setInterval(async () => {
+      const data = await fetchStatus(activeField);
+      if (data?.active_job_ids?.length) {
+        fetchJobDetails(data.active_job_ids);
+      } else {
+        setActiveJobs({});
+      }
+    }, 60000);
+
+    return () => {
+      clearInterval(statusIntervalRef.current);
+      clearTimeout(refreshTimeoutRef.current);
+    };
+  }, [activeField, fetchStatus, fetchBest, fetchHistory, fetchModels, fetchJobDetails]);
+
+  const handleEvaluate = async () => {
+    setActionLoading('evaluate');
+    try {
+      const res = await fetch(
+        `${mlUrl}/v1/performance/${encodeURIComponent(activeField)}/evaluate?metric=${encodeURIComponent(metric)}`,
+        { method: 'POST' }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        showActionMsg('error', err.detail ?? `Evaluate failed (HTTP ${res.status})`);
+      } else {
+        showActionMsg('success', 'Evaluation triggered successfully.');
+        await Promise.all([fetchBest(activeField), fetchHistory(activeField)]);
+      }
+    } catch (e) {
+      showActionMsg('error', e.message);
+    } finally {
+      setActionLoading(null);
     }
   };
+
+  const handleMonitor = async () => {
+    setActionLoading('monitor');
+    try {
+      const res = await fetch(
+        `${mlUrl}/v1/performance/${encodeURIComponent(activeField)}/monitor`,
+        { method: 'POST' }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        showActionMsg('error', err.detail ?? `Monitor failed (HTTP ${res.status})`);
+      } else {
+        showActionMsg('success', 'Monitor check triggered.');
+        await fetchStatus(activeField);
+      }
+    } catch (e) {
+      showActionMsg('error', e.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const chartData = useMemo(() => {
+    const allEntries = history?.entries ?? [];
+    const now = Date.now();
+    const timeFiltered = timeWindow
+      ? allEntries.filter(e => new Date(e.measured_at).getTime() >= now - timeWindow)
+      : allEntries;
+    const entries = triggerFilter ? timeFiltered.filter(e => e.trigger === triggerFilter) : timeFiltered;
+    if (!entries.length) return null;
+
+    const bestModelId = bestModel?.model_id;
+
+    const byModel = {};
+    entries.forEach(h => { (byModel[h.model_id] ??= []).push(h); });
+
+    // Sort each model's entries by time
+    Object.values(byModel).forEach(pts => pts.sort((a, b) => new Date(a.measured_at) - new Date(b.measured_at)));
+
+    // All timestamps as labels (union, sorted)
+    const allTimes = [...new Set(entries.map(e => e.measured_at))].sort();
+    const labels = allTimes.map(t => {
+      const d = new Date(t);
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const hh = String(d.getHours()).padStart(2, '0');
+      const min = String(d.getMinutes()).padStart(2, '0');
+      return `${dd}/${mm} ${hh}:${min}`;
+    });
+
+    const modelMeta = [];
+    const alignedDatasets = Object.entries(byModel).map(([modelId, pts], i) => {
+      const modelName = models.find(m => m.id === modelId)?.name ?? modelId.slice(0, 8);
+      const isBest = modelId === bestModelId;
+      const color = COLORS[i % COLORS.length];
+      modelMeta.push({ modelId, modelName, color, isBest });
+      const ptMap = Object.fromEntries(pts.map(p => [p.measured_at, p]));
+      const aligned = allTimes.map(t => ptMap[t] ? ptMap[t].score : null);
+      const baseShape = POINT_SHAPES[i % POINT_SHAPES.length];
+      const styles = allTimes.map(t => ptMap[t]
+        ? (ptMap[t].trigger === 'evaluate' ? 'rectRot' : baseShape)
+        : baseShape);
+      const radii = allTimes.map(t => ptMap[t]
+        ? (ptMap[t].trigger === 'evaluate' ? 7 : ptMap[t].trigger === 'monitor' ? 4 : 3)
+        : 0);
+      const isVisible = visibleModels ? visibleModels.has(modelId) : isBest;
+      return {
+        label: modelName,
+        data: aligned,
+        borderColor: color,
+        backgroundColor: color + '33',
+        pointStyle: styles,
+        pointRadius: radii,
+        pointHoverRadius: 6,
+        tension: 0,
+        fill: false,
+        spanGaps: false,
+        showLine: false,
+        hidden: !isVisible,
+      };
+    });
+
+    return { labels, datasets: alignedDatasets, _models: modelMeta, _times: allTimes };
+  }, [history, models, bestModel, triggerFilter, timeWindow, visibleModels]);
+
+  const chartOptions = useMemo(() => {
+    const times = chartData?._times ?? [];
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          title: { display: true, text: 'Time' },
+          ticks: { maxRotation: 45, maxTicksLimit: 12 },
+        },
+        y: {
+          title: { display: true, text: metric.toUpperCase() },
+        },
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          callbacks: {
+            title: (items) => {
+              const raw = times[items[0]?.dataIndex];
+              if (!raw) return '';
+              const d = new Date(raw);
+              const dd = String(d.getDate()).padStart(2, '0');
+              const mm = String(d.getMonth() + 1).padStart(2, '0');
+              const yyyy = d.getFullYear();
+              const hh = String(d.getHours()).padStart(2, '0');
+              const min = String(d.getMinutes()).padStart(2, '0');
+              const sec = String(d.getSeconds()).padStart(2, '0');
+              return `${dd}/${mm}/${yyyy} ${hh}:${min}:${sec}`;
+            },
+          },
+        },
+      },
+      interaction: { mode: 'nearest', axis: 'x', intersect: false },
+    };
+  }, [chartData?._times, metric]);
+
+  if (loadingFields) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!fields.length) {
+    return (
+      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm text-center text-gray-500">
+        No fields available from the ML service.
+      </div>
+    );
+  }
+
+  const degradationPct = bestModel?.baseline_score
+    ? ((bestModel.score - bestModel.baseline_score) / Math.abs(bestModel.baseline_score)) * 100
+    : null;
+  const evalThreshold = bestModel?.baseline_score != null && status?.monitoring_degradation_factor != null
+    ? bestModel.baseline_score * status.monitoring_degradation_factor
+    : null;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-        <div className="flex justify-between items-center">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Performance Monitoring</h2>
-            <p className="text-sm text-gray-600">
-              Real-time MSE (Mean Squared Error) values for ML models across different cells
-            </p>
+      <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm space-y-3">
+          <div className="flex flex-wrap gap-1">
+            {fields.map(f => (
+              <button
+                key={f}
+                onClick={() => setActiveField(f)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  activeField === f
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {f}
+              </button>
+            ))}
           </div>
-          <div className={`flex items-center space-x-2 px-3 py-1 rounded-full ${
-            isConnected
-              ? 'bg-green-100 text-green-800'
-              : 'bg-red-100 text-red-800'
-          }`}>
-            {isConnected ? (
-              <MdSignalWifiStatusbar4Bar className="h-4 w-4" />
-            ) : (
-              <MdSignalWifiConnectedNoInternet4 className="h-4 w-4" />
-            )}
-            <span className="text-sm font-medium capitalize">
-              {isConnected ? 'Connected' : 'Disconnected'}
-            </span>
+
+          <hr className="border-gray-200" />
+
+          <div className="flex items-center gap-2">
+            {/* TODO: Metric selector
+            <select
+              value={metric}
+              onChange={e => setMetric(e.target.value)}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              {METRICS.map(m => <option key={m} value={m}>{m.toUpperCase()}</option>)}
+            </select>
+            */}
+            <button
+              onClick={handleEvaluate}
+              disabled={!!actionLoading}
+              className="px-3 py-1.5 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+            >
+              {actionLoading === 'evaluate' && <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white" />}
+              Evaluate
+            </button>
+            <button
+              onClick={handleMonitor}
+              disabled={!!actionLoading}
+              className="px-3 py-1.5 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+            >
+              {actionLoading === 'monitor' && <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white" />}
+              Monitor
+            </button>
           </div>
-        </div>
       </div>
 
-      {/* Error Display */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-start space-x-3">
-            <div>
-              <p className="font-semibold text-red-900 mb-1">Error</p>
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
-          </div>
+      {actionMsg && (
+        <div className={`rounded-lg p-3 text-sm font-medium ${
+          actionMsg.type === 'success'
+            ? 'bg-green-50 border border-green-200 text-green-800'
+            : 'bg-red-50 border border-red-200 text-red-800'
+        }`}>
+          {actionMsg.text}
         </div>
       )}
 
-      {/* Charts for each window size */}
-      {windowSizes.map(windowSize => {
-        const chartData = prepareChartData(windowSize);
-
-        if (!chartData || chartData.datasets.length === 0) {
-          return null;
-        }
-
-        return (
-          <div key={windowSize} className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Performance for Window Size: {windowSize}s
-            </h3>
-            <div className="h-96">
-              <Line data={chartData} options={chartOptions} />
-            </div>
-          </div>
-        );
-      })}
-
-      {/* No Data State */}
-      {isConnected && Object.keys(performanceData).length === 0 && !error && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-          <div className="text-center py-8">
-            <p className="text-gray-600">Connected to WebSocket but no performance data available.</p>
-            <p className="text-sm text-gray-500 mt-2">The ML service might not have generated any performance metrics yet.</p>
-          </div>
+      {loadingData ? (
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
-      )}
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+            <div className="mb-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-semibold text-gray-900">Score History</h3>
+                <div className="flex gap-1">
+                  {TIME_WINDOWS.map(w => (
+                    <button
+                      key={w.label}
+                      onClick={() => setTimeWindow(w.ms)}
+                      className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                        timeWindow === w.ms
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {w.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400">Trigger</span>
+                <div className="flex gap-1">
+                  {[null, 'evaluate', 'monitor', 'auto_monitor'].map(t => (
+                    <button
+                      key={t ?? 'all'}
+                      onClick={() => setTriggerFilter(t)}
+                      className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                        triggerFilter === t
+                          ? 'bg-gray-700 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {t ?? 'All'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {chartData ? (
+              <>
+                {/* Model visibility selector */}
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {chartData._models.map(({ modelId, modelName, color, isBest }) => {
+                    const isActive = visibleModels ? visibleModels.has(modelId) : isBest;
+                    return (
+                      <button
+                        key={modelId}
+                        onClick={() => toggleModel(modelId)}
+                        title={modelId}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border-2 transition-colors ${
+                          isActive
+                            ? 'text-white border-transparent'
+                            : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                        }`}
+                        style={isActive ? { backgroundColor: color, borderColor: color } : {}}
+                      >
+                        <span
+                          className="inline-block w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: isActive ? 'rgba(255,255,255,0.7)' : color }}
+                        />
+                        {modelName}
+                        {isBest && <span className={`text-xs ${isActive ? 'opacity-70' : 'text-gray-400'}`}>★</span>}
+                      </button>
+                    );
+                  })}
+                </div>
 
-      {/* Connecting State */}
-      {!isConnected && !error && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-          <div className="flex justify-center items-center h-64">
-            <div className="text-center">
-              <svg className="animate-spin h-8 w-8 text-blue-600 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <p className="text-gray-600">Connecting to WebSocket for performance data...</p>
+                <div className="h-80">
+                  <Line data={chartData} options={chartOptions} />
+                </div>
+                <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-3 h-3 rotate-45 bg-gray-400 rounded-sm" />
+                    Evaluate
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-3 h-3 rounded-full bg-gray-400" />
+                    Monitor
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-2 h-2 rounded-full bg-gray-400" />
+                    Auto monitor
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-80 text-gray-400 text-sm">
+                No score history available for {activeField}.
+              </div>
+            )}
+          </div>
+
+          {/* Right panel - 1/3 width */}
+          <div className="space-y-4">
+            {/* Best model card */}
+            <div className="bg-white rounded-lg border border-gray-200 p-5 shadow-sm">
+              <h3 className="text-base font-semibold text-gray-900 mb-3">Best Model</h3>
+              {bestModel ? (
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-gray-900">{bestModel.model_name}</span>
+                      {bestModel.architecture && (
+                        <span className="px-1.5 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded uppercase">
+                          {bestModel.architecture}
+                        </span>
+                      )}
+                      {bestModel.latest_version != null && (
+                        <span className="px-1.5 py-0.5 text-xs font-mono bg-gray-100 text-gray-700 rounded">
+                          v{bestModel.latest_version}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <hr className="border-gray-100" />
+                  <dl className="space-y-1.5 text-sm">
+                    <div className="flex justify-between">
+                      <dt className="text-gray-500">Latest Score</dt>
+                      <dd className="font-semibold text-gray-900">
+                        {bestModel.score?.toFixed(4)} <span className="text-gray-400 font-normal text-xs">{bestModel.metric ?? metric}</span>
+                      </dd>
+                    </div>
+                    {bestModel.baseline_score != null && (
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500">Baseline</dt>
+                        <dd className="text-gray-900">
+                          {bestModel.baseline_score?.toFixed(4)}
+                        </dd>
+                      </div>
+                    )}
+                    {evalThreshold != null && (
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500" title={`baseline × ${status.monitoring_degradation_factor} - score above this triggers re-evaluation`}>
+                          Eval threshold
+                        </dt>
+                        <dd className={`font-semibold text-xs ${bestModel.score > evalThreshold ? 'text-red-600' : 'text-green-700'}`}>
+                          {evalThreshold.toFixed(4)}
+                          <span className="ml-1 font-normal text-gray-400">(×{status.monitoring_degradation_factor})</span>
+                        </dd>
+                      </div>
+                    )}
+                    {bestModel.last_trained_at && (
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500">Last trained</dt>
+                        <dd className="text-gray-900 text-xs">{new Date(bestModel.last_trained_at).toLocaleString()}</dd>
+                      </div>
+                    )}
+                    {bestModel.model_id && (
+                      <div className="flex justify-between items-center">
+                        <dt className="text-gray-500 shrink-0">Model ID</dt>
+                        <dd className="font-mono text-xs text-gray-700 truncate ml-2" title={bestModel.model_id}>{bestModel.model_id}</dd>
+                      </div>
+                    )}
+                  </dl>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400">No best model set for {activeField}.</p>
+              )}
+            </div>
+
+            {/* State card */}
+            <div className="bg-white rounded-lg border border-gray-200 p-5 shadow-sm">
+              <h3 className="text-base font-semibold text-gray-900 mb-3">State</h3>
+              {status ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <StateBadge state={status.state} />
+                  </div>
+
+                  {status.state !== 'RETRAINING' && status.last_checked_at && (
+                    <dl className="space-y-1.5 text-sm">
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500">Last check</dt>
+                        <dd className="text-gray-900 text-xs">{new Date(status.last_checked_at).toLocaleTimeString()}</dd>
+                      </div>
+                      {status.monitoring_interval_seconds != null && status.last_checked_at && (
+                        <div className="flex justify-between">
+                          <dt className="text-gray-500">Next check at</dt>
+                          <dd className="font-medium text-gray-900 text-xs">
+                            {new Date(new Date(status.last_checked_at).getTime() + status.monitoring_interval_seconds * 1000).toLocaleTimeString()}
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                  )}
+
+                  <hr className="border-gray-100" />
+                  <dl className="space-y-1.5 text-sm">
+                    {status.monitoring_interval_seconds != null && (
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500">Check interval</dt>
+                        <dd className="text-gray-900">{status.monitoring_interval_seconds}s</dd>
+                      </div>
+                    )}
+                    {status.monitor_degradation_threshold != null && (
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500">Degradation threshold</dt>
+                        <dd className="text-gray-900">{status.monitor_degradation_threshold}</dd>
+                      </div>
+                    )}
+                    {status.monitoring_degradation_factor != null && (
+                      <div className="flex justify-between">
+                        <dt className="text-gray-500">Eval trigger factor</dt>
+                        <dd className="text-gray-900">{status.monitoring_degradation_factor}</dd>
+                      </div>
+                    )}
+                  </dl>
+
+                  {status.state === 'RETRAINING' && status.active_job_ids?.length > 0 && (
+                    <div className="space-y-2">
+                      {status.active_job_ids.map(jobId => {
+                        const job = activeJobs[jobId];
+                        return (
+                          <div key={jobId} className="text-xs bg-blue-50 rounded p-2 border border-blue-100">
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500" />
+                              <span className="font-mono text-blue-700 truncate" title={jobId}>{jobId.slice(0, 12)}…</span>
+                            </div>
+                            {job && (
+                              <div className="text-blue-600">
+                                {job.status}{job.progress != null ? ` - ${job.progress}%` : ''}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400">No status available.</p>
+              )}
             </div>
           </div>
         </div>
