@@ -71,8 +71,21 @@ const fetchRegisteredComponents = async () => {
         id: comp.component_id,
         name: defaultEntry?.name
           || comp.component_id.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
-        group: defaultEntry?.group || comp.component_type || 'General'
+        group: defaultEntry?.group
+          || (comp.component_type === 'ml_model' ? 'ML Models' : comp.component_type || 'General')
       };
+
+      // Attach ML model metadata for tooltip/display in pipeline modal
+      if (comp.component_type === 'ml_model' && comp.attributes) {
+        base.mlModelMeta = {
+          architecture: comp.attributes.architecture,
+          inputFields: comp.attributes.input_fields || [],
+          outputFields: comp.attributes.output_fields || [],
+          dataType: comp.attributes.data_type,
+          windowDuration: comp.attributes.window_duration_seconds,
+          modelId: comp.attributes.model_id,
+        };
+      }
 
       // Extract resourceTypes from allowed_fields keys that match pattern "{component_id}:"
       // e.g., "data-storage:influx" -> resourceType: "influx" for data-storage component
@@ -719,10 +732,21 @@ const Policy = () => {
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">Select source...</option>
-                    {availableComponents.map(comp => (
-                      <option key={comp.id} value={comp.id} disabled={comp.id === newPipelineSink}>
-                        {comp.name}
-                      </option>
+                    {Object.entries(
+                      availableComponents.reduce((groups, comp) => {
+                        const g = comp.group || 'General';
+                        if (!groups[g]) groups[g] = [];
+                        groups[g].push(comp);
+                        return groups;
+                      }, {})
+                    ).map(([group, comps]) => (
+                      <optgroup key={group} label={group}>
+                        {comps.map(comp => (
+                          <option key={comp.id} value={comp.id} disabled={comp.id === newPipelineSink}>
+                            {comp.name}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>
@@ -742,14 +766,77 @@ const Policy = () => {
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">Select sink...</option>
-                    {availableComponents.map(comp => (
-                      <option key={comp.id} value={comp.id} disabled={comp.id === newPipelineSource}>
-                        {comp.name}
-                      </option>
+                    {Object.entries(
+                      availableComponents.reduce((groups, comp) => {
+                        const g = comp.group || 'General';
+                        if (!groups[g]) groups[g] = [];
+                        groups[g].push(comp);
+                        return groups;
+                      }, {})
+                    ).map(([group, comps]) => (
+                      <optgroup key={group} label={group}>
+                        {comps.map(comp => (
+                          <option key={comp.id} value={comp.id} disabled={comp.id === newPipelineSource}>
+                            {comp.name}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>
               </div>
+
+              {/* ML Model Metadata — shown when source is an ML model */}
+              {newPipelineSource && (() => {
+                const sourceComp = availableComponents.find(c => c.id === newPipelineSource);
+                if (!sourceComp?.mlModelMeta) return null;
+                const meta = sourceComp.mlModelMeta;
+                return (
+                  <div className="mb-4 bg-purple-50 border border-purple-200 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-purple-900 mb-2">
+                      🤖 ML Model: {sourceComp.name}
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2 text-xs text-purple-800">
+                      {meta.architecture && <div><span className="font-medium">Architecture:</span> {meta.architecture}</div>}
+                      {meta.windowDuration && <div><span className="font-medium">Window:</span> {meta.windowDuration}s</div>}
+                      <div className="col-span-2">
+                        <span className="font-medium">Input fields:</span>{' '}
+                        {meta.inputFields.join(', ') || '(none)'}
+                      </div>
+                      <div className="col-span-2">
+                        <span className="font-medium">Output fields:</span>{' '}
+                        {meta.outputFields.join(', ') || '(none)'}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ML Model Metadata — shown when sink is an ML model */}
+              {newPipelineSink && (() => {
+                const sinkComp = availableComponents.find(c => c.id === newPipelineSink);
+                if (!sinkComp?.mlModelMeta) return null;
+                const meta = sinkComp.mlModelMeta;
+                return (
+                  <div className="mb-4 bg-purple-50 border border-purple-200 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-purple-900 mb-2">
+                      🤖 ML Model: {sinkComp.name}
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2 text-xs text-purple-800">
+                      {meta.architecture && <div><span className="font-medium">Architecture:</span> {meta.architecture}</div>}
+                      {meta.windowDuration && <div><span className="font-medium">Window:</span> {meta.windowDuration}s</div>}
+                      <div className="col-span-2">
+                        <span className="font-medium">Input fields:</span>{' '}
+                        {meta.inputFields.join(', ') || '(none)'}
+                      </div>
+                      <div className="col-span-2">
+                        <span className="font-medium">Output fields:</span>{' '}
+                        {meta.outputFields.join(', ') || '(none)'}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Source Resource Type Selector - shown when source has resourceTypes */}
               {newPipelineSource && (() => {
