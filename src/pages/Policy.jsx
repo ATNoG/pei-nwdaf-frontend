@@ -45,21 +45,33 @@ const parseAvailableComponents = () => {
   return DEFAULT_AVAILABLE_COMPONENTS;
 };
 
-// Fetch registered components from Policy Service
-// This ensures only components that have actually registered with Policy are shown
-// Also extracts dynamic resource types from allowed_fields (e.g., "data-storage:influx")
+// Fetch registered components from Policy Service and merge with defaults.
+// Registered data is the source of truth but defaults fill in components
+// that haven't registered yet and provide richer display names / groups.
+// Resource types are extracted from allowed_fields keys using the
+// "{component_id}:subtype" pattern so they work for BOTH source and sink.
 const fetchRegisteredComponents = async () => {
+  const defaults = parseAvailableComponents();
+
+  // Build a lookup of defaults by id for fast merging
+  const defaultsById = {};
+  defaults.forEach(c => { defaultsById[c.id] = c; });
+
+  let registeredComponents = [];
   try {
     const response = await fetch(`${POLICY_SERVICE_URL}/components`);
     if (!response.ok) throw new Error('Failed to fetch components');
     const data = await response.json();
 
     // Transform registered components into the format expected by the UI
-    return data.components.map(comp => {
+    registeredComponents = data.components.map(comp => {
+      // Start from the default entry (if it exists) to keep nice display names
+      const defaultEntry = defaultsById[comp.component_id];
       const base = {
         id: comp.component_id,
-        name: comp.component_id.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
-        group: comp.component_type || 'General'
+        name: defaultEntry?.name
+          || comp.component_id.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+        group: defaultEntry?.group || comp.component_type || 'General'
       };
 
       // Extract resourceTypes from allowed_fields keys that match pattern "{component_id}:"
@@ -67,7 +79,7 @@ const fetchRegisteredComponents = async () => {
       //       "ingestion-service:producer_label" -> resourceType: "producer_label" for ingestion-service
       const componentPrefix = `${comp.component_id}:`;
       if (comp.allowed_fields && Object.keys(comp.allowed_fields).length > 0) {
-        base.resourceTypes = Object.keys(comp.allowed_fields)
+        const discovered = Object.keys(comp.allowed_fields)
           .filter(key => key.startsWith(componentPrefix))
           .map(key => {
             const resourceType = key.substring(componentPrefix.length);
@@ -77,14 +89,43 @@ const fetchRegisteredComponents = async () => {
               description: `Category: ${resourceType}`
             };
           });
+
+        if (discovered.length > 0) {
+          // Merge with default resourceTypes so hand-written descriptions aren't lost
+          const defaultRTs = defaultEntry?.resourceTypes || [];
+          const byId = {};
+          defaultRTs.forEach(rt => { byId[rt.id] = rt; });
+          discovered.forEach(rt => {
+            // Discovered takes precedence, but inherit richer name/description from default
+            byId[rt.id] = { ...rt, ...(byId[rt.id] || {}), id: rt.id };
+          });
+          base.resourceTypes = Object.values(byId);
+        } else if (defaultEntry?.resourceTypes?.length > 0) {
+          // Component registered without self-referencing keys but default
+          // declares resource types (e.g. data-storage before DB connects) — keep defaults
+          base.resourceTypes = defaultEntry.resourceTypes;
+        }
+      } else if (defaultEntry?.resourceTypes?.length > 0) {
+        // No allowed_fields at all — preserve hardcoded defaults
+        base.resourceTypes = defaultEntry.resourceTypes;
       }
 
       return base;
     });
   } catch (e) {
     console.warn('Failed to fetch registered components, using defaults:', e);
-    return parseAvailableComponents();
+    return defaults;
   }
+
+  // Merge: registered components are primary, then append any defaults
+  // that are missing (components that haven't registered yet).
+  const registeredIds = new Set(registeredComponents.map(c => c.id));
+  const merged = [
+    ...registeredComponents,
+    ...defaults.filter(d => !registeredIds.has(d.id))
+  ];
+
+  return merged;
 };
 
 // Start with defaults, will be updated with fetched components
@@ -144,6 +185,7 @@ const Policy = () => {
   const [showNewPipelineModal, setShowNewPipelineModal] = useState(false);
   const [newPipelineSource, setNewPipelineSource] = useState('');
   const [newPipelineSink, setNewPipelineSink] = useState('');
+  const [newPipelineSourceResourceType, setNewPipelineSourceResourceType] = useState('');
   const [newPipelineSinkResourceType, setNewPipelineSinkResourceType] = useState('');
   const [notification, setNotification] = useState(null);
   const [availableComponents, setAvailableComponents] = useState(parseAvailableComponents());
@@ -372,6 +414,15 @@ const Policy = () => {
       return;
     }
 
+    // Check if source requires a resource type selection
+    const sourceComponent = availableComponents.find(c => c.id === newPipelineSource);
+    const sourceRequiresResourceType = sourceComponent?.resourceTypes?.length > 0;
+
+    if (sourceRequiresResourceType && !newPipelineSourceResourceType) {
+      showNotification('error', `Please select a resource type for ${sourceComponent.name}`);
+      return;
+    }
+
     // Check if sink requires a resource type selection
     const sinkComponent = availableComponents.find(c => c.id === newPipelineSink);
     const requiresResourceType = sinkComponent?.resourceTypes?.length > 0;
@@ -381,12 +432,15 @@ const Policy = () => {
       return;
     }
 
-    // Build pipeline ID with resource type if selected: "source_to_sink:resourceType"
+    // Build pipeline ID: "source[:resourceType]_to_sink[:resourceType]"
+    const sourcePart = newPipelineSourceResourceType
+      ? `${newPipelineSource}:${newPipelineSourceResourceType}`
+      : newPipelineSource;
     const sinkPart = newPipelineSinkResourceType
       ? `${newPipelineSink}:${newPipelineSinkResourceType}`
       : newPipelineSink;
 
-    const newId = `${newPipelineSource}_to_${sinkPart}`;
+    const newId = `${sourcePart}_to_${sinkPart}`;
     setSelectedPipeline(newId);
     setPipelineSteps([]);
     setDiscoveredFields([]);
@@ -396,6 +450,7 @@ const Policy = () => {
     setShowNewPipelineModal(false);
     setNewPipelineSource('');
     setNewPipelineSink('');
+    setNewPipelineSourceResourceType('');
     setNewPipelineSinkResourceType('');
   };
 
@@ -638,6 +693,7 @@ const Policy = () => {
                   setShowNewPipelineModal(false);
                   setNewPipelineSource('');
                   setNewPipelineSink('');
+                  setNewPipelineSourceResourceType('');
                   setNewPipelineSinkResourceType('');
                 }}
                 className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
@@ -656,7 +712,10 @@ const Policy = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Source Component</label>
                   <select
                     value={newPipelineSource}
-                    onChange={(e) => setNewPipelineSource(e.target.value)}
+                    onChange={(e) => {
+                      setNewPipelineSource(e.target.value);
+                      setNewPipelineSourceResourceType(''); // Reset resource type when source changes
+                    }}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">Select source...</option>
@@ -692,7 +751,55 @@ const Policy = () => {
                 </div>
               </div>
 
-              {/* Resource Type Selector - shown only when sink has resourceTypes */}
+              {/* Source Resource Type Selector - shown when source has resourceTypes */}
+              {newPipelineSource && (() => {
+                const sourceComponent = availableComponents.find(c => c.id === newPipelineSource);
+                const resourceTypes = sourceComponent?.resourceTypes;
+
+                if (!resourceTypes || resourceTypes.length === 0) {
+                  return null;
+                }
+
+                return (
+                  <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Select Resource Type for {sourceComponent.name} (Source)
+                    </label>
+                    <p className="text-xs text-gray-500 mb-3">
+                      {sourceComponent.name} supports multiple data types. Select which type this pipeline reads from.
+                    </p>
+                    <div className="grid grid-cols-1 gap-3">
+                      {resourceTypes.map(resourceType => (
+                        <label
+                          key={resourceType.id}
+                          className={`flex items-start p-3 border rounded-lg cursor-pointer transition-colors ${
+                            newPipelineSourceResourceType === resourceType.id
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-gray-300 hover:border-gray-400'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="sourceResourceType"
+                            value={resourceType.id}
+                            checked={newPipelineSourceResourceType === resourceType.id}
+                            onChange={(e) => setNewPipelineSourceResourceType(e.target.value)}
+                            className="mt-1 mr-3"
+                          />
+                          <div>
+                            <div className="font-medium text-gray-900">{resourceType.name}</div>
+                            {resourceType.description && (
+                              <div className="text-sm text-gray-500">{resourceType.description}</div>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Sink Resource Type Selector - shown only when sink has resourceTypes */}
               {newPipelineSink && (() => {
                 const sinkComponent = availableComponents.find(c => c.id === newPipelineSink);
                 const resourceTypes = sinkComponent?.resourceTypes;
@@ -704,10 +811,10 @@ const Policy = () => {
                 return (
                   <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Select Resource Type for {sinkComponent.name}
+                      Select Resource Type for {sinkComponent.name} (Sink)
                     </label>
                     <p className="text-xs text-gray-500 mb-3">
-                      {sinkComponent.name} supports multiple data types. Select which type this pipeline should handle.
+                      {sinkComponent.name} supports multiple data types. Select which type this pipeline writes to.
                     </p>
                     <div className="grid grid-cols-1 gap-3">
                       {resourceTypes.map(resourceType => (
@@ -721,7 +828,7 @@ const Policy = () => {
                         >
                           <input
                             type="radio"
-                            name="resourceType"
+                            name="sinkResourceType"
                             value={resourceType.id}
                             checked={newPipelineSinkResourceType === resourceType.id}
                             onChange={(e) => setNewPipelineSinkResourceType(e.target.value)}
@@ -746,7 +853,11 @@ const Policy = () => {
                   <h3 className="text-sm font-medium text-blue-900 mb-2">Pipeline Preview</h3>
                   <div className="flex items-center justify-center gap-3 text-blue-800">
                     <span className="font-medium">
-                      {newPipelineSource || '(source)'}
+                      {newPipelineSource
+                        ? (newPipelineSourceResourceType
+                            ? `${newPipelineSource}:${newPipelineSourceResourceType}`
+                            : newPipelineSource)
+                        : '(source)'}
                     </span>
                     <span className="text-blue-400">→</span>
                     <span className="font-medium">
@@ -760,7 +871,7 @@ const Policy = () => {
                   {(newPipelineSource && newPipelineSink) && (
                     <p className="text-sm text-blue-600 mt-2 text-center">
                       Pipeline ID: <code className="bg-blue-100 px-2 py-1 rounded">
-                        {newPipelineSource}_to_{newPipelineSink}{newPipelineSinkResourceType ? `:${newPipelineSinkResourceType}` : ''}
+                        {newPipelineSourceResourceType ? `${newPipelineSource}:${newPipelineSourceResourceType}` : newPipelineSource}_to_{newPipelineSinkResourceType ? `${newPipelineSink}:${newPipelineSinkResourceType}` : newPipelineSink}
                       </code>
                     </p>
                   )}
@@ -769,10 +880,13 @@ const Policy = () => {
 
               {/* Existing Pipelines Warning */}
               {newPipelineSource && newPipelineSink && (() => {
+                const sourcePart = newPipelineSourceResourceType
+                  ? `${newPipelineSource}:${newPipelineSourceResourceType}`
+                  : newPipelineSource;
                 const sinkPart = newPipelineSinkResourceType
                   ? `${newPipelineSink}:${newPipelineSinkResourceType}`
                   : newPipelineSink;
-                const existingPipelineId = `${newPipelineSource}_to_${sinkPart}`;
+                const existingPipelineId = `${sourcePart}_to_${sinkPart}`;
 
                 if (pipelines[existingPipelineId]) {
                   return (
@@ -796,6 +910,7 @@ const Policy = () => {
                   setShowNewPipelineModal(false);
                   setNewPipelineSource('');
                   setNewPipelineSink('');
+                  setNewPipelineSourceResourceType('');
                   setNewPipelineSinkResourceType('');
                 }}
                 className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
@@ -806,11 +921,15 @@ const Policy = () => {
                 type="button"
                 onClick={confirmNewPipeline}
                 disabled={!newPipelineSource || !newPipelineSink || (() => {
+                  const sourceComponent = availableComponents.find(c => c.id === newPipelineSource);
+                  if (sourceComponent?.resourceTypes?.length > 0 && !newPipelineSourceResourceType) return true;
                   const sinkComponent = availableComponents.find(c => c.id === newPipelineSink);
                   return sinkComponent?.resourceTypes?.length > 0 && !newPipelineSinkResourceType;
                 })()}
                 className={`px-6 py-2 rounded-lg font-medium transition-colors ${
                   !newPipelineSource || !newPipelineSink || (() => {
+                    const sourceComponent = availableComponents.find(c => c.id === newPipelineSource);
+                    if (sourceComponent?.resourceTypes?.length > 0 && !newPipelineSourceResourceType) return true;
                     const sinkComponent = availableComponents.find(c => c.id === newPipelineSink);
                     return sinkComponent?.resourceTypes?.length > 0 && !newPipelineSinkResourceType;
                   })()
