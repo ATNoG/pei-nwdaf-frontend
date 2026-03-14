@@ -44,6 +44,12 @@ html.cvd-rg [class*="bg-red-500"],
 html.cvd-rg [class*="bg-red-600"]    { background-color: #ee7733 !important; }
 html.cvd-rg [class*="border-red-"]   { border-color: #ee7733 !important; }
 
+html.cvd-rg [class*="text-orange-"]  { color: #005fa3 !important; }
+html.cvd-rg [class*="bg-orange-100"] { background-color: #cce5f6 !important; }
+html.cvd-rg [class*="bg-orange-500"],
+html.cvd-rg [class*="bg-orange-600"] { background-color: #0077bb !important; }
+html.cvd-rg [class*="border-orange-"]{ border-color: #0077bb !important; }
+
 /* Mode 2: Tritanopia safe (Blue-Yellow) */
 html.cvd-tritan [class*="text-yellow-"]   { color: #b0004e !important; }
 html.cvd-tritan [class*="bg-yellow-50"]   { background-color: #fce4ec !important; }
@@ -55,6 +61,12 @@ html.cvd-tritan [class*="bg-purple-50"]   { background-color: #fbe9e7 !important
 html.cvd-tritan [class*="bg-purple-100"]  { background-color: #ffccbc !important; }
 html.cvd-tritan [class*="bg-purple-600"]  { background-color: #f4511e !important; }
 html.cvd-tritan [class*="border-purple-"] { border-color: #f4511e !important; }
+
+html.cvd-tritan [class*="text-orange-"]   { color: #b0004e !important; }
+html.cvd-tritan [class*="bg-orange-100"]  { background-color: #f8bbd0 !important; }
+html.cvd-tritan [class*="bg-orange-500"],
+html.cvd-tritan [class*="bg-orange-600"]  { background-color: #d81b60 !important; }
+html.cvd-tritan [class*="border-orange-"] { border-color: #d81b60 !important; }
 
 /* High Contrast */
 html.high-contrast {
