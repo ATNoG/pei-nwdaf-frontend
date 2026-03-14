@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useConfig } from '../contexts/ConfigContext';
 
 // ModelCard
-const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefault, onDelete, isDefault, isTraining }) => {
+const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefault, onDelete, isDefault, isTraining, copiedId, onCopyId }) => {
   const isBestForAny = model.best_for_fields?.length > 0;
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow [container-type:inline-size]">
@@ -112,11 +112,28 @@ const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefaul
           </div>
         )}
         {model.id && (
-          <div className="flex justify-between">
+          <div className="flex justify-between items-center">
             <span className='text-gray-600'>ID:</span>
-            <span className="font-medium text-gray-900 truncate ml-2" title={model.id}>
-              {model.id}
-            </span>
+            <div className="flex items-center gap-2 ml-2 min-w-0">
+              <span className="font-medium text-gray-900 truncate font-mono text-xs" title={model.id}>
+                {model.id}
+              </span>
+              <button
+                onClick={() => onCopyId(model.id, model.id)}
+                className="p-1 hover:bg-gray-200 rounded transition-colors shrink-0"
+                title="Copy model ID"
+              >
+                {copiedId === model.id ? (
+                  <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                )}
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -130,7 +147,8 @@ const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefaul
                    JSON.stringify(prevProps.model.best_for_fields) === JSON.stringify(nextProps.model.best_for_fields);
   const isDefaultSame = prevProps.isDefault === nextProps.isDefault;
   const isTrainingSame = prevProps.isTraining === nextProps.isTraining;
-  return modelSame && isDefaultSame && isTrainingSame;
+  const copiedIdSame = prevProps.copiedId === nextProps.copiedId;
+  return modelSame && isDefaultSame && isTrainingSame && copiedIdSame;
 });
 
 // CreateModelModal
@@ -971,6 +989,14 @@ const MLModels = () => {
   const [lookbackSeconds, setLookbackSeconds] = useState(3600);
   const pollingRef = useRef(null);
 
+  // Copy to clipboard
+  const [copiedId, setCopiedId] = useState(null);
+  const copyToClipboard = (text, id) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
   const isDefaultModel = useCallback((modelName) => {
     if (!config?.inference_types) return false;
     return config.inference_types.some(inference => {
@@ -1513,6 +1539,8 @@ const MLModels = () => {
                     onDelete={handleDelete}
                     isDefault={isDefaultModel(model.name)}
                     isTraining={trainingModelIds.has(model.id)}
+                    copiedId={copiedId}
+                    onCopyId={copyToClipboard}
                   />
                 ))}
             </div>

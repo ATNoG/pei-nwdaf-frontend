@@ -121,6 +121,18 @@ html.high-contrast [class*="from-red-"] {
   color: #fff !important;
   border: 2px solid #000 !important;
 }
+
+/* Exception for gradient text (logo) - must come after the above rule */
+html.high-contrast [class*="from-blue-"].bg-clip-text,
+html.high-contrast [class*="from-green-"].bg-clip-text,
+html.high-contrast [class*="from-red-"].bg-clip-text,
+html.high-contrast [class*="from-blue-"].text-transparent,
+html.high-contrast [class*="from-green-"].text-transparent,
+html.high-contrast [class*="from-red-"].text-transparent {
+  background-color: transparent !important;
+  color: #000000 !important;
+  border: none !important;
+}
 html.high-contrast [class*="text-green-"],
 html.high-contrast [class*="text-red-"],
 html.high-contrast [class*="text-yellow-"],
@@ -135,16 +147,25 @@ html.high-contrast header {
 html.high-contrast [class*="border-"] {
   border-color: var(--hc-border) !important;
 }
-html.high-contrast .bg-clip-text {
+html.high-contrast .bg-clip-text,
+html.high-contrast .text-transparent {
   -webkit-background-clip: unset !important;
   background-clip: unset !important;
   background-image: none !important;
-  color: var(--hc-fg) !important;
+  background-color: transparent !important;
+  border: none !important;
+  color: #000000 !important;
 }
 
 html.high-contrast header,
 html.high-contrast header * {
   color: #fff !important;
+}
+
+/* Override header text color for logo */
+html.high-contrast .bg-clip-text,
+html.high-contrast .text-transparent {
+  color: #000000 !important;
 }
 
 html.high-contrast .bg-blue-600,    html.high-contrast .bg-blue-600 *,
