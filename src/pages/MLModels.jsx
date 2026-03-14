@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useConfig } from '../contexts/ConfigContext';
 
 // ModelCard
-const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefault, onDelete, isDefault, isTraining }) => {
+const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefault, onDelete, isDefault, isTraining, copiedId, onCopyId }) => {
   const isBestForAny = model.best_for_fields?.length > 0;
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow [container-type:inline-size]">
@@ -17,6 +17,11 @@ const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefaul
             {model.architecture && (
               <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded uppercase">
                 {model.architecture}
+              </span>
+            )}
+            {model.modelType === 'anomaly' && (
+              <span className="px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-700 rounded uppercase">
+                anomaly
               </span>
             )}
           </div>
@@ -63,7 +68,7 @@ const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefaul
           </button>
         </div>
         <div className="flex gap-2">
-          {!isBestForAny && (
+          {!isBestForAny && model.modelType !== 'anomaly' && (
             <button
               onClick={() => onSetDefault(model)}
               className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1.5"
@@ -107,11 +112,28 @@ const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefaul
           </div>
         )}
         {model.id && (
-          <div className="flex justify-between">
+          <div className="flex justify-between items-center">
             <span className='text-gray-600'>ID:</span>
-            <span className="font-medium text-gray-900 truncate ml-2" title={model.id}>
-              {model.id}
-            </span>
+            <div className="flex items-center gap-2 ml-2 min-w-0">
+              <span className="font-medium text-gray-900 truncate font-mono text-xs" title={model.id}>
+                {model.id}
+              </span>
+              <button
+                onClick={() => onCopyId(model.id, model.id)}
+                className="p-1 hover:bg-gray-200 rounded transition-colors shrink-0"
+                title="Copy model ID"
+              >
+                {copiedId === model.id ? (
+                  <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                )}
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -125,7 +147,8 @@ const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefaul
                    JSON.stringify(prevProps.model.best_for_fields) === JSON.stringify(nextProps.model.best_for_fields);
   const isDefaultSame = prevProps.isDefault === nextProps.isDefault;
   const isTrainingSame = prevProps.isTraining === nextProps.isTraining;
-  return modelSame && isDefaultSame && isTrainingSame;
+  const copiedIdSame = prevProps.copiedId === nextProps.copiedId;
+  return modelSame && isDefaultSame && isTrainingSame && copiedIdSame;
 });
 
 // CreateModelModal
@@ -185,9 +208,25 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
   const [hiddenSize, setHiddenSize] = useState(32);
   const [fields, setFields] = useState([]);
   const [loadingFields, setLoadingFields] = useState(true);
+  const [isAnomaly, setIsAnomaly] = useState(false);
 
   useEffect(() => {
-    if (!showCreateModal) return;
+    if (!showCreateModal) {
+      // Reset form when modal closes
+      setIsAnomaly(false);
+      setFormData({
+        name: '',
+        architecture: 'ann',
+        input_fields: [],
+        output_fields: [],
+        window_duration_seconds: 60,
+        lookback_steps: 30,
+        forecast_steps: 5,
+      });
+      setShowAdvanced(false);
+      setHiddenSize(32);
+      return;
+    }
     const fetchFields = async () => {
       setLoadingFields(true);
       try {
@@ -215,19 +254,28 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsCreating(true);
-    const body = {
-      name: formData.name,
-      config: {
-        architecture: formData.architecture,
-        input_fields: formData.input_fields,
-        output_fields: formData.output_fields,
-        window_duration_seconds: parseInt(formData.window_duration_seconds),
-        lookback_steps: parseInt(formData.lookback_steps),
-        forecast_steps: parseInt(formData.forecast_steps),
-        ...(showAdvanced ? { hidden_size: parseInt(hiddenSize) } : {}),
-      },
-    };
-    await handleCreateModel(body);
+    const body = isAnomaly
+      ? {
+          name: formData.name,
+          config: {
+            input_fields: formData.input_fields,
+            window_duration_seconds: parseInt(formData.window_duration_seconds),
+            lookback_steps: parseInt(formData.lookback_steps),
+          },
+        }
+      : {
+          name: formData.name,
+          config: {
+            architecture: formData.architecture,
+            input_fields: formData.input_fields,
+            output_fields: formData.output_fields,
+            window_duration_seconds: parseInt(formData.window_duration_seconds),
+            lookback_steps: parseInt(formData.lookback_steps),
+            forecast_steps: parseInt(formData.forecast_steps),
+            ...(showAdvanced ? { hidden_size: parseInt(hiddenSize) } : {}),
+          },
+        };
+    await handleCreateModel(body, isAnomaly);
     setIsCreating(false);
   };
 
@@ -263,28 +311,46 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
             />
           </div>
 
-          {/* Architecture */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Architecture <span className="text-red-500">*</span></label>
-            <select
-              value={formData.architecture}
-              onChange={(e) => setFormData({ ...formData, architecture: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required
-            >
-              <option value="ann">ANN</option>
-              <option value="lstm">LSTM</option>
-            </select>
+          {/* Anomaly Checkbox */}
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="anomaly-checkbox"
+              checked={isAnomaly}
+              onChange={(e) => setIsAnomaly(e.target.checked)}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+            />
+            <label htmlFor="anomaly-checkbox" className="text-sm font-medium text-gray-700 cursor-pointer">
+              Anomaly Detection Model
+            </label>
           </div>
+
+          {/* Architecture - Hidden for anomaly */}
+          {!isAnomaly && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Architecture <span className="text-red-500">*</span></label>
+              <select
+                value={formData.architecture}
+                onChange={(e) => setFormData({ ...formData, architecture: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                required
+              >
+                <option value="ann">ANN</option>
+                <option value="lstm">LSTM</option>
+              </select>
+            </div>
+          )}
 
           {/* Input Fields */}
           <FieldCheckboxes fieldKey="input_fields" label="Input Fields" fields={fields} loadingFields={loadingFields} selected={formData.input_fields} onToggle={toggleField} />
 
-          {/* Output Fields */}
-          <FieldCheckboxes fieldKey="output_fields" label="Output Fields" fields={fields} loadingFields={loadingFields} selected={formData.output_fields} onToggle={toggleField} />
+          {/* Output Fields - Hidden for anomaly */}
+          {!isAnomaly && (
+            <FieldCheckboxes fieldKey="output_fields" label="Output Fields" fields={fields} loadingFields={loadingFields} selected={formData.output_fields} onToggle={toggleField} />
+          )}
 
           {/* Steps grid */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className={`grid gap-3 ${isAnomaly ? 'grid-cols-2' : 'grid-cols-3'}`}>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Window (s) <span className="text-red-500">*</span></label>
               <input
@@ -307,46 +373,52 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
                 required
               />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Forecast steps <span className="text-red-500">*</span></label>
-              <input
-                type="number"
-                min="1"
-                value={formData.forecast_steps}
-                onChange={(e) => setFormData({ ...formData, forecast_steps: e.target.value })}
-                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-              />
-            </div>
-          </div>
-
-          {/* Advanced Settings Toggle */}
-          <div>
-            <button
-              type="button"
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
-            >
-              <svg className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-              Advanced Settings
-            </button>
-          </div>
-
-          {showAdvanced && (
-            <div className="border border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50">
+            {!isAnomaly && (
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Hidden Size (default 32)</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Forecast steps <span className="text-red-500">*</span></label>
                 <input
                   type="number"
                   min="1"
-                  value={hiddenSize}
-                  onChange={(e) => setHiddenSize(e.target.value)}
+                  value={formData.forecast_steps}
+                  onChange={(e) => setFormData({ ...formData, forecast_steps: e.target.value })}
                   className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
                 />
               </div>
-            </div>
+            )}
+          </div>
+
+          {/* Advanced Settings Toggle - Hidden for anomaly */}
+          {!isAnomaly && (
+            <>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+                >
+                  <svg className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  Advanced Settings
+                </button>
+              </div>
+
+              {showAdvanced && (
+                <div className="border border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Hidden Size (default 32)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={hiddenSize}
+                      onChange={(e) => setHiddenSize(e.target.value)}
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           <div className="flex gap-3 pt-4 flex-shrink-0 border-t border-gray-200 -mx-6 px-6 -mb-6 pb-6 bg-white">
@@ -360,7 +432,7 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
             </button>
             <button
               type="submit"
-              disabled={isCreating || formData.input_fields.length === 0 || formData.output_fields.length === 0}
+              disabled={isCreating || formData.input_fields.length === 0 || (!isAnomaly && formData.output_fields.length === 0)}
               className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isCreating ? (
@@ -410,23 +482,51 @@ const ForceFieldPickerModal = ({ model, fields, onConfirm, onCancel }) => {
 const AllJobsModal = ({ showModal, setShowModal, mlUrl, onJobsUpdate }) => {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [copiedId, setCopiedId] = useState(null);
   const intervalRef = useRef(null);
+
+  const copyToClipboard = (text, id) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${mlUrl}/v1/training/jobs`);
-      if (response.ok) {
-        const data = await response.json();
-        const sorted = [...(Array.isArray(data) ? data : [])].sort((a, b) => {
-          const aActive = a.status === 'running' || a.status === 'pending';
-          const bActive = b.status === 'running' || b.status === 'pending';
-          if (aActive !== bActive) return aActive ? -1 : 1;
-          return new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0);
-        });
-        setJobs(sorted);
-        onJobsUpdate?.(sorted.filter(j => j.status === 'running' || j.status === 'pending').length);
+      // Fetch forecast training jobs
+      const forecastResponse = await fetch(`${mlUrl}/v1/training/jobs`);
+      let forecastJobs = [];
+      if (forecastResponse.ok) {
+        const data = await forecastResponse.json();
+        forecastJobs = Array.isArray(data) ? data : [];
       }
+
+      // Fetch anomaly training jobs
+      let anomalyJobs = [];
+      try {
+        const anomalyResponse = await fetch(`${mlUrl}/v1/anomaly/training/jobs`);
+        if (anomalyResponse.ok) {
+          const data = await anomalyResponse.json();
+          anomalyJobs = Array.isArray(data) ? data : [];
+        }
+      } catch (err) {
+        console.warn('Failed to fetch anomaly jobs:', err.message);
+      }
+
+      // Merge and sort both job types
+      const allJobs = [...forecastJobs, ...anomalyJobs];
+      const sorted = allJobs.sort((a, b) => {
+        const aActive = a.status === 'running' || a.status === 'pending';
+        const bActive = b.status === 'running' || b.status === 'pending';
+        if (aActive !== bActive) return aActive ? -1 : 1;
+        return new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0);
+      });
+
+      setJobs(sorted);
+      onJobsUpdate?.(sorted.filter(j => j.status === 'running' || j.status === 'pending').length);
+    } catch (err) {
+      console.error('Failed to fetch jobs:', err.message);
     } finally {
       setLoading(false);
     }
@@ -498,8 +598,27 @@ const AllJobsModal = ({ showModal, setShowModal, mlUrl, onJobsUpdate }) => {
                       <td className="px-4 py-2 font-mono text-xs text-gray-600" title={job.job_id}>
                         {job.job_id?.slice(0, 8)}…
                       </td>
-                      <td className="px-4 py-2 font-mono text-xs text-gray-600" title={job.model_id}>
-                        {job.model_id?.slice(0, 8)}…
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs text-gray-600" title={job.model_id}>
+                            {job.model_id?.slice(0, 8)}…
+                          </span>
+                          <button
+                            onClick={() => copyToClipboard(job.model_id, job.model_id)}
+                            className="p-1 hover:bg-gray-200 rounded transition-colors"
+                            title="Copy model ID"
+                          >
+                            {copiedId === job.model_id ? (
+                              <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : (
+                              <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
                       </td>
                       <td className="px-4 py-2">
                         <span className={statusBadge(job.status)}>{job.status}</span>
@@ -761,7 +880,9 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
         <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex-shrink-0">
           <div className="flex gap-3">
             <a
-              href={`${mlUrl}/v1/models/${modelDetails.id}`}
+              href={selectedModel.modelType === 'anomaly'
+                ? `${mlUrl}/v1/anomaly/models/${modelDetails.id}`
+                : `${mlUrl}/v1/models/${modelDetails.id}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-center text-sm"
@@ -837,6 +958,11 @@ const MLModels = () => {
   const [fields, setFields] = useState([]);
   const [loadingFields, setLoadingFields] = useState(true);
 
+  // Search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [fieldSearchQuery, setFieldSearchQuery] = useState('');
+  const [showFieldDropdown, setShowFieldDropdown] = useState(false);
+
   // Modal state
   const [showJobHistoryModal, setShowJobHistoryModal] = useState(false);
   const [showAllJobsModal, setShowAllJobsModal] = useState(false);
@@ -862,6 +988,14 @@ const MLModels = () => {
   const [trainTarget, setTrainTarget] = useState(null);
   const [lookbackSeconds, setLookbackSeconds] = useState(3600);
   const pollingRef = useRef(null);
+
+  // Copy to clipboard
+  const [copiedId, setCopiedId] = useState(null);
+  const copyToClipboard = (text, id) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   const isDefaultModel = useCallback((modelName) => {
     if (!config?.inference_types) return false;
@@ -891,14 +1025,37 @@ const MLModels = () => {
     try {
       setError(null);
       setLoading(true);
-      const url = field
+
+      // Fetch forecast models (skip field filter if filtering by anomaly)
+      const forecastUrl = (field && field !== 'anomaly')
         ? `${mlUrl}/v1/models?output_field=${encodeURIComponent(field)}&include_details=true`
         : `${mlUrl}/v1/models?include_details=true`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
-      const modelsArray = Array.isArray(data) ? data : [data];
-      setModels([...modelsArray].sort((a, b) => (a.name || '').localeCompare(b.name || '')));
+      const forecastResponse = await fetch(forecastUrl);
+      if (!forecastResponse.ok) throw new Error(`HTTP error! status: ${forecastResponse.status}`);
+      const forecastData = await forecastResponse.json();
+      const forecastModels = (Array.isArray(forecastData) ? forecastData : [forecastData]).map(m => ({
+        ...m,
+        modelType: 'forecast'
+      }));
+
+      // Fetch anomaly models
+      let anomalyModels = [];
+      try {
+        const anomalyResponse = await fetch(`${mlUrl}/v1/anomaly/models`);
+        if (anomalyResponse.ok) {
+          const anomalyData = await anomalyResponse.json();
+          anomalyModels = (Array.isArray(anomalyData) ? anomalyData : [anomalyData]).map(m => ({
+            ...m,
+            modelType: 'anomaly'
+          }));
+        }
+      } catch (err) {
+        console.warn('Failed to fetch anomaly models:', err.message);
+      }
+
+      // Combine and sort
+      const allModels = [...forecastModels, ...anomalyModels];
+      setModels(allModels.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
       setLastUpdated(new Date());
     } catch (err) {
       console.error('Failed to fetch models:', err.message);
@@ -917,7 +1074,10 @@ const MLModels = () => {
     setLoadingJobs(true);
     setJobs([]);
     try {
-      const response = await fetch(`${mlUrl}/v1/training/jobs?model_id=${model.id}`);
+      const endpoint = model.modelType === 'anomaly'
+        ? `${mlUrl}/v1/anomaly/training/jobs?model_id=${model.id}`
+        : `${mlUrl}/v1/training/jobs?model_id=${model.id}`;
+      const response = await fetch(endpoint);
       if (response.ok) {
         const data = await response.json();
         const raw = Array.isArray(data) ? data : [];
@@ -939,7 +1099,10 @@ const MLModels = () => {
     setLoadingModelDetails(true);
     setModelDetails(null);
     try {
-      const response = await fetch(`${mlUrl}/v1/models/${model.id}`);
+      const endpoint = model.modelType === 'anomaly'
+        ? `${mlUrl}/v1/anomaly/models/${model.id}`
+        : `${mlUrl}/v1/models/${model.id}`;
+      const response = await fetch(endpoint);
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       setModelDetails(await response.json());
     } catch (err) {
@@ -949,12 +1112,15 @@ const MLModels = () => {
     }
   }, [mlUrl]);
 
-  const startPollingJob = useCallback((jobId, modelId, modelName) => {
+  const startPollingJob = useCallback((jobId, modelId, modelName, modelType) => {
     pollingRef.current = pollingRef.current || {};
     if (pollingRef.current[modelId]) clearInterval(pollingRef.current[modelId]);
     pollingRef.current[modelId] = setInterval(async () => {
       try {
-        const response = await fetch(`${mlUrl}/v1/training/jobs/${jobId}`);
+        const endpoint = modelType === 'anomaly'
+          ? `${mlUrl}/v1/anomaly/training/jobs/${jobId}`
+          : `${mlUrl}/v1/training/jobs/${jobId}`;
+        const response = await fetch(endpoint);
         if (!response.ok) return;
         const job = await response.json();
         setTrainingMessage({ type: 'info', text: `Training job ${jobId.slice(0, 8)}… - ${job.status} (${modelName})` });
@@ -986,7 +1152,10 @@ const MLModels = () => {
     setTrainingModelIds(prev => new Set([...prev, trainTarget.id]));
     setTrainingMessage(null);
     try {
-      const response = await fetch(`${mlUrl}/v1/training/train`, {
+      const endpoint = trainTarget.modelType === 'anomaly'
+        ? `${mlUrl}/v1/anomaly/training/train`
+        : `${mlUrl}/v1/training/train`;
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model_id: trainTarget.id, lookback_seconds: lookbackSeconds }),
@@ -995,7 +1164,7 @@ const MLModels = () => {
       const data = await response.json();
       setTrainingMessage({ type: 'info', text: `Training started for ${trainTarget.name} (job ${data.job_id?.slice(0, 8)}…)` });
       setTrainModalOpen(false);
-      startPollingJob(data.job_id, trainTarget.id, trainTarget.name);
+      startPollingJob(data.job_id, trainTarget.id, trainTarget.name, trainTarget.modelType);
     } catch (err) {
       console.error('Failed to start training:', err.message);
       setTrainingMessage({ type: 'error', text: `Failed to start training: ${err.message}` });
@@ -1047,7 +1216,10 @@ const MLModels = () => {
     if (!confirm(`Are you sure you want to delete ${model.name}? This action cannot be undone.`)) return;
     setTrainingMessage(null);
     try {
-      const response = await fetch(`${mlUrl}/v1/models/${model.id}`, { method: 'DELETE' });
+      const endpoint = model.modelType === 'anomaly'
+        ? `${mlUrl}/v1/anomaly/models/${model.id}`
+        : `${mlUrl}/v1/models/${model.id}`;
+      const response = await fetch(endpoint, { method: 'DELETE' });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         const detail = errorData.detail;
@@ -1061,10 +1233,13 @@ const MLModels = () => {
     }
   }, [mlUrl, fetchModels, filterField, refetchConfig]);
 
-  const handleCreateModel = useCallback(async (formData) => {
+  const handleCreateModel = useCallback(async (formData, isAnomaly = false) => {
     setTrainingMessage(null);
     try {
-      const response = await fetch(`${mlUrl}/v1/models`, {
+      const endpoint = isAnomaly
+        ? `${mlUrl}/v1/anomaly/models`
+        : `${mlUrl}/v1/models`;
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
@@ -1160,25 +1335,13 @@ const MLModels = () => {
       <div className="space-y-6">
         {/* Header */}
         <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+          {/* Header */}
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex-1">
               <h2 className="text-2xl font-bold text-gray-900">ML Registry</h2>
               <p className="text-sm text-gray-600 mt-1">Browse and manage ML models</p>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
-              {/* Field filter */}
-              <select
-                value={filterField}
-                onChange={(e) => setFilterField(e.target.value)}
-                disabled={loadingFields}
-                className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-              >
-                <option value="">All fields</option>
-                {fields.map(f => (
-                  <option key={f} value={f}>{f}</option>
-                ))}
-              </select>
-
               <button
                 onClick={() => setShowAllJobsModal(true)}
                 className="px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors flex items-center gap-2"
@@ -1220,6 +1383,87 @@ const MLModels = () => {
               >
                 {loading ? 'Refreshing...' : 'Refresh'}
               </button>
+            </div>
+          </div>
+
+          {/* Search and Filter Bar */}
+          <div className="bg-gray-50 border-y border-gray-200 px-6 py-3 -mx-6">
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Search */}
+              <div className="relative flex-1 min-w-[300px]">
+                <input
+                  type="text"
+                  placeholder="Search models by name or ID..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                />
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+
+              {/* Field Filter */}
+              <div className="relative">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Filter by field..."
+                    value={fieldSearchQuery || filterField}
+                    onChange={(e) => {
+                      setFieldSearchQuery(e.target.value);
+                      setShowFieldDropdown(true);
+                    }}
+                    onFocus={() => setShowFieldDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowFieldDropdown(false), 200)}
+                    disabled={loadingFields}
+                    className="pl-10 pr-8 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white disabled:opacity-50 w-56"
+                  />
+                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                  <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+                {showFieldDropdown && (
+                  <div className="absolute top-full mt-1 w-56 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto z-10">
+                    {[{ value: '', label: 'All fields' }, { value: 'anomaly', label: 'Anomaly' }, ...fields.map(f => ({ value: f, label: f }))]
+                      .filter(option =>
+                        !fieldSearchQuery ||
+                        option.label.toLowerCase().includes(fieldSearchQuery.toLowerCase())
+                      )
+                      .map(option => (
+                        <button
+                          key={option.value}
+                          onClick={() => {
+                            setFilterField(option.value);
+                            setFieldSearchQuery('');
+                            setShowFieldDropdown(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition-colors ${
+                            filterField === option.value ? 'bg-blue-100 font-medium' : ''
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Clear Filters */}
+              {(searchQuery || filterField) && (
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setFilterField('');
+                  }}
+                  className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Clear Filters
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1265,24 +1509,60 @@ const MLModels = () => {
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {models.map((model) => (
-                <ModelCard
-                  key={model.id || model.name}
-                  model={model}
-                  onShowDetails={handleShowDetails}
-                  onShowInfo={handleShowInfo}
-                  onTrain={handleTrain}
-                  onSetDefault={handleSetDefault}
-                  onDelete={handleDelete}
-                  isDefault={isDefaultModel(model.name)}
-                  isTraining={trainingModelIds.has(model.id)}
-                />
-              ))}
+              {models
+                .filter(model => {
+                  // Filter by field
+                  if (filterField === 'anomaly') {
+                    // Only show anomaly models
+                    if (model.modelType !== 'anomaly') return false;
+                  } else if (filterField) {
+                    // Only show forecast models when a specific field is selected
+                    if (model.modelType === 'anomaly') return false;
+                  }
+
+                  // Filter by search query
+                  if (!searchQuery) return true;
+                  const query = searchQuery.toLowerCase();
+                  return (
+                    model.name?.toLowerCase().includes(query) ||
+                    model.id?.toLowerCase().includes(query)
+                  );
+                })
+                .map((model) => (
+                  <ModelCard
+                    key={model.id || model.name}
+                    model={model}
+                    onShowDetails={handleShowDetails}
+                    onShowInfo={handleShowInfo}
+                    onTrain={handleTrain}
+                    onSetDefault={handleSetDefault}
+                    onDelete={handleDelete}
+                    isDefault={isDefaultModel(model.name)}
+                    isTraining={trainingModelIds.has(model.id)}
+                    copiedId={copiedId}
+                    onCopyId={copyToClipboard}
+                  />
+                ))}
             </div>
             <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 text-center">
               <p className="text-sm text-gray-600">
-                Total Models: <span className="font-semibold text-gray-900">{models.length}</span>
+                Total Models: <span className="font-semibold text-gray-900">{models.filter(m => {
+                  // Filter by field
+                  if (filterField === 'anomaly') {
+                    // Only show anomaly models
+                    if (m.modelType !== 'anomaly') return false;
+                  } else if (filterField) {
+                    // Only show forecast models when a specific field is selected
+                    if (m.modelType === 'anomaly') return false;
+                  }
+
+                  // Filter by search query
+                  if (!searchQuery) return true;
+                  const query = searchQuery.toLowerCase();
+                  return m.name?.toLowerCase().includes(query) || m.id?.toLowerCase().includes(query);
+                }).length}</span>
                 {filterField && <span className="ml-2 text-gray-400">filtered by <span className="font-mono">{filterField}</span></span>}
+                {searchQuery && <span className="ml-2 text-gray-400">matching <span className="font-mono">"{searchQuery}"</span></span>}
               </p>
             </div>
           </>
