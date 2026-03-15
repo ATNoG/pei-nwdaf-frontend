@@ -35,62 +35,62 @@ const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefaul
         </div>
 
         <div className="model-card-actions shrink-0 flex flex-col gap-2">
-        <div className="flex gap-2">
-          <button
-            onClick={() => onShowDetails(model)}
-            className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors flex items-center justify-center gap-1.5"
-            title="View model configuration"
-          >
-            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Details
-          </button>
-          <button
-            onClick={() => onShowInfo(model)}
-            className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center justify-center gap-1.5"
-          >
-            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Info
-          </button>
-          <button
-            onClick={() => onTrain(model)}
-            disabled={isTraining}
-            className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Train
-          </button>
-        </div>
-        <div className="flex gap-2">
-          {!isBestForAny && model.modelType !== 'anomaly' && (
+          <div className="flex gap-2">
             <button
-              onClick={() => onSetDefault(model)}
-              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1.5"
-              title="Set as default model"
+              onClick={() => onShowDetails(model)}
+              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors flex items-center justify-center gap-1.5"
+              title="View model configuration"
             >
-              Force
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Details
             </button>
-          )}
-          <button
-            onClick={() => onDelete(model)}
-            className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center justify-center gap-1.5"
-            title="Delete model instance"
-          >
-            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            Delete
-          </button>
+            <button
+              onClick={() => onShowInfo(model)}
+              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center justify-center gap-1.5"
+            >
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Info
+            </button>
+            <button
+              onClick={() => onTrain(model)}
+              disabled={isTraining}
+              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Train
+            </button>
+          </div>
+          <div className="flex gap-2">
+            {!isBestForAny && model.modelType !== 'anomaly' && (
+              <button
+                onClick={() => onSetDefault(model)}
+                className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1.5"
+                title="Set as default model"
+              >
+                Force
+              </button>
+            )}
+            <button
+              onClick={() => onDelete(model)}
+              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center justify-center gap-1.5"
+              title="Delete model instance"
+            >
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Delete
+            </button>
+          </div>
+          {/* /model-card-actions */}
         </div>
-        {/* /model-card-actions */}
-        </div>
-      {/* /flex-wrap header */}
+        {/* /flex-wrap header */}
       </div>
 
       <hr className="border-gray-200 mt-1 mb-3" />
@@ -141,10 +141,10 @@ const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefaul
   );
 }, (prevProps, nextProps) => {
   const modelSame = prevProps.model.id === nextProps.model.id &&
-                   prevProps.model.created_at === nextProps.model.created_at &&
-                   prevProps.model.latest_version === nextProps.model.latest_version &&
-                   prevProps.model.architecture === nextProps.model.architecture &&
-                   JSON.stringify(prevProps.model.best_for_fields) === JSON.stringify(nextProps.model.best_for_fields);
+    prevProps.model.created_at === nextProps.model.created_at &&
+    prevProps.model.latest_version === nextProps.model.latest_version &&
+    prevProps.model.architecture === nextProps.model.architecture &&
+    JSON.stringify(prevProps.model.best_for_fields) === JSON.stringify(nextProps.model.best_for_fields);
   const isDefaultSame = prevProps.isDefault === nextProps.isDefault;
   const isTrainingSame = prevProps.isTraining === nextProps.isTraining;
   const copiedIdSame = prevProps.copiedId === nextProps.copiedId;
@@ -256,25 +256,25 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
     setIsCreating(true);
     const body = isAnomaly
       ? {
-          name: formData.name,
-          config: {
-            input_fields: formData.input_fields,
-            window_duration_seconds: parseInt(formData.window_duration_seconds),
-            lookback_steps: parseInt(formData.lookback_steps),
-          },
-        }
+        name: formData.name,
+        config: {
+          input_fields: formData.input_fields,
+          window_duration_seconds: parseInt(formData.window_duration_seconds),
+          lookback_steps: parseInt(formData.lookback_steps),
+        },
+      }
       : {
-          name: formData.name,
-          config: {
-            architecture: formData.architecture,
-            input_fields: formData.input_fields,
-            output_fields: formData.output_fields,
-            window_duration_seconds: parseInt(formData.window_duration_seconds),
-            lookback_steps: parseInt(formData.lookback_steps),
-            forecast_steps: parseInt(formData.forecast_steps),
-            ...(showAdvanced ? { hidden_size: parseInt(hiddenSize) } : {}),
-          },
-        };
+        name: formData.name,
+        config: {
+          architecture: formData.architecture,
+          input_fields: formData.input_fields,
+          output_fields: formData.output_fields,
+          window_duration_seconds: parseInt(formData.window_duration_seconds),
+          lookback_steps: parseInt(formData.lookback_steps),
+          forecast_steps: parseInt(formData.forecast_steps),
+          ...(showAdvanced ? { hidden_size: parseInt(hiddenSize) } : {}),
+        },
+      };
     await handleCreateModel(body, isAnomaly);
     setIsCreating(false);
   };
@@ -544,8 +544,8 @@ const AllJobsModal = ({ showModal, setShowModal, mlUrl, onJobsUpdate }) => {
   const statusBadge = (status) => {
     const base = 'px-2 py-0.5 rounded text-xs font-medium';
     if (status === 'completed') return `${base} bg-green-100 text-green-800`;
-    if (status === 'failed')    return `${base} bg-red-100 text-red-800`;
-    if (status === 'running')   return `${base} bg-yellow-100 text-yellow-800`;
+    if (status === 'failed') return `${base} bg-red-100 text-red-800`;
+    if (status === 'running') return `${base} bg-yellow-100 text-yellow-800`;
     return `${base} bg-gray-100 text-gray-700`;
   };
 
@@ -1387,7 +1387,7 @@ const MLModels = () => {
           </div>
 
           {/* Search and Filter Bar */}
-          <div className="bg-gray-50 border-y border-gray-200 px-6 py-3 -mx-6">
+          <div className="bg-gray-50 border-y border-none px-6 py-3 -mx-6">
             <div className="flex items-center gap-3 flex-wrap">
               {/* Search */}
               <div className="relative flex-1 min-w-[300px]">
@@ -1441,9 +1441,8 @@ const MLModels = () => {
                             setFieldSearchQuery('');
                             setShowFieldDropdown(false);
                           }}
-                          className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition-colors ${
-                            filterField === option.value ? 'bg-blue-100 font-medium' : ''
-                          }`}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition-colors ${filterField === option.value ? 'bg-blue-100 font-medium' : ''
+                            }`}
                         >
                           {option.label}
                         </button>
@@ -1470,13 +1469,12 @@ const MLModels = () => {
 
         {/* Training Status Message */}
         {trainingMessage && (
-          <div className={`p-3 rounded-lg ${
-            trainingMessage.type === 'success'
+          <div className={`p-3 rounded-lg ${trainingMessage.type === 'success'
               ? 'bg-green-50 border border-green-200 text-green-800'
               : trainingMessage.type === 'info'
-              ? 'bg-blue-50 border border-blue-200 text-blue-800'
-              : 'bg-red-50 border border-red-200 text-red-800'
-          }`}>
+                ? 'bg-blue-50 border border-blue-200 text-blue-800'
+                : 'bg-red-50 border border-red-200 text-red-800'
+            }`}>
             <p className="text-sm font-medium">{trainingMessage.text}</p>
           </div>
         )}
