@@ -163,7 +163,6 @@ const FIELD_CATEGORIES = {
 
 // Available transformer types
 const TRANSFORMER_TYPES = [
-  { type: 'filter', label: 'Filter', description: 'Filter fields by whitelist or blacklist' },
   { type: 'hashing', label: 'Hashing', description: 'Hash specified fields (preserves data type)' },
   { type: 'redaction', label: 'Redaction', description: 'Redact sensitive field values (preserves data type)' }
 ];
@@ -381,6 +380,17 @@ const Policy = () => {
     setHasUnsavedChanges(true);
   };
 
+  const deselectAllFields = () => {
+    setSelectedFields(new Set());
+    setHasUnsavedChanges(true);
+  };
+
+  const selectAllFields = () => {
+    const allFieldNames = Object.values(fieldsByCategory).flat();
+    setSelectedFields(new Set(allFieldNames));
+    setHasUnsavedChanges(true);
+  };
+
   const toggleCategory = (category) => {
     const newSelected = new Set(selectedFields);
     const fieldsInCategory = fieldsByCategory[category] || [];
@@ -562,24 +572,29 @@ const Policy = () => {
             onSync={syncFieldsToPermit}
             syncStatus={fieldSyncStatus}
             isLoading={isLoadingFields}
+            onDeselectAll={deselectAllFields}
+            onSelectAll={selectAllFields}
           />
 
-          {/* Transformer Steps */}
+          {/* Field Transformations */}
           <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Transformer Steps</h3>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Field Transformations</h3>
+                <p className="text-sm text-gray-600 mt-1">Applies different transformations to fields before they reach the sink</p>
+              </div>
               <button
                 onClick={() => { setEditingStepIndex(null); setShowStepEditor(true); }}
                 className="flex items-center space-x-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
               >
                 <FaPlus />
-                <span>Add Step</span>
+                <span>Add Transformation</span>
               </button>
             </div>
 
             {pipelineSteps.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
-                <p>No transformer steps configured.</p>
+                <p>No field transformations configured.</p>
                 <p className="text-sm">Field filtering is handled automatically based on your selections above.</p>
               </div>
             ) : (

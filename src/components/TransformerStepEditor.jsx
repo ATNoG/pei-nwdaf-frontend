@@ -2,26 +2,43 @@ import React, { useState, useEffect } from 'react';
 import { FaTimes, FaPlus, FaTrash } from 'react-icons/fa';
 
 const TRANSFORMER_TYPES = [
-  { type: 'filter', label: 'Filter', description: 'Filter fields by whitelist or blacklist' },
   { type: 'hashing', label: 'Hashing', description: 'Hash specified fields (preserves data type)' },
   { type: 'redaction', label: 'Redaction', description: 'Redact sensitive field values (preserves data type)' }
 ];
 
 const TransformerStepEditor = ({ step, onSave, onCancel, availableFields }) => {
-  const [stepType, setStepType] = useState(step?.type || 'filter');
+  const [stepType, setStepType] = useState(step?.type || '');
   const [params, setParams] = useState(step?.params || {});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [toast, setToast] = useState(null);
+  const initialStepType = React.useRef(step?.type);
 
+  // Initialize params from step when component mounts or step changes
   useEffect(() => {
-    // Reset params when type changes if not editing
-    if (!step) {
+    if (step) {
+      // Editing mode - set type and params from step
+      setStepType(step.type);
+      setParams(step.params || getDefaultParamsForType(step.type));
+      initialStepType.current = step.type;
+    }
+  }, [step]); // Only run when step object changes
+
+  // Handle type changes
+  useEffect(() => {
+    // Skip if stepType is empty (initial state)
+    if (!stepType) return;
+
+    const isEditing = !!step;
+    const originalType = initialStepType.current;
+
+    // For new steps, or when type changes in edit mode (and different from original)
+    if (!isEditing || (isEditing && stepType !== originalType)) {
       setParams(getDefaultParamsForType(stepType));
     }
-  }, [stepType]);
+  }, [stepType, step]); // Depend on stepType and step
 
   const getDefaultParamsForType = (type) => {
     switch (type) {
-      case 'filter':
-        return { mode: 'whitelist', fields: [] };
       case 'hashing':
         return { fields: [], salt: '' };
       case 'redaction':
@@ -31,18 +48,25 @@ const TransformerStepEditor = ({ step, onSave, onCancel, availableFields }) => {
     }
   };
 
+  const showToast = (message, type = 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   const handleSave = () => {
-    // Validate params based on type
-    if (stepType === 'filter' && params.fields?.length === 0 && params.mode === 'whitelist') {
-      alert('Please select at least one field for whitelist mode');
+    // Validate that a type is selected
+    if (!stepType) {
+      showToast('Please select a transformation type', 'error');
       return;
     }
+
+    // Validate params based on type
     if (stepType === 'hashing' && (!params.fields || params.fields.length === 0)) {
-      alert('Please select at least one field to hash');
+      showToast('Please select at least one field to hash', 'error');
       return;
     }
     if (stepType === 'hashing' && !params.salt) {
-      alert('Please enter a salt value for hashing');
+      showToast('Please enter a salt value for hashing', 'error');
       return;
     }
 
@@ -65,42 +89,95 @@ const TransformerStepEditor = ({ step, onSave, onCancel, availableFields }) => {
     }
   };
 
-  const renderFilterParams = () => (
-    <div className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Mode</label>
-        <select
-          value={params.mode || 'whitelist'}
-          onChange={(e) => updateParams('mode', e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="whitelist">Whitelist (only selected fields)</option>
-          <option value="blacklist">Blacklist (exclude selected fields)</option>
-        </select>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Fields ({params.fields?.length || 0} selected)
-        </label>
-        <div className="border border-gray-200 rounded-lg p-3 max-h-48 overflow-y-auto">
-          <div className="grid grid-cols-2 gap-2">
-            {availableFields.map(field => (
-              <label
-                key={field}
-                className={`flex items-center space-x-2 p-2 rounded cursor-pointer ${
-                  params.fields?.includes(field) ? 'bg-blue-50' : 'hover:bg-gray-50'
-                }`}
+  const filteredFields = React.useMemo(() => {
+    if (!searchQuery) return availableFields;
+    return availableFields.filter(f =>
+      f.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [availableFields, searchQuery]);
+
+  const renderSelectedFieldsSummary = () => {
+    const selectedFields = params.fields || [];
+    if (selectedFields.length === 0) return null;
+
+    return (
+      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-medium text-blue-900">
+            {selectedFields.length} field{selectedFields.length !== 1 ? 's' : ''} selected
+          </span>
+          <button
+            type="button"
+            onClick={() => updateParams('fields', [])}
+            className="text-xs text-blue-700 hover:text-blue-900 underline"
+          >
+            Clear all
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {selectedFields.slice(0, 10).map(field => (
+            <span
+              key={field}
+              className="inline-flex items-center px-2 py-1 bg-white rounded text-xs text-blue-800 border border-blue-300"
+            >
+              {field}
+              <button
+                type="button"
+                onClick={() => toggleFieldInList(field)}
+                className="ml-1 text-blue-600 hover:text-blue-800"
               >
-                <input
-                  type="checkbox"
-                  checked={params.fields?.includes(field) || false}
-                  onChange={() => toggleFieldInList(field)}
-                  className="w-4 h-4 text-blue-600 rounded"
-                />
-                <span className="text-sm truncate">{field}</span>
-              </label>
-            ))}
-          </div>
+                <FaTimes className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+          {selectedFields.length > 10 && (
+            <span className="text-xs text-blue-600">+{selectedFields.length - 10} more</span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderFieldSelector = (label) => (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2">
+        {label} ({params.fields?.length || 0} selected)
+      </label>
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <div className="p-2 border-b border-gray-200 bg-gray-50">
+          <input
+            type="text"
+            placeholder="Search fields..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+          />
+        </div>
+        <div className="p-3 max-h-48 overflow-y-auto">
+          {filteredFields.length === 0 ? (
+            <div className="text-center py-4 text-gray-500 text-sm">
+              No fields match "{searchQuery}"
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              {filteredFields.map(field => (
+                <label
+                  key={field}
+                  className={`flex items-center space-x-2 p-2 rounded cursor-pointer ${
+                    params.fields?.includes(field) ? 'bg-blue-50' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={params.fields?.includes(field) || false}
+                    onChange={() => toggleFieldInList(field)}
+                    className="w-4 h-4 text-blue-600 rounded"
+                  />
+                  <span className="text-sm truncate">{field}</span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -108,36 +185,14 @@ const TransformerStepEditor = ({ step, onSave, onCancel, availableFields }) => {
 
   const renderHashingParams = () => (
     <div className="space-y-4">
+      {renderFieldSelector('Fields to Hash')}
+      <p className="text-xs text-gray-500">
+        Hashed values preserve the original data type (int → int, float → float, str → str)
+      </p>
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Fields to Hash ({params.fields?.length || 0} selected)
+          Salt <span className="text-red-500">*</span>
         </label>
-        <div className="border border-gray-200 rounded-lg p-3 max-h-48 overflow-y-auto">
-          <div className="grid grid-cols-2 gap-2">
-            {availableFields.map(field => (
-              <label
-                key={field}
-                className={`flex items-center space-x-2 p-2 rounded cursor-pointer ${
-                  params.fields?.includes(field) ? 'bg-blue-50' : 'hover:bg-gray-50'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={params.fields?.includes(field) || false}
-                  onChange={() => toggleFieldInList(field)}
-                  className="w-4 h-4 text-blue-600 rounded"
-                />
-                <span className="text-sm truncate">{field}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-        <p className="text-xs text-gray-500 mt-2">
-          Hashed values preserve the original data type (int → int, float → float, str → str)
-        </p>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Salt</label>
         <input
           type="text"
           value={params.salt || ''}
@@ -152,44 +207,45 @@ const TransformerStepEditor = ({ step, onSave, onCancel, availableFields }) => {
 
   const renderRedactionParams = () => (
     <div className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Fields to Redact ({params.fields?.length || 0} selected)
-        </label>
-        <div className="border border-gray-200 rounded-lg p-3 max-h-48 overflow-y-auto">
-          <div className="grid grid-cols-2 gap-2">
-            {availableFields.map(field => (
-              <label
-                key={field}
-                className={`flex items-center space-x-2 p-2 rounded cursor-pointer ${
-                  params.fields?.includes(field) ? 'bg-blue-50' : 'hover:bg-gray-50'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={params.fields?.includes(field) || false}
-                  onChange={() => toggleFieldInList(field)}
-                  className="w-4 h-4 text-blue-600 rounded"
-                />
-                <span className="text-sm truncate">{field}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-        <p className="text-xs text-gray-500 mt-2">
-          Values will be replaced with type-preserving defaults (-1 for int, -1.0 for float, False for bool, "***" for string)
-        </p>
-      </div>
+      {renderFieldSelector('Fields to Redact')}
+      <p className="text-xs text-gray-500">
+        Values will be replaced with type-preserving defaults (-1 for int, -1.0 for float, False for bool, "***" for string)
+      </p>
+    </div>
+  );
+
+  const renderPreview = () => (
+    <div className="bg-gray-50 rounded-lg p-4 h-full">
+      <h3 className="text-sm font-medium text-gray-700 mb-3">Configuration data preview</h3>
+      <p className="text-xs text-gray-500 mb-3">This is the configuration that will be sent to components when transforming.</p>
+      <pre className="bg-gray-900 text-gray-100 p-3 rounded-lg overflow-x-auto text-xs">
+        {JSON.stringify({ type: stepType, params }, null, 2)}
+      </pre>
     </div>
   );
 
   return (
     <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+      {toast && (
+        <div className={`fixed top-4 right-4 z-[60] flex items-center space-x-3 px-4 py-3 rounded-lg shadow-lg text-white transform transition-all duration-300 ${
+          toast.type === 'error' ? 'bg-red-500' : 'bg-green-500'
+        }`}>
+          <FaTimes className="flex-shrink-0" />
+          <span className="flex-1">{toast.message}</span>
+          <button
+            onClick={() => setToast(null)}
+            className="flex-shrink-0 hover:opacity-75 ml-2"
+          >
+            <FaTimes className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">
-            {step ? 'Edit Transformer Step' : 'Add Transformer Step'}
+            {step ? 'Edit Field Transformation' : 'Add Field Transformation'}
           </h2>
           <button
             onClick={onCancel}
@@ -204,7 +260,7 @@ const TransformerStepEditor = ({ step, onSave, onCancel, availableFields }) => {
           <div className="space-y-6">
             {/* Step Type Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Transformer Type</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Transformation Type</label>
               <div className="grid grid-cols-2 gap-3">
                 {TRANSFORMER_TYPES.map(({ type, label, description }) => (
                   <button
@@ -224,21 +280,25 @@ const TransformerStepEditor = ({ step, onSave, onCancel, availableFields }) => {
               </div>
             </div>
 
-            {/* Type-Specific Parameters */}
-            <div className="border-t border-gray-200 pt-6">
-              <h3 className="text-sm font-medium text-gray-700 mb-4">Parameters</h3>
-              {stepType === 'filter' && renderFilterParams()}
-              {stepType === 'hashing' && renderHashingParams()}
-              {stepType === 'redaction' && renderRedactionParams()}
-            </div>
+            {/* Type-Specific Parameters - only show after type is selected */}
+            {stepType && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Parameters Section - 2 columns */}
+                <div className="lg:col-span-2 space-y-4">
+                  <div className="border-t border-gray-200 pt-6">
+                    <h3 className="text-sm font-medium text-gray-700 mb-4">Parameters</h3>
+                    {renderSelectedFieldsSummary()}
+                    {stepType === 'hashing' && renderHashingParams()}
+                    {stepType === 'redaction' && renderRedactionParams()}
+                  </div>
+                </div>
 
-            {/* Preview */}
-            <div className="border-t border-gray-200 pt-6">
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Preview</h3>
-              <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm">
-                {JSON.stringify({ type: stepType, params }, null, 2)}
-              </pre>
-            </div>
+                {/* Preview Section - 1 column on the right */}
+                <div className="lg:col-span-1">
+                  {renderPreview()}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -256,7 +316,7 @@ const TransformerStepEditor = ({ step, onSave, onCancel, availableFields }) => {
             onClick={handleSave}
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            {step ? 'Update' : 'Add'} Step
+            {step ? 'Update' : 'Add'} Transformation
           </button>
         </div>
       </div>

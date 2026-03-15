@@ -1,5 +1,5 @@
 import React from 'react';
-import { FaSearch, FaSync, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
+import { FaSearch, FaSync, FaCheckCircle, FaExclamationTriangle, FaTimes } from 'react-icons/fa';
 
 const FieldDiscoveryPanel = ({
   fieldsByCategory,
@@ -9,8 +9,13 @@ const FieldDiscoveryPanel = ({
   onRefresh,
   onSync,
   syncStatus,
-  isLoading
+  isLoading,
+  onDeselectAll,
+  onSelectAll
 }) => {
+  // Search state
+  const [searchQuery, setSearchQuery] = React.useState('');
+
   // Flatten all fields into a single array with their category info
   const allFields = React.useMemo(() => {
     const flat = [];
@@ -22,6 +27,22 @@ const FieldDiscoveryPanel = ({
     return flat.sort((a, b) => a.name.localeCompare(b.name)); // Sort alphabetically
   }, [fieldsByCategory]);
 
+  // Filter fields based on search query
+  const filteredFields = React.useMemo(() => {
+    if (!searchQuery) return allFields;
+    return allFields.filter(f =>
+      f.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [allFields, searchQuery]);
+
+  // Get deselected fields as sorted array
+  const deselectedFieldsArray = React.useMemo(() => {
+    return allFields
+      .filter(f => !selectedFields.has(f.name))
+      .map(f => f.name)
+      .sort();
+  }, [allFields, selectedFields]);
+
   const selectedCount = selectedFields.size;
   const totalFields = allFields.length;
 
@@ -30,11 +51,20 @@ const FieldDiscoveryPanel = ({
 
   const toggleAll = () => {
     if (isAllSelected) {
-      // Deselect all
-      allFields.forEach(f => onToggleField(f.name));
+      // Deselect all - use dedicated callback if available
+      onDeselectAll?.();
     } else {
-      // Select all
-      allFields.forEach(f => onToggleField(f.name));
+      // Select all - use dedicated callback if available, otherwise toggle unselected fields
+      if (onSelectAll) {
+        onSelectAll();
+      } else {
+        // Fallback: only select fields that aren't already selected
+        allFields.forEach(f => {
+          if (!selectedFields.has(f.name)) {
+            onToggleField(f.name);
+          }
+        });
+      }
     }
   };
 
@@ -127,52 +157,125 @@ const FieldDiscoveryPanel = ({
         </div>
       )}
 
-      {/* All Fields */}
+      {/* Two-Column Layout */}
       {totalFields > 0 && (
-        <div className="border border-gray-200 rounded-lg overflow-hidden">
-          {/* Header with Select All */}
-          <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-            <label className="flex items-center space-x-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isAllSelected}
-                ref={(input) => {
-                  if (input) {
-                    input.indeterminate = isPartiallySelected;
-                  }
-                }}
-                onChange={toggleAll}
-                className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-              />
-              <span className="font-medium text-gray-900">
-                {isAllSelected ? 'Deselect All' : 'Select All'} ({totalFields} fields)
-              </span>
-            </label>
-          </div>
-
-          {/* Fields Grid */}
-          <div className="p-4 bg-white">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
-              {allFields.map(field => (
-                <label
-                  key={field.name}
-                  className={`flex items-center space-x-2 p-2 rounded-lg border cursor-pointer transition-colors ${
-                    selectedFields.has(field.name)
-                      ? 'bg-blue-50 border-blue-300'
-                      : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                  }`}
-                  title={field.name}
-                >
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column - Available Fields */}
+          <div className="lg:col-span-2 border border-gray-200 rounded-lg overflow-hidden">
+            {/* Header with Select All */}
+            <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center space-x-3 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={selectedFields.has(field.name)}
-                    onChange={() => onToggleField(field.name)}
-                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 flex-shrink-0"
+                    checked={isAllSelected}
+                    ref={(input) => {
+                      if (input) {
+                        input.indeterminate = isPartiallySelected;
+                      }
+                    }}
+                    onChange={toggleAll}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
                   />
-                  <span className="text-sm text-gray-700 truncate">{field.name}</span>
+                  <span className="font-medium text-gray-900">
+                    {isAllSelected ? 'Deselect All' : 'Select All'}
+                  </span>
                 </label>
-              ))}
+                <span className="text-sm text-gray-500">{totalFields} available</span>
+              </div>
             </div>
+
+            {/* Search Input */}
+            <div className="px-4 py-3 border-b border-gray-200">
+              <input
+                type="text"
+                placeholder="Search available fields..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            {/* Fields Grid - bounded with scroll */}
+            <div className="p-4 bg-white max-h-96 overflow-y-auto">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {filteredFields.map(field => (
+                  <label
+                    key={field.name}
+                    className={`flex items-center space-x-2 p-2 rounded-lg border cursor-pointer transition-colors ${
+                      selectedFields.has(field.name)
+                        ? 'bg-blue-50 border-blue-300'
+                        : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                    }`}
+                    title={field.name}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedFields.has(field.name)}
+                      onChange={() => onToggleField(field.name)}
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 flex-shrink-0"
+                    />
+                    <span className="text-sm text-gray-700 truncate">{field.name}</span>
+                  </label>
+                ))}
+              </div>
+              {filteredFields.length === 0 && searchQuery && (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No fields match "{searchQuery}"</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column - Deselected Fields List */}
+          <div className="lg:col-span-1 border border-gray-200 rounded-lg overflow-hidden">
+            {/* Header */}
+            <div className="bg-red-50 px-4 py-3 border-b border-red-200">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-red-900">Excluded Fields</span>
+                <span className="text-sm text-red-700">{totalFields - selectedCount}</span>
+              </div>
+            </div>
+
+            {/* Deselected Fields List */}
+            <div className="p-4 bg-white max-h-96 overflow-y-auto">
+              {totalFields - selectedCount === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  <p className="text-sm">All fields included</p>
+                  <p className="text-xs mt-1">No fields are filtered out</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {deselectedFieldsArray.map(fieldName => (
+                    <div
+                      key={fieldName}
+                      className="flex items-center justify-between p-2 bg-red-50 rounded border border-red-200 group hover:bg-red-100 transition-colors"
+                    >
+                      <span className="text-sm text-red-900 truncate flex-1">{fieldName}</span>
+                      <button
+                        onClick={() => onToggleField(fieldName)}
+                        className="flex-shrink-0 p-1 text-red-600 hover:text-red-800 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Include field"
+                      >
+                        <FaTimes className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Quick Actions */}
+            {totalFields - selectedCount > 0 && (
+              <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
+                <button
+                  onClick={onSelectAll}
+                  className="w-full text-sm text-green-600 hover:text-green-700 py-2 px-3 rounded border border-green-300 hover:bg-green-50 transition-colors"
+                >
+                  Include All ({totalFields - selectedCount})
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -181,7 +284,7 @@ const FieldDiscoveryPanel = ({
       {totalFields > 0 && (
         <div className="mt-4 p-4 bg-blue-50 rounded-lg">
           <p className="text-sm text-blue-800">
-            <strong>Note:</strong> Unchecked fields will be filtered out before data reaches the destination.
+            <strong>Note:</strong> Only selected fields will be included in the pipeline.
             Changes are applied when you click "Save Pipeline".
           </p>
         </div>
