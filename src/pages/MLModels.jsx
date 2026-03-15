@@ -1044,10 +1044,16 @@ const MLModels = () => {
         const anomalyResponse = await fetch(`${mlUrl}/v1/anomaly/models`);
         if (anomalyResponse.ok) {
           const anomalyData = await anomalyResponse.json();
-          anomalyModels = (Array.isArray(anomalyData) ? anomalyData : [anomalyData]).map(m => ({
-            ...m,
-            modelType: 'anomaly'
-          }));
+          const summaries = Array.isArray(anomalyData) ? anomalyData : [anomalyData];
+          anomalyModels = await Promise.all(
+            summaries.map(async (m) => {
+              try {
+                const detailRes = await fetch(`${mlUrl}/v1/anomaly/models/${m.id}`);
+                if (detailRes.ok) return { ...(await detailRes.json()), modelType: 'anomaly' };
+              } catch {}
+              return { ...m, modelType: 'anomaly' };
+            })
+          );
         }
       } catch (err) {
         console.warn('Failed to fetch anomaly models:', err.message);
