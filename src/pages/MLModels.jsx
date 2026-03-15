@@ -31,23 +31,23 @@ const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete,
         <div className="flex-1 min-w-0">
           <h3 className="text-lg font-semibold text-gray-900 break-words">{model.name || 'Unnamed Model'}</h3>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
-            <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-700 rounded font-mono">
+            <span className="px-2 py-0.5 text-xs font-bold font-mono bg-gray-200 text-gray-800 rounded">
               v{model.latest_version ?? 'N/A'}
             </span>
             {model.architecture && (
-              <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded uppercase">
+              <span className="px-2 py-0.5 text-xs font-bold bg-purple-200 text-purple-900 rounded uppercase tracking-wide">
                 {model.architecture}
               </span>
             )}
             {model.modelType === 'anomaly' && (
-              <span className="px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-700 rounded uppercase">
+              <span className="px-2 py-0.5 text-xs font-bold bg-orange-200 text-orange-900 rounded uppercase tracking-wide">
                 anomaly
               </span>
             )}
           </div>
           <div className="flex flex-wrap gap-1 mt-2 min-h-[22px]">
             {isBestForAny && model.best_for_fields.map(field => (
-              <span key={field} className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
+              <span key={field} className="px-2 py-0.5 text-xs font-bold bg-green-200 text-green-900 rounded-full">
                 Best for: {field}
               </span>
             ))}

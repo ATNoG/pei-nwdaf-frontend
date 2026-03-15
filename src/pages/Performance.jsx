@@ -40,12 +40,12 @@ const TIME_WINDOWS = [
 
 const StateBadge = ({ state }) => {
   const cfg = {
-    MONITORING: { cls: 'bg-green-100 text-green-800', label: 'Monitoring' },
-    EVALUATING: { cls: 'bg-yellow-100 text-yellow-800 animate-pulse', label: 'Evaluating…' },
-    RETRAINING: { cls: 'bg-blue-100 text-blue-800 animate-pulse', label: 'Retraining' },
-  }[state] ?? { cls: 'bg-gray-100 text-gray-600', label: state ?? 'Unknown' };
+    MONITORING: { cls: 'bg-green-200 text-green-900', label: 'Monitoring' },
+    EVALUATING: { cls: 'bg-yellow-200 text-yellow-900 animate-pulse', label: 'Evaluating…' },
+    RETRAINING: { cls: 'bg-blue-200 text-blue-900 animate-pulse', label: 'Retraining' },
+  }[state] ?? { cls: 'bg-gray-200 text-gray-700', label: state ?? 'Unknown' };
   return (
-    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${cfg.cls}`}>
+    <span className={`px-2.5 py-1 rounded-full text-xs font-bold tracking-wide ${cfg.cls}`}>
       {cfg.label}
     </span>
   );
@@ -617,12 +617,12 @@ const Performance = () => {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-gray-900">{bestModel.model_name}</span>
                       {bestModel.architecture && (
-                        <span className="px-1.5 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded uppercase">
+                        <span className="px-2 py-0.5 text-xs font-bold bg-purple-200 text-purple-900 rounded uppercase tracking-wide">
                           {bestModel.architecture}
                         </span>
                       )}
                       {bestModel.latest_version != null && (
-                        <span className="px-1.5 py-0.5 text-xs font-mono bg-gray-100 text-gray-700 rounded">
+                        <span className="px-2 py-0.5 text-xs font-bold font-mono bg-gray-200 text-gray-800 rounded">
                           v{bestModel.latest_version}
                         </span>
                       )}
