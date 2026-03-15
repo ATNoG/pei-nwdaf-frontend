@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 const ProducerManager = ({ apiBase = '/data-ingestion', onRemove }) => {
   const [producers, setProducers] = useState([]);
@@ -71,9 +72,9 @@ const ProducerManager = ({ apiBase = '/data-ingestion', onRemove }) => {
 
   return (
     <>
-      {/* Add Producer Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      {/* Add Producer Modal — rendered via portal to avoid stacking context issues */}
+      {showModal && createPortal(
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-gray-900">Add Producer</h3>
@@ -126,7 +127,7 @@ const ProducerManager = ({ apiBase = '/data-ingestion', onRemove }) => {
             </form>
           </div>
         </div>
-      )}
+      , document.body)}
 
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
         <div className="flex items-center justify-between mb-4">

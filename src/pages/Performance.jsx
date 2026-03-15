@@ -303,16 +303,20 @@ const Performance = () => {
     // Sort each model's entries by time
     Object.values(byModel).forEach(pts => pts.sort((a, b) => new Date(a.measured_at) - new Date(b.measured_at)));
 
-    // All timestamps as labels (union, sorted)
-    const allTimes = [...new Set(entries.map(e => e.measured_at))].sort();
-    const labels = allTimes.map(t => {
+    // All timestamps as labels (union, sorted) — with boundary ticks for fixed windows
+    const dataTimes = [...new Set(entries.map(e => e.measured_at))].sort();
+    const allTimes = timeWindow
+      ? [...new Set([new Date(now - timeWindow).toISOString(), ...dataTimes, new Date(now).toISOString()])].sort()
+      : dataTimes;
+    const fmt = (t) => {
       const d = new Date(t);
       const dd = String(d.getDate()).padStart(2, '0');
       const mm = String(d.getMonth() + 1).padStart(2, '0');
       const hh = String(d.getHours()).padStart(2, '0');
       const min = String(d.getMinutes()).padStart(2, '0');
       return `${dd}/${mm} ${hh}:${min}`;
-    });
+    };
+    const labels = allTimes.map(fmt);
 
     const modelMeta = [];
     const alignedDatasets = Object.entries(byModel).map(([modelId, pts], i) => {
