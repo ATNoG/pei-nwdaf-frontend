@@ -16,7 +16,7 @@ function AppContent() {
   const getPageTitle = () => {
     switch (location.pathname) {
       case '/':
-        return 'Dashboard';
+        return 'Ingestion';
       case '/ml':
         return 'ML';
       case '/analytics':
