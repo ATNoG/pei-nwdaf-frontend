@@ -42,13 +42,7 @@ services:
     # volumes:
     #   - .:/app
     #   - /app/node_modules
-    environment:
-      - NODE_ENV=development
-      - CHOKIDAR_USEPOLLING=true
-      - HOST=0.0.0.0
-      - VITE_RAW_DATA_URL=${VITE_RAW_DATA_URL}
-      - VITE_DATA_STORAGE_URL=${VITE_DATA_STORAGE_URL}
-      - VITE_ML_URL=${VITE_ML_URL}
+    env_file: .env
     working_dir: /app
     networks:
       - nwdaf-network
