@@ -126,19 +126,12 @@ const fetchRegisteredComponents = async () => {
       return base;
     });
   } catch (e) {
-    console.warn('Failed to fetch registered components, using defaults:', e);
-    return defaults;
+    console.warn('Failed to fetch registered components, returning empty list:', e);
+    return [];
   }
 
-  // Merge: registered components are primary, then append any defaults
-  // that are missing (components that haven't registered yet).
-  const registeredIds = new Set(registeredComponents.map(c => c.id));
-  const merged = [
-    ...registeredComponents,
-    ...defaults.filter(d => !registeredIds.has(d.id))
-  ];
-
-  return merged;
+  // Only return registered components - no ghost defaults
+  return registeredComponents;
 };
 
 // Start with defaults, will be updated with fetched components
@@ -201,7 +194,7 @@ const Policy = () => {
   const [newPipelineSourceResourceType, setNewPipelineSourceResourceType] = useState('');
   const [newPipelineSinkResourceType, setNewPipelineSinkResourceType] = useState('');
   const [notification, setNotification] = useState(null);
-  const [availableComponents, setAvailableComponents] = useState(parseAvailableComponents());
+  const [availableComponents, setAvailableComponents] = useState([]);
 
   // Fetch all pipelines on mount
   useEffect(() => {
