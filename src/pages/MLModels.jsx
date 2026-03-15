@@ -84,9 +84,9 @@ const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete,
               <button
                 onClick={() => onSetDefault(model)}
                 className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1.5"
-                title="Set as default model"
+                title="Set as best model"
               >
-                Force
+                Set Best
               </button>
             )}
             <button
