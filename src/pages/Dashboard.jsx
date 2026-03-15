@@ -32,14 +32,14 @@ const Dashboard = () => {
     }
   });
 
-  // When selected subscription is cleared, ensure realtime data is emptied
+  // Clear realtime data whenever the selected subscription changes (or is cleared)
   useEffect(() => {
+    setRealtimeData([]);
     if (!selectedSubscription) {
-      setRealtimeData([]);
       setWsConnected(false);
       if (wsDisconnect) wsDisconnect();
     }
-  }, [selectedSubscription, wsDisconnect]);
+  }, [selectedSubscription]);
 
   // Fetch available subscriptions so the user can select one for the WS
   useEffect(() => {

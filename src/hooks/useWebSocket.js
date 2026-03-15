@@ -32,9 +32,12 @@ export const useWebSocket = (url, options = {}) => {
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const shouldReconnectRef = useRef(true);
+  const generationRef = useRef(0);
 
   const connect = useCallback(() => {
     if (!enabled || !url) return;
+
+    const generation = ++generationRef.current;
 
     try {
       const ws = new WebSocket(url);
@@ -62,8 +65,8 @@ export const useWebSocket = (url, options = {}) => {
         wsRef.current = null;
         if (onClose) onClose();
 
-        // Attempt reconnection
-        if (shouldReconnectRef.current && reconnectAttempts < maxReconnectAttempts) {
+        // Only reconnect if this is still the active connection (URL hasn't changed)
+        if (shouldReconnectRef.current && generationRef.current === generation && reconnectAttempts < maxReconnectAttempts) {
           reconnectTimeoutRef.current = setTimeout(() => {
             console.log(`Reconnecting... (attempt ${reconnectAttempts + 1})`);
             setReconnectAttempts((prev) => prev + 1);
