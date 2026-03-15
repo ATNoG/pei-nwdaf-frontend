@@ -696,7 +696,7 @@ const JobHistoryModal = memo(({ showModal, setShowModal, selectedModel, jobs, lo
           {loadingJobs ? (
             <div className="flex items-center justify-center py-12">
               <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-60 mx-auto"></div>
                 <p className="mt-4 text-sm text-gray-600">Loading job history...</p>
               </div>
             </div>
@@ -970,8 +970,10 @@ const MLModels = () => {
 
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const hasLoadedRef = useRef(false);
 
   // Field filter
   const [filterField, setFilterField] = useState('');
@@ -1050,9 +1052,11 @@ const MLModels = () => {
   }, [mlUrl]);
 
   const fetchModels = useCallback(async (field = filterField) => {
+    const isInitial = !hasLoadedRef.current;
     try {
       setError(null);
-      setLoading(true);
+      if (isInitial) setLoading(true);
+      else setIsRefreshing(true);
 
       // Fetch forecast models (skip field filter if filtering by anomaly)
       const forecastUrl = (field && field !== 'anomaly')
@@ -1078,7 +1082,7 @@ const MLModels = () => {
               try {
                 const detailRes = await fetch(`${mlUrl}/v1/anomaly/models/${m.id}`);
                 if (detailRes.ok) return { ...(await detailRes.json()), modelType: 'anomaly' };
-              } catch {}
+              } catch { }
               return { ...m, modelType: 'anomaly' };
             })
           );
@@ -1091,12 +1095,18 @@ const MLModels = () => {
       const allModels = [...forecastModels, ...anomalyModels];
       setModels(allModels.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
       setLastUpdated(new Date());
+      hasLoadedRef.current = true;
     } catch (err) {
       console.error('Failed to fetch models:', err.message);
-      setError(`Failed to load models: ${err.message}`);
-      setModels([]);
+      if (isInitial) {
+        setError(`Failed to load models: ${err.message}`);
+        setModels([]);
+      } else {
+        setTimedTrainingMessage({ type: 'error', text: `Failed to refresh models: ${err.message}` });
+      }
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   }, [mlUrl, filterField]);
 
@@ -1415,10 +1425,10 @@ const MLModels = () => {
               )}
               <button
                 onClick={() => fetchModels(filterField)}
-                disabled={loading}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isRefreshing}
+                className="w-24 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Refreshing...' : 'Refresh'}
+                {isRefreshing ? 'Refreshing...' : 'Refresh'}
               </button>
             </div>
           </div>
