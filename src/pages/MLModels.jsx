@@ -1,6 +1,26 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useConfig } from '../contexts/ConfigContext';
 
+// Toast
+const Toast = ({ message, onClose }) => {
+  if (!message) return null;
+  const colors = message.type === 'success'
+    ? 'bg-green-50 border-green-300 text-green-900'
+    : message.type === 'info'
+      ? 'bg-blue-50 border-blue-300 text-blue-900'
+      : 'bg-red-50 border-red-300 text-red-900';
+  return (
+    <div className={`fixed bottom-6 right-6 z-50 flex items-start gap-3 px-4 py-3 rounded-lg border shadow-lg max-w-sm w-full ${colors}`}>
+      <p className="text-sm font-medium flex-1">{message.text}</p>
+      <button onClick={onClose} className="shrink-0 opacity-60 hover:opacity-100 transition-opacity">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+  );
+};
+
 // ModelCard
 const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefault, onDelete, isDefault, isTraining, copiedId, onCopyId }) => {
   const isBestForAny = model.best_for_fields?.length > 0;
@@ -1299,6 +1319,7 @@ const MLModels = () => {
 
   return (
     <>
+      <Toast message={trainingMessage} onClose={() => setTimedTrainingMessage(null)} />
       <CreateModelModal
         showCreateModal={showCreateModal}
         setShowCreateModal={setShowCreateModal}
@@ -1483,17 +1504,6 @@ const MLModels = () => {
           </div>
         </div>
 
-        {/* Training Status Message */}
-        {trainingMessage && (
-          <div className={`p-3 rounded-lg ${trainingMessage.type === 'success'
-              ? 'bg-green-50 border border-green-200 text-green-800'
-              : trainingMessage.type === 'info'
-                ? 'bg-blue-50 border border-blue-200 text-blue-800'
-                : 'bg-red-50 border border-red-200 text-red-800'
-            }`}>
-            <p className="text-sm font-medium">{trainingMessage.text}</p>
-          </div>
-        )}
 
         {/* Models Grid */}
         {loading && models.length === 0 ? (
