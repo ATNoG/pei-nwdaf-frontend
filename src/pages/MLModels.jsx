@@ -22,7 +22,7 @@ const Toast = ({ message, onClose }) => {
 };
 
 // ModelCard
-const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefault, onDelete, isDefault, isTraining, copiedId, onCopyId }) => {
+const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete, isDefault, isTraining, copiedId, onCopyId }) => {
   const isBestForAny = model.best_for_fields?.length > 0;
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow [container-type:inline-size]">
@@ -67,24 +67,16 @@ const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefaul
               Details
             </button>
             <button
-              onClick={() => onShowInfo(model)}
-              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center justify-center gap-1.5"
-            >
-              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Info
-            </button>
-            <button
               onClick={() => onTrain(model)}
-              disabled={isTraining}
-              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5"
             >
-              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Train
+              {isTraining
+                ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white shrink-0"></div>Training</>
+                : (<><svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>Train</>)
+              }
             </button>
           </div>
           <div className="flex gap-2">
@@ -665,9 +657,59 @@ const AllJobsModal = ({ showModal, setShowModal, mlUrl, onJobsUpdate }) => {
   );
 };
 
-// JobHistoryModal
-const JobHistoryModal = memo(({ showModal, setShowModal, selectedModel, jobs, loadingJobs }) => {
-  if (!showModal || !selectedModel) return null;
+// TrainingModal — combined start training + job history
+const TrainingModal = ({ model, mlUrl, onClose, onStartTraining, isTraining }) => {
+  const [lookbackSeconds, setLookbackSeconds] = useState(3600);
+  const [jobs, setJobs] = useState([]);
+  const [loadingJobs, setLoadingJobs] = useState(true);
+  const [cancellingIds, setCancellingIds] = useState(new Set());
+  const intervalRef = useRef(null);
+
+  const fetchJobs = useCallback(async () => {
+    if (!model) return;
+    try {
+      const endpoint = model.modelType === 'anomaly'
+        ? `${mlUrl}/v1/anomaly/training/jobs?model_id=${model.id}`
+        : `${mlUrl}/v1/training/jobs?model_id=${model.id}`;
+      const res = await fetch(endpoint);
+      if (!res.ok) return;
+      const data = await res.json();
+      const raw = Array.isArray(data) ? data : [];
+      setJobs(raw.sort((a, b) => {
+        const aActive = a.status === 'running' || a.status === 'pending';
+        const bActive = b.status === 'running' || b.status === 'pending';
+        if (aActive !== bActive) return aActive ? -1 : 1;
+        return new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0);
+      }));
+    } catch (err) {
+      console.error('Failed to fetch job history:', err.message);
+    } finally {
+      setLoadingJobs(false);
+    }
+  }, [model, mlUrl]);
+
+  useEffect(() => {
+    fetchJobs();
+    intervalRef.current = setInterval(fetchJobs, 5000);
+    return () => clearInterval(intervalRef.current);
+  }, [fetchJobs]);
+
+  const cancelJob = async (jobId) => {
+    setCancellingIds(prev => new Set([...prev, jobId]));
+    try {
+      const endpoint = model.modelType === 'anomaly'
+        ? `${mlUrl}/v1/anomaly/training/jobs/${jobId}`
+        : `${mlUrl}/v1/training/jobs/${jobId}`;
+      await fetch(endpoint, { method: 'DELETE' });
+      await fetchJobs();
+    } catch (err) {
+      console.error('Failed to cancel job:', err.message);
+    } finally {
+      setCancellingIds(prev => { const s = new Set(prev); s.delete(jobId); return s; });
+    }
+  };
+
+  if (!model) return null;
 
   const statusBadge = (status) => {
     const base = 'px-2 py-0.5 rounded text-xs font-medium';
@@ -679,77 +721,111 @@ const JobHistoryModal = memo(({ showModal, setShowModal, selectedModel, jobs, lo
 
   return (
     <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div>
-            <h3 className="text-xl font-bold text-gray-900">Training Job History</h3>
-            <p className="text-sm text-gray-600 mt-1">{selectedModel.name}</p>
+            <h3 className="text-xl font-bold text-gray-900">Train</h3>
+            <p className="text-sm text-gray-600 mt-1">{model.name}</p>
           </div>
-          <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <div className="p-6">
-          {loadingJobs ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-60 mx-auto"></div>
-                <p className="mt-4 text-sm text-gray-600">Loading job history...</p>
+        <div className="p-6 overflow-y-auto flex-1 space-y-6">
+          {/* Start Training */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
+            <h4 className="text-sm font-semibold text-gray-900">Start New Training Run</h4>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Lookback window (seconds)</label>
+              <input
+                type="number"
+                min="1"
+                value={lookbackSeconds}
+                onChange={(e) => setLookbackSeconds(parseInt(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+              />
+            </div>
+            <button
+              onClick={() => onStartTraining(lookbackSeconds)}
+              disabled={isTraining}
+              className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+            >
+              {isTraining
+                ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>Starting...</>
+                : 'Start Training'}
+            </button>
+          </div>
+
+          {/* Job History */}
+          <div>
+            <h4 className="text-sm font-semibold text-gray-900 mb-3">History</h4>
+            {loadingJobs ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               </div>
-            </div>
-          ) : jobs.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-gray-500">No training jobs found for this model.</p>
-            </div>
-          ) : (
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Job ID</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Created</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Started</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {jobs.map((job) => (
-                    <tr key={job.job_id} className="hover:bg-gray-50">
-                      <td className="px-4 py-2 font-mono text-xs text-gray-600 truncate max-w-[120px]" title={job.job_id}>
-                        {job.job_id?.slice(0, 8)}…
-                      </td>
-                      <td className="px-4 py-2">
-                        <span className={statusBadge(job.status)}>{job.status}</span>
-                      </td>
-                      <td className="px-4 py-2 text-gray-600 text-xs">
-                        {job.created_at ? new Date(job.created_at).toLocaleString() : '-'}
-                      </td>
-                      <td className="px-4 py-2 text-gray-600 text-xs">
-                        {job.started_at ? new Date(job.started_at).toLocaleString() : '-'}
-                      </td>
+            ) : jobs.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-6">No training jobs yet.</p>
+            ) : (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Job ID</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Created</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Started</th>
+                      <th className="px-4 py-2"></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {jobs.map((job) => {
+                      const isActive = job.status === 'running' || job.status === 'pending';
+                      return (
+                        <tr key={job.job_id} className="hover:bg-gray-50">
+                          <td className="px-4 py-2 font-mono text-xs text-gray-600" title={job.job_id}>
+                            {job.job_id?.slice(0, 8)}…
+                          </td>
+                          <td className="px-4 py-2">
+                            <span className={statusBadge(job.status)}>{job.status}</span>
+                          </td>
+                          <td className="px-4 py-2 text-gray-600 text-xs">
+                            {job.created_at ? new Date(job.created_at).toLocaleString() : '-'}
+                          </td>
+                          <td className="px-4 py-2 text-gray-600 text-xs">
+                            {job.started_at ? new Date(job.started_at).toLocaleString() : '-'}
+                          </td>
+                          <td className="px-4 py-2">
+                            {isActive && (
+                              <button
+                                onClick={() => cancelJob(job.job_id)}
+                                disabled={cancellingIds.has(job.job_id)}
+                                className="px-2 py-1 text-xs font-medium bg-red-100 text-red-700 hover:bg-red-200 rounded transition-colors disabled:opacity-50"
+                              >
+                                {cancellingIds.has(job.job_id) ? 'Cancelling…' : 'Cancel'}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4">
-          <button
-            onClick={() => setShowModal(false)}
-            className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-          >
-            Close
-          </button>
+        <div className="border-t border-gray-200 px-6 py-3 flex-shrink-0 bg-gray-50">
+          <p className="text-xs text-gray-500 text-center">Job history auto-refreshes every 5s</p>
         </div>
       </div>
     </div>
   );
-});
+};
 
 // Model Details Modal
 const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadingDetails, modelDetails, mlUrl }) => {
@@ -922,45 +998,6 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
   );
 });
 
-// Train Modal
-const TrainModal = ({ model, lookbackSeconds, setLookbackSeconds, onConfirm, onCancel, isTraining }) => {
-  if (!model) return null;
-  return (
-    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 space-y-4">
-        <h3 className="text-lg font-bold text-gray-900">Train Model</h3>
-        <p className="text-sm text-gray-600">{model.name}</p>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Lookback window (seconds)</label>
-          <input
-            type="number"
-            min="1"
-            value={lookbackSeconds}
-            onChange={(e) => setLookbackSeconds(parseInt(e.target.value))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-          <p className="mt-1 text-xs text-gray-500">Amount of historical data to train on.</p>
-        </div>
-        <div className="flex gap-3">
-          <button
-            onClick={onCancel}
-            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
-            disabled={isTraining}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={isTraining}
-            className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {isTraining ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>Starting...</> : 'Start Training'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 // Main MLModels page
 const MLModels = () => {
@@ -986,7 +1023,6 @@ const MLModels = () => {
   const [showFieldDropdown, setShowFieldDropdown] = useState(false);
 
   // Modal state
-  const [showJobHistoryModal, setShowJobHistoryModal] = useState(false);
   const [showAllJobsModal, setShowAllJobsModal] = useState(false);
   const [forceTarget, setForceTarget] = useState(null);
   const [forceFields, setForceFields] = useState([]);
@@ -994,10 +1030,6 @@ const MLModels = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedModel, setSelectedModel] = useState(null);
-
-  // Job history
-  const [jobs, setJobs] = useState([]);
-  const [loadingJobs, setLoadingJobs] = useState(false);
 
   // Model details
   const [modelDetails, setModelDetails] = useState(null);
@@ -1014,9 +1046,7 @@ const MLModels = () => {
       trainingMessageTimerRef.current = setTimeout(() => setTrainingMessage(null), 5000);
     }
   }, []);
-  const [trainModalOpen, setTrainModalOpen] = useState(false);
   const [trainTarget, setTrainTarget] = useState(null);
-  const [lookbackSeconds, setLookbackSeconds] = useState(3600);
   const pollingRef = useRef(null);
 
   // Copy to clipboard
@@ -1114,31 +1144,6 @@ const MLModels = () => {
     fetchModels(filterField);
   }, [filterField]);
 
-  const fetchJobHistory = useCallback(async (model) => {
-    setLoadingJobs(true);
-    setJobs([]);
-    try {
-      const endpoint = model.modelType === 'anomaly'
-        ? `${mlUrl}/v1/anomaly/training/jobs?model_id=${model.id}`
-        : `${mlUrl}/v1/training/jobs?model_id=${model.id}`;
-      const response = await fetch(endpoint);
-      if (response.ok) {
-        const data = await response.json();
-        const raw = Array.isArray(data) ? data : [];
-        setJobs(raw.sort((a, b) => {
-          const aActive = a.status === 'running' || a.status === 'pending';
-          const bActive = b.status === 'running' || b.status === 'pending';
-          if (aActive !== bActive) return aActive ? -1 : 1;
-          return new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0);
-        }));
-      }
-    } catch (err) {
-      console.error('Failed to fetch job history:', err.message);
-    } finally {
-      setLoadingJobs(false);
-    }
-  }, [mlUrl]);
-
   const fetchModelDetails = useCallback(async (model) => {
     setLoadingModelDetails(true);
     setModelDetails(null);
@@ -1191,7 +1196,7 @@ const MLModels = () => {
     if (pollingRef.current) Object.values(pollingRef.current).forEach(clearInterval);
   }, []);
 
-  const handleModelTraining = useCallback(async () => {
+  const handleModelTraining = useCallback(async (lookbackSeconds) => {
     if (!trainTarget) return;
     setTrainingModelIds(prev => new Set([...prev, trainTarget.id]));
     setTimedTrainingMessage(null);
@@ -1207,15 +1212,13 @@ const MLModels = () => {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
       setTimedTrainingMessage({ type: 'info', text: `Training started for ${trainTarget.name} (job ${data.job_id?.slice(0, 8)}…)` });
-      setTrainModalOpen(false);
       startPollingJob(data.job_id, trainTarget.id, trainTarget.name, trainTarget.modelType);
     } catch (err) {
       console.error('Failed to start training:', err.message);
       setTimedTrainingMessage({ type: 'error', text: `Failed to start training: ${err.message}` });
       setTrainingModelIds(prev => { const next = new Set(prev); next.delete(trainTarget.id); return next; });
-      setTrainModalOpen(false);
     }
-  }, [mlUrl, trainTarget, lookbackSeconds, startPollingJob]);
+  }, [mlUrl, trainTarget, startPollingJob]);
 
   const setModelAsBest = useCallback(async (model, outputField) => {
     setTimedTrainingMessage(null);
@@ -1313,15 +1316,8 @@ const MLModels = () => {
     fetchModelDetails(model);
   }, [fetchModelDetails]);
 
-  const handleShowInfo = useCallback((model) => {
-    setSelectedModel(model);
-    setShowJobHistoryModal(true);
-    fetchJobHistory(model);
-  }, [fetchJobHistory]);
-
   const handleTrain = useCallback((model) => {
     setTrainTarget(model);
-    setTrainModalOpen(true);
   }, []);
 
   const handleSetDefault = useCallback((model) => handleSetAsDefault(model), [handleSetAsDefault]);
@@ -1353,13 +1349,6 @@ const MLModels = () => {
         mlUrl={mlUrl}
         onJobsUpdate={setActiveJobCount}
       />
-      <JobHistoryModal
-        showModal={showJobHistoryModal}
-        setShowModal={setShowJobHistoryModal}
-        selectedModel={selectedModel}
-        jobs={jobs}
-        loadingJobs={loadingJobs}
-      />
       <ModelDetailsModal
         showModal={showDetailsModal}
         setShowModal={setShowDetailsModal}
@@ -1368,14 +1357,13 @@ const MLModels = () => {
         modelDetails={modelDetails}
         mlUrl={mlUrl}
       />
-      {trainModalOpen && (
-        <TrainModal
+      {trainTarget && (
+        <TrainingModal
           model={trainTarget}
-          lookbackSeconds={lookbackSeconds}
-          setLookbackSeconds={setLookbackSeconds}
-          onConfirm={handleModelTraining}
-          onCancel={() => setTrainModalOpen(false)}
-          isTraining={trainTarget ? trainingModelIds.has(trainTarget.id) : false}
+          mlUrl={mlUrl}
+          onClose={() => setTrainTarget(null)}
+          onStartTraining={handleModelTraining}
+          isTraining={trainingModelIds.has(trainTarget.id)}
         />
       )}
 
@@ -1567,7 +1555,7 @@ const MLModels = () => {
                     key={model.id || model.name}
                     model={model}
                     onShowDetails={handleShowDetails}
-                    onShowInfo={handleShowInfo}
+
                     onTrain={handleTrain}
                     onSetDefault={handleSetDefault}
                     onDelete={handleDelete}
