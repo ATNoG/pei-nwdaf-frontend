@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { FaHouse } from 'react-icons/fa6';
+import { FaPlug } from 'react-icons/fa6';
 import { FaRobot } from 'react-icons/fa';
 import { VscGraph } from 'react-icons/vsc';
 import { FaBars, FaChevronLeft, FaChartLine, FaCog } from 'react-icons/fa';
@@ -9,7 +9,7 @@ const Sidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(window.innerWidth < 1024);
 
   const navItems = [
-    { name: 'Dashboard', icon: <FaHouse />, path: '/' },
+    { name: 'Ingestion', icon: <FaPlug />, path: '/' },
     { name: 'ML', icon: <FaRobot />, path: '/ml' },
     { name: 'Analytics', icon: <VscGraph />, path: '/analytics' },
     { name: 'Performance', icon: <FaChartLine />, path: '/performance' },

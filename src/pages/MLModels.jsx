@@ -1,8 +1,28 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useConfig } from '../contexts/ConfigContext';
 
+// Toast
+const Toast = ({ message, onClose }) => {
+  if (!message) return null;
+  const colors = message.type === 'success'
+    ? 'bg-green-50 border-green-300 text-green-900'
+    : message.type === 'info'
+      ? 'bg-blue-50 border-blue-300 text-blue-900'
+      : 'bg-red-50 border-red-300 text-red-900';
+  return (
+    <div className={`fixed bottom-6 right-6 z-50 flex items-start gap-3 px-4 py-3 rounded-lg border shadow-lg max-w-sm w-full ${colors}`}>
+      <p className="text-sm font-medium flex-1">{message.text}</p>
+      <button onClick={onClose} className="shrink-0 opacity-60 hover:opacity-100 transition-opacity">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+  );
+};
+
 // ModelCard
-const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefault, onDelete, isDefault, isTraining, copiedId, onCopyId }) => {
+const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete, isDefault, isTraining, copiedId, onCopyId }) => {
   const isBestForAny = model.best_for_fields?.length > 0;
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow [container-type:inline-size]">
@@ -11,23 +31,23 @@ const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefaul
         <div className="flex-1 min-w-0">
           <h3 className="text-lg font-semibold text-gray-900 break-words">{model.name || 'Unnamed Model'}</h3>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
-            <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-700 rounded font-mono">
+            <span className="px-2 py-0.5 text-xs font-bold font-mono bg-gray-200 text-gray-800 rounded">
               v{model.latest_version ?? 'N/A'}
             </span>
             {model.architecture && (
-              <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded uppercase">
+              <span className="px-2 py-0.5 text-xs font-bold bg-purple-200 text-purple-900 rounded uppercase tracking-wide">
                 {model.architecture}
               </span>
             )}
             {model.modelType === 'anomaly' && (
-              <span className="px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-700 rounded uppercase">
+              <span className="px-2 py-0.5 text-xs font-bold bg-orange-200 text-orange-900 rounded uppercase tracking-wide">
                 anomaly
               </span>
             )}
           </div>
           <div className="flex flex-wrap gap-1 mt-2 min-h-[22px]">
             {isBestForAny && model.best_for_fields.map(field => (
-              <span key={field} className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
+              <span key={field} className="px-2 py-0.5 text-xs font-bold bg-green-200 text-green-900 rounded-full">
                 Best for: {field}
               </span>
             ))}
@@ -35,62 +55,54 @@ const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefaul
         </div>
 
         <div className="model-card-actions shrink-0 flex flex-col gap-2">
-        <div className="flex gap-2">
-          <button
-            onClick={() => onShowDetails(model)}
-            className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors flex items-center justify-center gap-1.5"
-            title="View model configuration"
-          >
-            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Details
-          </button>
-          <button
-            onClick={() => onShowInfo(model)}
-            className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center justify-center gap-1.5"
-          >
-            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Info
-          </button>
-          <button
-            onClick={() => onTrain(model)}
-            disabled={isTraining}
-            className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Train
-          </button>
-        </div>
-        <div className="flex gap-2">
-          {!isBestForAny && model.modelType !== 'anomaly' && (
+          <div className="flex gap-2">
             <button
-              onClick={() => onSetDefault(model)}
-              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1.5"
-              title="Set as default model"
+              onClick={() => onShowDetails(model)}
+              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors flex items-center justify-center gap-1.5"
+              title="View model configuration"
             >
-              Force
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Details
             </button>
-          )}
-          <button
-            onClick={() => onDelete(model)}
-            className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center justify-center gap-1.5"
-            title="Delete model instance"
-          >
-            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            Delete
-          </button>
+            <button
+              onClick={() => onTrain(model)}
+              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5"
+            >
+              {isTraining
+                ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white shrink-0"></div>Training</>
+                : (<><svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>Train</>)
+              }
+            </button>
+          </div>
+          <div className="flex gap-2">
+            {!isBestForAny && model.modelType !== 'anomaly' && (
+              <button
+                onClick={() => onSetDefault(model)}
+                className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1.5"
+                title="Set as best model"
+              >
+                Set Best
+              </button>
+            )}
+            <button
+              onClick={() => onDelete(model)}
+              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center justify-center gap-1.5"
+              title="Delete model instance"
+            >
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Delete
+            </button>
+          </div>
+          {/* /model-card-actions */}
         </div>
-        {/* /model-card-actions */}
-        </div>
-      {/* /flex-wrap header */}
+        {/* /flex-wrap header */}
       </div>
 
       <hr className="border-gray-200 mt-1 mb-3" />
@@ -141,10 +153,10 @@ const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefaul
   );
 }, (prevProps, nextProps) => {
   const modelSame = prevProps.model.id === nextProps.model.id &&
-                   prevProps.model.created_at === nextProps.model.created_at &&
-                   prevProps.model.latest_version === nextProps.model.latest_version &&
-                   prevProps.model.architecture === nextProps.model.architecture &&
-                   JSON.stringify(prevProps.model.best_for_fields) === JSON.stringify(nextProps.model.best_for_fields);
+    prevProps.model.created_at === nextProps.model.created_at &&
+    prevProps.model.latest_version === nextProps.model.latest_version &&
+    prevProps.model.architecture === nextProps.model.architecture &&
+    JSON.stringify(prevProps.model.best_for_fields) === JSON.stringify(nextProps.model.best_for_fields);
   const isDefaultSame = prevProps.isDefault === nextProps.isDefault;
   const isTrainingSame = prevProps.isTraining === nextProps.isTraining;
   const copiedIdSame = prevProps.copiedId === nextProps.copiedId;
@@ -153,39 +165,64 @@ const ModelCard = memo(({ model, onShowDetails, onShowInfo, onTrain, onSetDefaul
 
 // CreateModelModal
 const FieldCheckboxes = ({ fieldKey, label, fields, loadingFields, selected, onToggle }) => {
-  const allSelected = fields.length > 0 && fields.every(f => selected.includes(f));
-  const toggleAll = () => onToggle(allSelected ? [] : [...fields], fieldKey, true);
+  const [filter, setFilter] = useState('');
+  const visible = fields.filter(f => f.toLowerCase().includes(filter.toLowerCase()));
+  const unselected = visible.filter(f => !selected.includes(f));
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <label className="block text-sm font-medium text-gray-700">{label} <span className="text-red-500">*</span></label>
-        {!loadingFields && fields.length > 0 && (
-          <button
-            type="button"
-            onClick={toggleAll}
-            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-          >
-            {allSelected ? 'Deselect all' : 'Select all'}
-          </button>
-        )}
-      </div>
+      <label className="block text-sm font-medium text-gray-700 mb-2">{label} <span className="text-red-500">*</span></label>
       {loadingFields ? (
         <p className="text-sm text-gray-500">Loading fields...</p>
       ) : (
-        <div className="border border-gray-200 rounded-lg p-3 max-h-48 overflow-y-auto bg-gray-50">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-            {fields.map(f => (
-              <label key={f} className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selected.includes(f)}
-                  onChange={() => onToggle(f, fieldKey)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
-                />
-                <span className="text-gray-700 truncate">{f}</span>
-              </label>
-            ))}
+        <div className="border border-gray-200 rounded-lg bg-gray-50">
+          {/* Selected chips */}
+          {selected.length > 0 && (
+            <div className="flex flex-wrap gap-1 p-2 border-b border-gray-200">
+              {selected.map(f => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => onToggle(f, fieldKey)}
+                  className="flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full hover:bg-blue-200 transition-colors"
+                >
+                  {f}
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              ))}
+            </div>
+          )}
+          {/* Filter input */}
+          <div className="p-2 border-b border-gray-200">
+            <input
+              type="text"
+              placeholder="Filter fields..."
+              value={filter}
+              onChange={e => setFilter(e.target.value)}
+              className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
+            />
+          </div>
+          {/* Unselected fields */}
+          <div className="max-h-36 overflow-y-auto p-2">
+            {unselected.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-2">{filter ? 'No matches' : 'All fields selected'}</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                {unselected.map(f => (
+                  <label key={f} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={false}
+                      onChange={() => onToggle(f, fieldKey)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
+                    />
+                    <span className="text-gray-700 truncate">{f}</span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -256,25 +293,25 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
     setIsCreating(true);
     const body = isAnomaly
       ? {
-          name: formData.name,
-          config: {
-            input_fields: formData.input_fields,
-            window_duration_seconds: parseInt(formData.window_duration_seconds),
-            lookback_steps: parseInt(formData.lookback_steps),
-          },
-        }
+        name: formData.name,
+        config: {
+          input_fields: formData.input_fields,
+          window_duration_seconds: parseInt(formData.window_duration_seconds),
+          lookback_steps: parseInt(formData.lookback_steps),
+        },
+      }
       : {
-          name: formData.name,
-          config: {
-            architecture: formData.architecture,
-            input_fields: formData.input_fields,
-            output_fields: formData.output_fields,
-            window_duration_seconds: parseInt(formData.window_duration_seconds),
-            lookback_steps: parseInt(formData.lookback_steps),
-            forecast_steps: parseInt(formData.forecast_steps),
-            ...(showAdvanced ? { hidden_size: parseInt(hiddenSize) } : {}),
-          },
-        };
+        name: formData.name,
+        config: {
+          architecture: formData.architecture,
+          input_fields: formData.input_fields,
+          output_fields: formData.output_fields,
+          window_duration_seconds: parseInt(formData.window_duration_seconds),
+          lookback_steps: parseInt(formData.lookback_steps),
+          forecast_steps: parseInt(formData.forecast_steps),
+          ...(showAdvanced ? { hidden_size: parseInt(hiddenSize) } : {}),
+        },
+      };
     await handleCreateModel(body, isAnomaly);
     setIsCreating(false);
   };
@@ -544,8 +581,8 @@ const AllJobsModal = ({ showModal, setShowModal, mlUrl, onJobsUpdate }) => {
   const statusBadge = (status) => {
     const base = 'px-2 py-0.5 rounded text-xs font-medium';
     if (status === 'completed') return `${base} bg-green-100 text-green-800`;
-    if (status === 'failed')    return `${base} bg-red-100 text-red-800`;
-    if (status === 'running')   return `${base} bg-yellow-100 text-yellow-800`;
+    if (status === 'failed') return `${base} bg-red-100 text-red-800`;
+    if (status === 'running') return `${base} bg-yellow-100 text-yellow-800`;
     return `${base} bg-gray-100 text-gray-700`;
   };
 
@@ -645,9 +682,59 @@ const AllJobsModal = ({ showModal, setShowModal, mlUrl, onJobsUpdate }) => {
   );
 };
 
-// JobHistoryModal
-const JobHistoryModal = memo(({ showModal, setShowModal, selectedModel, jobs, loadingJobs }) => {
-  if (!showModal || !selectedModel) return null;
+// TrainingModal — combined start training + job history
+const TrainingModal = ({ model, mlUrl, onClose, onStartTraining, isTraining }) => {
+  const [lookbackSeconds, setLookbackSeconds] = useState(3600);
+  const [jobs, setJobs] = useState([]);
+  const [loadingJobs, setLoadingJobs] = useState(true);
+  const [cancellingIds, setCancellingIds] = useState(new Set());
+  const intervalRef = useRef(null);
+
+  const fetchJobs = useCallback(async () => {
+    if (!model) return;
+    try {
+      const endpoint = model.modelType === 'anomaly'
+        ? `${mlUrl}/v1/anomaly/training/jobs?model_id=${model.id}`
+        : `${mlUrl}/v1/training/jobs?model_id=${model.id}`;
+      const res = await fetch(endpoint);
+      if (!res.ok) return;
+      const data = await res.json();
+      const raw = Array.isArray(data) ? data : [];
+      setJobs(raw.sort((a, b) => {
+        const aActive = a.status === 'running' || a.status === 'pending';
+        const bActive = b.status === 'running' || b.status === 'pending';
+        if (aActive !== bActive) return aActive ? -1 : 1;
+        return new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0);
+      }));
+    } catch (err) {
+      console.error('Failed to fetch job history:', err.message);
+    } finally {
+      setLoadingJobs(false);
+    }
+  }, [model, mlUrl]);
+
+  useEffect(() => {
+    fetchJobs();
+    intervalRef.current = setInterval(fetchJobs, 5000);
+    return () => clearInterval(intervalRef.current);
+  }, [fetchJobs]);
+
+  const cancelJob = async (jobId) => {
+    setCancellingIds(prev => new Set([...prev, jobId]));
+    try {
+      const endpoint = model.modelType === 'anomaly'
+        ? `${mlUrl}/v1/anomaly/training/jobs/${jobId}`
+        : `${mlUrl}/v1/training/jobs/${jobId}`;
+      await fetch(endpoint, { method: 'DELETE' });
+      await fetchJobs();
+    } catch (err) {
+      console.error('Failed to cancel job:', err.message);
+    } finally {
+      setCancellingIds(prev => { const s = new Set(prev); s.delete(jobId); return s; });
+    }
+  };
+
+  if (!model) return null;
 
   const statusBadge = (status) => {
     const base = 'px-2 py-0.5 rounded text-xs font-medium';
@@ -659,77 +746,111 @@ const JobHistoryModal = memo(({ showModal, setShowModal, selectedModel, jobs, lo
 
   return (
     <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div>
-            <h3 className="text-xl font-bold text-gray-900">Training Job History</h3>
-            <p className="text-sm text-gray-600 mt-1">{selectedModel.name}</p>
+            <h3 className="text-xl font-bold text-gray-900">Train</h3>
+            <p className="text-sm text-gray-600 mt-1">{model.name}</p>
           </div>
-          <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <div className="p-6">
-          {loadingJobs ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="mt-4 text-sm text-gray-600">Loading job history...</p>
+        <div className="p-6 overflow-y-auto flex-1 space-y-6">
+          {/* Start Training */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
+            <h4 className="text-sm font-semibold text-gray-900">Start New Training Run</h4>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Lookback window (seconds)</label>
+              <input
+                type="number"
+                min="1"
+                value={lookbackSeconds}
+                onChange={(e) => setLookbackSeconds(parseInt(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+              />
+            </div>
+            <button
+              onClick={() => onStartTraining(lookbackSeconds)}
+              disabled={isTraining}
+              className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+            >
+              {isTraining
+                ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>Starting...</>
+                : 'Start Training'}
+            </button>
+          </div>
+
+          {/* Job History */}
+          <div>
+            <h4 className="text-sm font-semibold text-gray-900 mb-3">History</h4>
+            {loadingJobs ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               </div>
-            </div>
-          ) : jobs.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-gray-500">No training jobs found for this model.</p>
-            </div>
-          ) : (
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Job ID</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Created</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Started</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {jobs.map((job) => (
-                    <tr key={job.job_id} className="hover:bg-gray-50">
-                      <td className="px-4 py-2 font-mono text-xs text-gray-600 truncate max-w-[120px]" title={job.job_id}>
-                        {job.job_id?.slice(0, 8)}…
-                      </td>
-                      <td className="px-4 py-2">
-                        <span className={statusBadge(job.status)}>{job.status}</span>
-                      </td>
-                      <td className="px-4 py-2 text-gray-600 text-xs">
-                        {job.created_at ? new Date(job.created_at).toLocaleString() : '-'}
-                      </td>
-                      <td className="px-4 py-2 text-gray-600 text-xs">
-                        {job.started_at ? new Date(job.started_at).toLocaleString() : '-'}
-                      </td>
+            ) : jobs.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-6">No training jobs yet.</p>
+            ) : (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Job ID</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Created</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Started</th>
+                      <th className="px-4 py-2"></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {jobs.map((job) => {
+                      const isActive = job.status === 'running' || job.status === 'pending';
+                      return (
+                        <tr key={job.job_id} className="hover:bg-gray-50">
+                          <td className="px-4 py-2 font-mono text-xs text-gray-600" title={job.job_id}>
+                            {job.job_id?.slice(0, 8)}…
+                          </td>
+                          <td className="px-4 py-2">
+                            <span className={statusBadge(job.status)}>{job.status}</span>
+                          </td>
+                          <td className="px-4 py-2 text-gray-600 text-xs">
+                            {job.created_at ? new Date(job.created_at).toLocaleString() : '-'}
+                          </td>
+                          <td className="px-4 py-2 text-gray-600 text-xs">
+                            {job.started_at ? new Date(job.started_at).toLocaleString() : '-'}
+                          </td>
+                          <td className="px-4 py-2">
+                            {isActive && (
+                              <button
+                                onClick={() => cancelJob(job.job_id)}
+                                disabled={cancellingIds.has(job.job_id)}
+                                className="px-2 py-1 text-xs font-medium bg-red-100 text-red-700 hover:bg-red-200 rounded transition-colors disabled:opacity-50"
+                              >
+                                {cancellingIds.has(job.job_id) ? 'Cancelling…' : 'Cancel'}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4">
-          <button
-            onClick={() => setShowModal(false)}
-            className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-          >
-            Close
-          </button>
+        <div className="border-t border-gray-200 px-6 py-3 flex-shrink-0 bg-gray-50">
+          <p className="text-xs text-gray-500 text-center">Job history auto-refreshes every 5s</p>
         </div>
       </div>
     </div>
   );
-});
+};
 
 // Model Details Modal
 const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadingDetails, modelDetails, mlUrl }) => {
@@ -902,45 +1023,6 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
   );
 });
 
-// Train Modal
-const TrainModal = ({ model, lookbackSeconds, setLookbackSeconds, onConfirm, onCancel, isTraining }) => {
-  if (!model) return null;
-  return (
-    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 space-y-4">
-        <h3 className="text-lg font-bold text-gray-900">Train Model</h3>
-        <p className="text-sm text-gray-600">{model.name}</p>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Lookback window (seconds)</label>
-          <input
-            type="number"
-            min="1"
-            value={lookbackSeconds}
-            onChange={(e) => setLookbackSeconds(parseInt(e.target.value))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-          <p className="mt-1 text-xs text-gray-500">Amount of historical data to train on.</p>
-        </div>
-        <div className="flex gap-3">
-          <button
-            onClick={onCancel}
-            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
-            disabled={isTraining}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={isTraining}
-            className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {isTraining ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>Starting...</> : 'Start Training'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 // Main MLModels page
 const MLModels = () => {
@@ -950,8 +1032,10 @@ const MLModels = () => {
 
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const hasLoadedRef = useRef(false);
 
   // Field filter
   const [filterField, setFilterField] = useState('');
@@ -964,7 +1048,6 @@ const MLModels = () => {
   const [showFieldDropdown, setShowFieldDropdown] = useState(false);
 
   // Modal state
-  const [showJobHistoryModal, setShowJobHistoryModal] = useState(false);
   const [showAllJobsModal, setShowAllJobsModal] = useState(false);
   const [forceTarget, setForceTarget] = useState(null);
   const [forceFields, setForceFields] = useState([]);
@@ -973,10 +1056,6 @@ const MLModels = () => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedModel, setSelectedModel] = useState(null);
 
-  // Job history
-  const [jobs, setJobs] = useState([]);
-  const [loadingJobs, setLoadingJobs] = useState(false);
-
   // Model details
   const [modelDetails, setModelDetails] = useState(null);
   const [loadingModelDetails, setLoadingModelDetails] = useState(false);
@@ -984,9 +1063,15 @@ const MLModels = () => {
   // Training
   const [trainingModelIds, setTrainingModelIds] = useState(new Set());
   const [trainingMessage, setTrainingMessage] = useState(null);
-  const [trainModalOpen, setTrainModalOpen] = useState(false);
+  const trainingMessageTimerRef = useRef(null);
+  const setTimedTrainingMessage = useCallback((msg) => {
+    clearTimeout(trainingMessageTimerRef.current);
+    setTrainingMessage(msg);
+    if (msg) {
+      trainingMessageTimerRef.current = setTimeout(() => setTrainingMessage(null), 5000);
+    }
+  }, []);
   const [trainTarget, setTrainTarget] = useState(null);
-  const [lookbackSeconds, setLookbackSeconds] = useState(3600);
   const pollingRef = useRef(null);
 
   // Copy to clipboard
@@ -1022,9 +1107,11 @@ const MLModels = () => {
   }, [mlUrl]);
 
   const fetchModels = useCallback(async (field = filterField) => {
+    const isInitial = !hasLoadedRef.current;
     try {
       setError(null);
-      setLoading(true);
+      if (isInitial) setLoading(true);
+      else setIsRefreshing(true);
 
       // Fetch forecast models (skip field filter if filtering by anomaly)
       const forecastUrl = (field && field !== 'anomaly')
@@ -1044,10 +1131,16 @@ const MLModels = () => {
         const anomalyResponse = await fetch(`${mlUrl}/v1/anomaly/models`);
         if (anomalyResponse.ok) {
           const anomalyData = await anomalyResponse.json();
-          anomalyModels = (Array.isArray(anomalyData) ? anomalyData : [anomalyData]).map(m => ({
-            ...m,
-            modelType: 'anomaly'
-          }));
+          const summaries = Array.isArray(anomalyData) ? anomalyData : [anomalyData];
+          anomalyModels = await Promise.all(
+            summaries.map(async (m) => {
+              try {
+                const detailRes = await fetch(`${mlUrl}/v1/anomaly/models/${m.id}`);
+                if (detailRes.ok) return { ...(await detailRes.json()), modelType: 'anomaly' };
+              } catch { }
+              return { ...m, modelType: 'anomaly' };
+            })
+          );
         }
       } catch (err) {
         console.warn('Failed to fetch anomaly models:', err.message);
@@ -1057,43 +1150,24 @@ const MLModels = () => {
       const allModels = [...forecastModels, ...anomalyModels];
       setModels(allModels.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
       setLastUpdated(new Date());
+      hasLoadedRef.current = true;
     } catch (err) {
       console.error('Failed to fetch models:', err.message);
-      setError(`Failed to load models: ${err.message}`);
-      setModels([]);
+      if (isInitial) {
+        setError(`Failed to load models: ${err.message}`);
+        setModels([]);
+      } else {
+        setTimedTrainingMessage({ type: 'error', text: `Failed to refresh models: ${err.message}` });
+      }
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   }, [mlUrl, filterField]);
 
   useEffect(() => {
     fetchModels(filterField);
   }, [filterField]);
-
-  const fetchJobHistory = useCallback(async (model) => {
-    setLoadingJobs(true);
-    setJobs([]);
-    try {
-      const endpoint = model.modelType === 'anomaly'
-        ? `${mlUrl}/v1/anomaly/training/jobs?model_id=${model.id}`
-        : `${mlUrl}/v1/training/jobs?model_id=${model.id}`;
-      const response = await fetch(endpoint);
-      if (response.ok) {
-        const data = await response.json();
-        const raw = Array.isArray(data) ? data : [];
-        setJobs(raw.sort((a, b) => {
-          const aActive = a.status === 'running' || a.status === 'pending';
-          const bActive = b.status === 'running' || b.status === 'pending';
-          if (aActive !== bActive) return aActive ? -1 : 1;
-          return new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0);
-        }));
-      }
-    } catch (err) {
-      console.error('Failed to fetch job history:', err.message);
-    } finally {
-      setLoadingJobs(false);
-    }
-  }, [mlUrl]);
 
   const fetchModelDetails = useCallback(async (model) => {
     setLoadingModelDetails(true);
@@ -1123,12 +1197,12 @@ const MLModels = () => {
         const response = await fetch(endpoint);
         if (!response.ok) return;
         const job = await response.json();
-        setTrainingMessage({ type: 'info', text: `Training job ${jobId.slice(0, 8)}… - ${job.status} (${modelName})` });
+        setTimedTrainingMessage({ type: 'info', text: `Training job ${jobId.slice(0, 8)}… - ${job.status} (${modelName})` });
         if (job.status === 'completed' || job.status === 'failed') {
           clearInterval(pollingRef.current[modelId]);
           delete pollingRef.current[modelId];
           setTrainingModelIds(prev => { const next = new Set(prev); next.delete(modelId); return next; });
-          setTrainingMessage({
+          setTimedTrainingMessage({
             type: job.status === 'completed' ? 'success' : 'error',
             text: job.status === 'completed'
               ? `Training completed for ${modelName}`
@@ -1147,10 +1221,10 @@ const MLModels = () => {
     if (pollingRef.current) Object.values(pollingRef.current).forEach(clearInterval);
   }, []);
 
-  const handleModelTraining = useCallback(async () => {
+  const handleModelTraining = useCallback(async (lookbackSeconds) => {
     if (!trainTarget) return;
     setTrainingModelIds(prev => new Set([...prev, trainTarget.id]));
-    setTrainingMessage(null);
+    setTimedTrainingMessage(null);
     try {
       const endpoint = trainTarget.modelType === 'anomaly'
         ? `${mlUrl}/v1/anomaly/training/train`
@@ -1162,19 +1236,17 @@ const MLModels = () => {
       });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
-      setTrainingMessage({ type: 'info', text: `Training started for ${trainTarget.name} (job ${data.job_id?.slice(0, 8)}…)` });
-      setTrainModalOpen(false);
+      setTimedTrainingMessage({ type: 'info', text: `Training started for ${trainTarget.name} (job ${data.job_id?.slice(0, 8)}…)` });
       startPollingJob(data.job_id, trainTarget.id, trainTarget.name, trainTarget.modelType);
     } catch (err) {
       console.error('Failed to start training:', err.message);
-      setTrainingMessage({ type: 'error', text: `Failed to start training: ${err.message}` });
+      setTimedTrainingMessage({ type: 'error', text: `Failed to start training: ${err.message}` });
       setTrainingModelIds(prev => { const next = new Set(prev); next.delete(trainTarget.id); return next; });
-      setTrainModalOpen(false);
     }
-  }, [mlUrl, trainTarget, lookbackSeconds, startPollingJob]);
+  }, [mlUrl, trainTarget, startPollingJob]);
 
   const setModelAsBest = useCallback(async (model, outputField) => {
-    setTrainingMessage(null);
+    setTimedTrainingMessage(null);
     try {
       const response = await fetch(`${mlUrl}/v1/performance/${encodeURIComponent(outputField)}/set-best/${model.id}`, {
         method: 'POST',
@@ -1184,21 +1256,23 @@ const MLModels = () => {
         const detail = errorData.detail;
         throw new Error((detail && typeof detail === 'object' ? detail.message : detail) || `HTTP error! status: ${response.status}`);
       }
-      setTrainingMessage({ type: 'success', text: `${model.name} is now the best model for ${outputField}` });
+      setTimedTrainingMessage({ type: 'success', text: `${model.name} is now the best model for ${outputField}` });
+      await fetchModels(filterField);
+      if (refetchConfig) await refetchConfig();
     } catch (err) {
-      setTrainingMessage({ type: 'error', text: `Failed to set best model: ${err.message}` });
+      setTimedTrainingMessage({ type: 'error', text: `Failed to set best model: ${err.message}` });
     }
-  }, [mlUrl]);
+  }, [mlUrl, fetchModels, filterField, refetchConfig]);
 
   const handleSetAsDefault = useCallback(async (model) => {
-    setTrainingMessage(null);
+    setTimedTrainingMessage(null);
     try {
       const response = await fetch(`${mlUrl}/v1/models/${model.id}`);
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const details = await response.json();
       const outputFields = details.config?.output_fields ?? [];
       if (outputFields.length === 0) {
-        setTrainingMessage({ type: 'error', text: `Model ${model.name} has no output fields defined.` });
+        setTimedTrainingMessage({ type: 'error', text: `Model ${model.name} has no output fields defined.` });
         return;
       }
       if (outputFields.length === 1) {
@@ -1208,13 +1282,13 @@ const MLModels = () => {
         setForceFields(outputFields);
       }
     } catch (err) {
-      setTrainingMessage({ type: 'error', text: `Failed to fetch model details: ${err.message}` });
+      setTimedTrainingMessage({ type: 'error', text: `Failed to fetch model details: ${err.message}` });
     }
   }, [mlUrl, setModelAsBest]);
 
   const handleDeleteModel = useCallback(async (model) => {
     if (!confirm(`Are you sure you want to delete ${model.name}? This action cannot be undone.`)) return;
-    setTrainingMessage(null);
+    setTimedTrainingMessage(null);
     try {
       const endpoint = model.modelType === 'anomaly'
         ? `${mlUrl}/v1/anomaly/models/${model.id}`
@@ -1225,16 +1299,16 @@ const MLModels = () => {
         const detail = errorData.detail;
         throw new Error((detail && typeof detail === 'object' ? detail.message : detail) || `HTTP error! status: ${response.status}`);
       }
-      setTrainingMessage({ type: 'success', text: `Model ${model.name} deleted successfully` });
+      setTimedTrainingMessage({ type: 'success', text: `Model ${model.name} deleted successfully` });
       await fetchModels(filterField);
       if (refetchConfig) await refetchConfig();
     } catch (err) {
-      setTrainingMessage({ type: 'error', text: `Failed to delete model: ${err.message}` });
+      setTimedTrainingMessage({ type: 'error', text: `Failed to delete model: ${err.message}` });
     }
   }, [mlUrl, fetchModels, filterField, refetchConfig]);
 
   const handleCreateModel = useCallback(async (formData, isAnomaly = false) => {
-    setTrainingMessage(null);
+    setTimedTrainingMessage(null);
     try {
       const endpoint = isAnomaly
         ? `${mlUrl}/v1/anomaly/models`
@@ -1250,13 +1324,13 @@ const MLModels = () => {
         throw new Error((detail && typeof detail === 'object' ? detail.message : detail) || `HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
-      setTrainingMessage({ type: 'success', text: `Model ${data.name} created successfully` });
+      setTimedTrainingMessage({ type: 'success', text: `Model ${data.name} created successfully` });
       setShowCreateModal(false);
       await fetchModels(filterField);
       if (refetchConfig) await refetchConfig();
       return true;
     } catch (err) {
-      setTrainingMessage({ type: 'error', text: `Failed to create model: ${err.message}` });
+      setTimedTrainingMessage({ type: 'error', text: `Failed to create model: ${err.message}` });
       return false;
     }
   }, [mlUrl, fetchModels, filterField, refetchConfig]);
@@ -1267,15 +1341,8 @@ const MLModels = () => {
     fetchModelDetails(model);
   }, [fetchModelDetails]);
 
-  const handleShowInfo = useCallback((model) => {
-    setSelectedModel(model);
-    setShowJobHistoryModal(true);
-    fetchJobHistory(model);
-  }, [fetchJobHistory]);
-
   const handleTrain = useCallback((model) => {
     setTrainTarget(model);
-    setTrainModalOpen(true);
   }, []);
 
   const handleSetDefault = useCallback((model) => handleSetAsDefault(model), [handleSetAsDefault]);
@@ -1283,6 +1350,7 @@ const MLModels = () => {
 
   return (
     <>
+      <Toast message={trainingMessage} onClose={() => setTimedTrainingMessage(null)} />
       <CreateModelModal
         showCreateModal={showCreateModal}
         setShowCreateModal={setShowCreateModal}
@@ -1306,13 +1374,6 @@ const MLModels = () => {
         mlUrl={mlUrl}
         onJobsUpdate={setActiveJobCount}
       />
-      <JobHistoryModal
-        showModal={showJobHistoryModal}
-        setShowModal={setShowJobHistoryModal}
-        selectedModel={selectedModel}
-        jobs={jobs}
-        loadingJobs={loadingJobs}
-      />
       <ModelDetailsModal
         showModal={showDetailsModal}
         setShowModal={setShowDetailsModal}
@@ -1321,14 +1382,13 @@ const MLModels = () => {
         modelDetails={modelDetails}
         mlUrl={mlUrl}
       />
-      {trainModalOpen && (
-        <TrainModal
+      {trainTarget && (
+        <TrainingModal
           model={trainTarget}
-          lookbackSeconds={lookbackSeconds}
-          setLookbackSeconds={setLookbackSeconds}
-          onConfirm={handleModelTraining}
-          onCancel={() => setTrainModalOpen(false)}
-          isTraining={trainTarget ? trainingModelIds.has(trainTarget.id) : false}
+          mlUrl={mlUrl}
+          onClose={() => setTrainTarget(null)}
+          onStartTraining={handleModelTraining}
+          isTraining={trainingModelIds.has(trainTarget.id)}
         />
       )}
 
@@ -1378,16 +1438,16 @@ const MLModels = () => {
               )}
               <button
                 onClick={() => fetchModels(filterField)}
-                disabled={loading}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isRefreshing}
+                className="w-24 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Refreshing...' : 'Refresh'}
+                {isRefreshing ? 'Refreshing...' : 'Refresh'}
               </button>
             </div>
           </div>
 
           {/* Search and Filter Bar */}
-          <div className="bg-gray-50 border-y border-gray-200 px-6 py-3 -mx-6">
+          <div className="bg-gray-50 border-y border-none px-6 py-3 -mx-6">
             <div className="flex items-center gap-3 flex-wrap">
               {/* Search */}
               <div className="relative flex-1 min-w-[300px]">
@@ -1441,9 +1501,8 @@ const MLModels = () => {
                             setFieldSearchQuery('');
                             setShowFieldDropdown(false);
                           }}
-                          className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition-colors ${
-                            filterField === option.value ? 'bg-blue-100 font-medium' : ''
-                          }`}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition-colors ${filterField === option.value ? 'bg-blue-100 font-medium' : ''
+                            }`}
                         >
                           {option.label}
                         </button>
@@ -1468,18 +1527,6 @@ const MLModels = () => {
           </div>
         </div>
 
-        {/* Training Status Message */}
-        {trainingMessage && (
-          <div className={`p-3 rounded-lg ${
-            trainingMessage.type === 'success'
-              ? 'bg-green-50 border border-green-200 text-green-800'
-              : trainingMessage.type === 'info'
-              ? 'bg-blue-50 border border-blue-200 text-blue-800'
-              : 'bg-red-50 border border-red-200 text-red-800'
-          }`}>
-            <p className="text-sm font-medium">{trainingMessage.text}</p>
-          </div>
-        )}
 
         {/* Models Grid */}
         {loading && models.length === 0 ? (
@@ -1533,7 +1580,7 @@ const MLModels = () => {
                     key={model.id || model.name}
                     model={model}
                     onShowDetails={handleShowDetails}
-                    onShowInfo={handleShowInfo}
+
                     onTrain={handleTrain}
                     onSetDefault={handleSetDefault}
                     onDelete={handleDelete}

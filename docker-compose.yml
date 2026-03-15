@@ -19,6 +19,8 @@ services:
       - DECISION_PORT=${DECISION_PORT}
       - DATA_INGESTION_HOST=${DATA_INGESTION_HOST}
       - DATA_INGESTION_PORT=${DATA_INGESTION_PORT}
+      - MLFLOW_HOST=${MLFLOW_HOST}
+      - MLFLOW_PORT=${MLFLOW_PORT}
     healthcheck:
       test: ["CMD-SHELL", "service nginx status"]
       interval: 10s

@@ -32,14 +32,14 @@ const Dashboard = () => {
     }
   });
 
-  // When selected subscription is cleared, ensure realtime data is emptied
+  // Clear realtime data whenever the selected subscription changes (or is cleared)
   useEffect(() => {
+    setRealtimeData([]);
     if (!selectedSubscription) {
-      setRealtimeData([]);
       setWsConnected(false);
       if (wsDisconnect) wsDisconnect();
     }
-  }, [selectedSubscription, wsDisconnect]);
+  }, [selectedSubscription]);
 
   // Fetch available subscriptions so the user can select one for the WS
   useEffect(() => {
@@ -130,36 +130,27 @@ const Dashboard = () => {
         }
       }} />
 
-      {/* Select active subscription for WebSocket updates */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm flex items-center gap-4">
-        <label className="text-sm font-medium text-gray-700">Active Producer:</label>
-        {producers.length > 0 ? (
-          <select
-            value={selectedSubscription}
-            onChange={(e) => setSelectedSubscription(e.target.value)}
-            className="px-3 py-2 border rounded-md"
-          >
-            {producers.map((p) => (
-              <option key={p.id} value={p.id}>{p.id} - {p.url}</option>
-            ))}
-          </select>
-        ) : (
-          <div className="text-sm text-gray-500">No producers available - add one above</div>
-        )}
-      </div>
-
       {/* Real-time Data Section */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
         <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">Raw Data - Complete Network Metrics</h2>
-            <p className="text-sm text-gray-600 mt-1">Real-time data ingestion stream</p>
-          </div>
+          <h2 className="text-xl font-bold text-gray-900">Ingestion Data</h2>
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-            <span className="text-xs text-gray-500">
-              {wsConnected ? 'Live Updates' : 'Disconnected'}
-            </span>
+            {producers.length > 0 ? (
+              <>
+                <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Active Producer:</label>
+                <select
+                  value={selectedSubscription}
+                  onChange={(e) => setSelectedSubscription(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {producers.map((p) => (
+                    <option key={p.id} value={p.id}>{p.id} - {p.url}</option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              <span className="text-sm text-gray-400">No producers available</span>
+            )}
           </div>
         </div>
 

@@ -107,11 +107,6 @@ const Analytics = () => {
     setFormData(prev => ({ ...prev, output_field: e.target.value }));
   };
 
-  const handleModelChange = (e) => {
-    const val = e.target.value;
-    setFormData(prev => ({ ...prev, model_id: val === '' ? null : val }));
-  };
-
   const fetchPrediction = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -213,37 +208,22 @@ const Analytics = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Output Field
               </label>
-              <select
-                name="output_field"
+              <SearchableDropdown
+                options={fields}
                 value={formData.output_field}
-                onChange={handleFieldChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                onChange={(field) => handleFieldChange({ target: { value: field } })}
+                placeholder={loadingFields ? 'Loading...' : fields.length > 0 ? 'Search fields...' : 'No fields available'}
                 disabled={loadingFields}
-              >
-                {loadingFields ? (
-                  <option>Loading...</option>
-                ) : fields.length > 0 ? (
-                  <>
-                    <option value="anomaly">Anomaly Detection</option>
-                    {fields.filter(f => f !== 'anomaly' && fieldsWithModels.has(f)).length > 0 && (
-                      <optgroup label="With trained models">
-                        {fields.filter(f => f !== 'anomaly' && fieldsWithModels.has(f)).map(f => (
-                          <option key={f} value={f}>{f}</option>
-                        ))}
-                      </optgroup>
-                    )}
-                    {fields.filter(f => f !== 'anomaly' && !fieldsWithModels.has(f)).length > 0 && (
-                      <optgroup label="No trained models">
-                        {fields.filter(f => f !== 'anomaly' && !fieldsWithModels.has(f)).map(f => (
-                          <option key={f} value={f}>{f}</option>
-                        ))}
-                      </optgroup>
-                    )}
-                  </>
-                ) : (
-                  <option value="">No fields available</option>
-                )}
-              </select>
+                loading={loadingFields}
+                formatOption={(f) => {
+                  if (f === 'anomaly') return 'Anomaly Detection';
+                  return fieldsWithModels.has(f) ? f : `${f} (no model)`;
+                }}
+                filterOption={(f, term) => {
+                  const label = f === 'anomaly' ? 'anomaly detection' : f;
+                  return label.toLowerCase().includes(term.toLowerCase());
+                }}
+              />
             </div>
 
             {/* Cell ID */}
@@ -259,7 +239,7 @@ const Analytics = () => {
                 disabled={loadingCells}
                 loading={loadingCells}
                 formatOption={(cell) => cell.toString()}
-                filterOption={(cell, searchTerm) => cell.toString().includes(searchTerm)}
+                filterOption={(cell, searchTerm) => cell.toString().startsWith(searchTerm)}
               />
             </div>
 
@@ -301,26 +281,25 @@ const Analytics = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Model {formData.output_field !== 'anomaly' && <span className="text-gray-400 font-normal">(optional)</span>}
               </label>
-              <select
-                name="model_id"
-                value={formData.model_id ?? ''}
-                onChange={handleModelChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
+              <SearchableDropdown
+                options={formData.output_field === 'anomaly' ? [null] : [null, ...models.map(m => m.id)]}
+                value={formData.model_id}
+                onChange={(id) => setFormData(prev => ({ ...prev, model_id: id }))}
+                placeholder={loadingModels ? 'Loading models...' : 'Search models...'}
                 disabled={formData.output_field === 'anomaly' || loadingModels || noModelsAvailable}
-              >
-                {loadingModels ? (
-                  <option value="">Loading models...</option>
-                ) : formData.output_field === 'anomaly' ? (
-                  <option value="">Best model (auto)</option>
-                ) : (
-                  <>
-                    <option value="">Best model (auto)</option>
-                    {models.map(m => (
-                      <option key={m.id} value={m.id}>{m.name} - {m.id}</option>
-                    ))}
-                  </>
-                )}
-              </select>
+                loading={loadingModels}
+                formatOption={(id) => {
+                  if (id === null || id === undefined) return 'Best model (auto)';
+                  const m = models.find(m => m.id === id);
+                  return m ? `${m.name} – ${m.id}` : id;
+                }}
+                filterOption={(id, term) => {
+                  if (id === null || id === undefined) return 'best model auto'.includes(term.toLowerCase());
+                  const m = models.find(m => m.id === id);
+                  const label = m ? `${m.name} ${m.id}` : id;
+                  return label.toLowerCase().includes(term.toLowerCase());
+                }}
+              />
               {formData.output_field === 'anomaly' && (
                 <p className="mt-1 text-sm text-blue-700">
                   Anomaly detection uses the best available model.
