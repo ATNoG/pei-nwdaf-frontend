@@ -984,6 +984,14 @@ const MLModels = () => {
   // Training
   const [trainingModelIds, setTrainingModelIds] = useState(new Set());
   const [trainingMessage, setTrainingMessage] = useState(null);
+  const trainingMessageTimerRef = useRef(null);
+  const setTimedTrainingMessage = useCallback((msg) => {
+    clearTimeout(trainingMessageTimerRef.current);
+    setTrainingMessage(msg);
+    if (msg) {
+      trainingMessageTimerRef.current = setTimeout(() => setTrainingMessage(null), 5000);
+    }
+  }, []);
   const [trainModalOpen, setTrainModalOpen] = useState(false);
   const [trainTarget, setTrainTarget] = useState(null);
   const [lookbackSeconds, setLookbackSeconds] = useState(3600);
@@ -1129,12 +1137,12 @@ const MLModels = () => {
         const response = await fetch(endpoint);
         if (!response.ok) return;
         const job = await response.json();
-        setTrainingMessage({ type: 'info', text: `Training job ${jobId.slice(0, 8)}… - ${job.status} (${modelName})` });
+        setTimedTrainingMessage({ type: 'info', text: `Training job ${jobId.slice(0, 8)}… - ${job.status} (${modelName})` });
         if (job.status === 'completed' || job.status === 'failed') {
           clearInterval(pollingRef.current[modelId]);
           delete pollingRef.current[modelId];
           setTrainingModelIds(prev => { const next = new Set(prev); next.delete(modelId); return next; });
-          setTrainingMessage({
+          setTimedTrainingMessage({
             type: job.status === 'completed' ? 'success' : 'error',
             text: job.status === 'completed'
               ? `Training completed for ${modelName}`
@@ -1156,7 +1164,7 @@ const MLModels = () => {
   const handleModelTraining = useCallback(async () => {
     if (!trainTarget) return;
     setTrainingModelIds(prev => new Set([...prev, trainTarget.id]));
-    setTrainingMessage(null);
+    setTimedTrainingMessage(null);
     try {
       const endpoint = trainTarget.modelType === 'anomaly'
         ? `${mlUrl}/v1/anomaly/training/train`
@@ -1168,19 +1176,19 @@ const MLModels = () => {
       });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
-      setTrainingMessage({ type: 'info', text: `Training started for ${trainTarget.name} (job ${data.job_id?.slice(0, 8)}…)` });
+      setTimedTrainingMessage({ type: 'info', text: `Training started for ${trainTarget.name} (job ${data.job_id?.slice(0, 8)}…)` });
       setTrainModalOpen(false);
       startPollingJob(data.job_id, trainTarget.id, trainTarget.name, trainTarget.modelType);
     } catch (err) {
       console.error('Failed to start training:', err.message);
-      setTrainingMessage({ type: 'error', text: `Failed to start training: ${err.message}` });
+      setTimedTrainingMessage({ type: 'error', text: `Failed to start training: ${err.message}` });
       setTrainingModelIds(prev => { const next = new Set(prev); next.delete(trainTarget.id); return next; });
       setTrainModalOpen(false);
     }
   }, [mlUrl, trainTarget, lookbackSeconds, startPollingJob]);
 
   const setModelAsBest = useCallback(async (model, outputField) => {
-    setTrainingMessage(null);
+    setTimedTrainingMessage(null);
     try {
       const response = await fetch(`${mlUrl}/v1/performance/${encodeURIComponent(outputField)}/set-best/${model.id}`, {
         method: 'POST',
@@ -1190,21 +1198,21 @@ const MLModels = () => {
         const detail = errorData.detail;
         throw new Error((detail && typeof detail === 'object' ? detail.message : detail) || `HTTP error! status: ${response.status}`);
       }
-      setTrainingMessage({ type: 'success', text: `${model.name} is now the best model for ${outputField}` });
+      setTimedTrainingMessage({ type: 'success', text: `${model.name} is now the best model for ${outputField}` });
     } catch (err) {
-      setTrainingMessage({ type: 'error', text: `Failed to set best model: ${err.message}` });
+      setTimedTrainingMessage({ type: 'error', text: `Failed to set best model: ${err.message}` });
     }
   }, [mlUrl]);
 
   const handleSetAsDefault = useCallback(async (model) => {
-    setTrainingMessage(null);
+    setTimedTrainingMessage(null);
     try {
       const response = await fetch(`${mlUrl}/v1/models/${model.id}`);
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const details = await response.json();
       const outputFields = details.config?.output_fields ?? [];
       if (outputFields.length === 0) {
-        setTrainingMessage({ type: 'error', text: `Model ${model.name} has no output fields defined.` });
+        setTimedTrainingMessage({ type: 'error', text: `Model ${model.name} has no output fields defined.` });
         return;
       }
       if (outputFields.length === 1) {
@@ -1214,13 +1222,13 @@ const MLModels = () => {
         setForceFields(outputFields);
       }
     } catch (err) {
-      setTrainingMessage({ type: 'error', text: `Failed to fetch model details: ${err.message}` });
+      setTimedTrainingMessage({ type: 'error', text: `Failed to fetch model details: ${err.message}` });
     }
   }, [mlUrl, setModelAsBest]);
 
   const handleDeleteModel = useCallback(async (model) => {
     if (!confirm(`Are you sure you want to delete ${model.name}? This action cannot be undone.`)) return;
-    setTrainingMessage(null);
+    setTimedTrainingMessage(null);
     try {
       const endpoint = model.modelType === 'anomaly'
         ? `${mlUrl}/v1/anomaly/models/${model.id}`
@@ -1231,16 +1239,16 @@ const MLModels = () => {
         const detail = errorData.detail;
         throw new Error((detail && typeof detail === 'object' ? detail.message : detail) || `HTTP error! status: ${response.status}`);
       }
-      setTrainingMessage({ type: 'success', text: `Model ${model.name} deleted successfully` });
+      setTimedTrainingMessage({ type: 'success', text: `Model ${model.name} deleted successfully` });
       await fetchModels(filterField);
       if (refetchConfig) await refetchConfig();
     } catch (err) {
-      setTrainingMessage({ type: 'error', text: `Failed to delete model: ${err.message}` });
+      setTimedTrainingMessage({ type: 'error', text: `Failed to delete model: ${err.message}` });
     }
   }, [mlUrl, fetchModels, filterField, refetchConfig]);
 
   const handleCreateModel = useCallback(async (formData, isAnomaly = false) => {
-    setTrainingMessage(null);
+    setTimedTrainingMessage(null);
     try {
       const endpoint = isAnomaly
         ? `${mlUrl}/v1/anomaly/models`
@@ -1256,13 +1264,13 @@ const MLModels = () => {
         throw new Error((detail && typeof detail === 'object' ? detail.message : detail) || `HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
-      setTrainingMessage({ type: 'success', text: `Model ${data.name} created successfully` });
+      setTimedTrainingMessage({ type: 'success', text: `Model ${data.name} created successfully` });
       setShowCreateModal(false);
       await fetchModels(filterField);
       if (refetchConfig) await refetchConfig();
       return true;
     } catch (err) {
-      setTrainingMessage({ type: 'error', text: `Failed to create model: ${err.message}` });
+      setTimedTrainingMessage({ type: 'error', text: `Failed to create model: ${err.message}` });
       return false;
     }
   }, [mlUrl, fetchModels, filterField, refetchConfig]);
