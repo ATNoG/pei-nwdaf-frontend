@@ -107,11 +107,6 @@ const Analytics = () => {
     setFormData(prev => ({ ...prev, output_field: e.target.value }));
   };
 
-  const handleModelChange = (e) => {
-    const val = e.target.value;
-    setFormData(prev => ({ ...prev, model_id: val === '' ? null : val }));
-  };
-
   const fetchPrediction = async (e) => {
     e.preventDefault();
     setLoading(true);
