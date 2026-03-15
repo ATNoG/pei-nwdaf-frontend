@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import SearchableDropdown from '../components/SearchableDropdown';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -77,6 +78,7 @@ const Performance = () => {
 
   // Intervals / timers
   const statusIntervalRef = useRef(null);
+  const fastPollRef = useRef(null);
   const refreshTimeoutRef = useRef(null);
   const actionMsgTimerRef = useRef(null);
 
@@ -214,7 +216,7 @@ const Performance = () => {
       }
     }).finally(() => setLoadingData(false));
 
-    // 60s status poll
+    // 5s status poll
     statusIntervalRef.current = setInterval(async () => {
       const data = await fetchStatus(activeField);
       if (data?.active_job_ids?.length) {
@@ -222,7 +224,7 @@ const Performance = () => {
       } else {
         setActiveJobs({});
       }
-    }, 60000);
+    }, 5000);
 
     return () => {
       clearInterval(statusIntervalRef.current);
@@ -230,8 +232,19 @@ const Performance = () => {
     };
   }, [activeField, fetchStatus, fetchBest, fetchHistory, fetchModels, fetchJobDetails]);
 
+  // 2s fast-poll while an action is running (so state badge updates immediately)
+  useEffect(() => {
+    if (!actionLoading || !activeField) {
+      clearInterval(fastPollRef.current);
+      return;
+    }
+    fastPollRef.current = setInterval(() => fetchStatus(activeField), 2000);
+    return () => clearInterval(fastPollRef.current);
+  }, [actionLoading, activeField, fetchStatus]);
+
   const handleEvaluate = async () => {
     setActionLoading('evaluate');
+    setStatus(prev => prev ? { ...prev, state: 'evaluating' } : prev);
     try {
       const res = await fetch(
         `${mlUrl}/v1/performance/${encodeURIComponent(activeField)}/evaluate?metric=${encodeURIComponent(metric)}`,
@@ -248,6 +261,7 @@ const Performance = () => {
       showActionMsg('error', e.message);
     } finally {
       setActionLoading(null);
+      fetchStatus(activeField);
     }
   };
 
@@ -338,6 +352,7 @@ const Performance = () => {
   const chartOptions = useMemo(() => {
     const times = chartData?._times ?? [];
     return {
+      animation: false,
       responsive: true,
       maintainAspectRatio: false,
       scales: {
@@ -400,20 +415,19 @@ const Performance = () => {
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm space-y-3">
-          <div className="flex flex-wrap gap-1">
-            {fields.map(f => (
-              <button
-                key={f}
-                onClick={() => setActiveField(f)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  activeField === f
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {f}
-              </button>
-            ))}
+          <div className="flex items-center gap-3">
+            <div className="w-64">
+              <SearchableDropdown
+                options={fields}
+                value={activeField}
+                onChange={setActiveField}
+                placeholder="Search fields..."
+                formatOption={(f) => f}
+              />
+            </div>
+            {activeField && (
+              <span className="text-sm font-medium text-gray-700">{activeField}</span>
+            )}
           </div>
 
           <hr className="border-gray-200" />
