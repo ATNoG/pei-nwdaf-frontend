@@ -1199,10 +1199,12 @@ const MLModels = () => {
         throw new Error((detail && typeof detail === 'object' ? detail.message : detail) || `HTTP error! status: ${response.status}`);
       }
       setTimedTrainingMessage({ type: 'success', text: `${model.name} is now the best model for ${outputField}` });
+      await fetchModels(filterField);
+      if (refetchConfig) await refetchConfig();
     } catch (err) {
       setTimedTrainingMessage({ type: 'error', text: `Failed to set best model: ${err.message}` });
     }
-  }, [mlUrl]);
+  }, [mlUrl, fetchModels, filterField, refetchConfig]);
 
   const handleSetAsDefault = useCallback(async (model) => {
     setTimedTrainingMessage(null);
