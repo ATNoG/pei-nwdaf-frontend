@@ -165,39 +165,64 @@ const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete,
 
 // CreateModelModal
 const FieldCheckboxes = ({ fieldKey, label, fields, loadingFields, selected, onToggle }) => {
-  const allSelected = fields.length > 0 && fields.every(f => selected.includes(f));
-  const toggleAll = () => onToggle(allSelected ? [] : [...fields], fieldKey, true);
+  const [filter, setFilter] = useState('');
+  const visible = fields.filter(f => f.toLowerCase().includes(filter.toLowerCase()));
+  const unselected = visible.filter(f => !selected.includes(f));
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <label className="block text-sm font-medium text-gray-700">{label} <span className="text-red-500">*</span></label>
-        {!loadingFields && fields.length > 0 && (
-          <button
-            type="button"
-            onClick={toggleAll}
-            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-          >
-            {allSelected ? 'Deselect all' : 'Select all'}
-          </button>
-        )}
-      </div>
+      <label className="block text-sm font-medium text-gray-700 mb-2">{label} <span className="text-red-500">*</span></label>
       {loadingFields ? (
         <p className="text-sm text-gray-500">Loading fields...</p>
       ) : (
-        <div className="border border-gray-200 rounded-lg p-3 max-h-48 overflow-y-auto bg-gray-50">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-            {fields.map(f => (
-              <label key={f} className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selected.includes(f)}
-                  onChange={() => onToggle(f, fieldKey)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
-                />
-                <span className="text-gray-700 truncate">{f}</span>
-              </label>
-            ))}
+        <div className="border border-gray-200 rounded-lg bg-gray-50">
+          {/* Selected chips */}
+          {selected.length > 0 && (
+            <div className="flex flex-wrap gap-1 p-2 border-b border-gray-200">
+              {selected.map(f => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => onToggle(f, fieldKey)}
+                  className="flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full hover:bg-blue-200 transition-colors"
+                >
+                  {f}
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              ))}
+            </div>
+          )}
+          {/* Filter input */}
+          <div className="p-2 border-b border-gray-200">
+            <input
+              type="text"
+              placeholder="Filter fields..."
+              value={filter}
+              onChange={e => setFilter(e.target.value)}
+              className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
+            />
+          </div>
+          {/* Unselected fields */}
+          <div className="max-h-36 overflow-y-auto p-2">
+            {unselected.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-2">{filter ? 'No matches' : 'All fields selected'}</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                {unselected.map(f => (
+                  <label key={f} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={false}
+                      onChange={() => onToggle(f, fieldKey)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
+                    />
+                    <span className="text-gray-700 truncate">{f}</span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
