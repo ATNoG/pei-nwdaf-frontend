@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import SearchableDropdown from '../components/SearchableDropdown';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -29,22 +30,22 @@ const POINT_SHAPES = ['circle', 'triangle', 'rect', 'star', 'cross', 'crossRot']
 const METRICS = ['rmse', 'mae', 'mse', 'r2'];
 
 const TIME_WINDOWS = [
-  { label: '1h',  ms: 60 * 60 * 1000 },
-  { label: '6h',  ms: 6 * 60 * 60 * 1000 },
+  { label: '1h', ms: 60 * 60 * 1000 },
+  { label: '6h', ms: 6 * 60 * 60 * 1000 },
   { label: '24h', ms: 24 * 60 * 60 * 1000 },
-  { label: '7d',  ms: 7 * 24 * 60 * 60 * 1000 },
+  { label: '7d', ms: 7 * 24 * 60 * 60 * 1000 },
   { label: 'All', ms: null },
 ];
 
 
 const StateBadge = ({ state }) => {
   const cfg = {
-    MONITORING:  { cls: 'bg-green-100 text-green-800', label: 'Monitoring' },
-    EVALUATING:  { cls: 'bg-yellow-100 text-yellow-800 animate-pulse', label: 'Evaluating…' },
-    RETRAINING:  { cls: 'bg-blue-100 text-blue-800 animate-pulse', label: 'Retraining' },
-  }[state] ?? { cls: 'bg-gray-100 text-gray-600', label: state ?? 'Unknown' };
+    MONITORING: { cls: 'bg-green-200 text-green-900', label: 'Monitoring' },
+    EVALUATING: { cls: 'bg-yellow-200 text-yellow-900 animate-pulse', label: 'Evaluating…' },
+    RETRAINING: { cls: 'bg-blue-200 text-blue-900 animate-pulse', label: 'Retraining' },
+  }[state] ?? { cls: 'bg-gray-200 text-gray-700', label: state ?? 'Unknown' };
   return (
-    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${cfg.cls}`}>
+    <span className={`px-2.5 py-1 rounded-full text-xs font-bold tracking-wide ${cfg.cls}`}>
       {cfg.label}
     </span>
   );
@@ -77,6 +78,7 @@ const Performance = () => {
 
   // Intervals / timers
   const statusIntervalRef = useRef(null);
+  const fastPollRef = useRef(null);
   const refreshTimeoutRef = useRef(null);
   const actionMsgTimerRef = useRef(null);
 
@@ -214,7 +216,7 @@ const Performance = () => {
       }
     }).finally(() => setLoadingData(false));
 
-    // 60s status poll
+    // 5s status poll
     statusIntervalRef.current = setInterval(async () => {
       const data = await fetchStatus(activeField);
       if (data?.active_job_ids?.length) {
@@ -222,7 +224,7 @@ const Performance = () => {
       } else {
         setActiveJobs({});
       }
-    }, 60000);
+    }, 5000);
 
     return () => {
       clearInterval(statusIntervalRef.current);
@@ -230,8 +232,19 @@ const Performance = () => {
     };
   }, [activeField, fetchStatus, fetchBest, fetchHistory, fetchModels, fetchJobDetails]);
 
+  // 2s fast-poll while an action is running (so state badge updates immediately)
+  useEffect(() => {
+    if (!actionLoading || !activeField) {
+      clearInterval(fastPollRef.current);
+      return;
+    }
+    fastPollRef.current = setInterval(() => fetchStatus(activeField), 2000);
+    return () => clearInterval(fastPollRef.current);
+  }, [actionLoading, activeField, fetchStatus]);
+
   const handleEvaluate = async () => {
     setActionLoading('evaluate');
+    setStatus(prev => prev ? { ...prev, state: 'evaluating' } : prev);
     try {
       const res = await fetch(
         `${mlUrl}/v1/performance/${encodeURIComponent(activeField)}/evaluate?metric=${encodeURIComponent(metric)}`,
@@ -248,6 +261,7 @@ const Performance = () => {
       showActionMsg('error', e.message);
     } finally {
       setActionLoading(null);
+      fetchStatus(activeField);
     }
   };
 
@@ -289,16 +303,20 @@ const Performance = () => {
     // Sort each model's entries by time
     Object.values(byModel).forEach(pts => pts.sort((a, b) => new Date(a.measured_at) - new Date(b.measured_at)));
 
-    // All timestamps as labels (union, sorted)
-    const allTimes = [...new Set(entries.map(e => e.measured_at))].sort();
-    const labels = allTimes.map(t => {
+    // All timestamps as labels (union, sorted) — with boundary ticks for fixed windows
+    const dataTimes = [...new Set(entries.map(e => e.measured_at))].sort();
+    const allTimes = timeWindow
+      ? [...new Set([new Date(now - timeWindow).toISOString(), ...dataTimes, new Date(now).toISOString()])].sort()
+      : dataTimes;
+    const fmt = (t) => {
       const d = new Date(t);
       const dd = String(d.getDate()).padStart(2, '0');
       const mm = String(d.getMonth() + 1).padStart(2, '0');
       const hh = String(d.getHours()).padStart(2, '0');
       const min = String(d.getMinutes()).padStart(2, '0');
       return `${dd}/${mm} ${hh}:${min}`;
-    });
+    };
+    const labels = allTimes.map(fmt);
 
     const modelMeta = [];
     const alignedDatasets = Object.entries(byModel).map(([modelId, pts], i) => {
@@ -323,7 +341,10 @@ const Performance = () => {
         backgroundColor: color + '33',
         pointStyle: styles,
         pointRadius: radii,
-        pointHoverRadius: 6,
+        pointHoverRadius: 8,
+        pointBackgroundColor: color,
+        pointBorderColor: '#fff',
+        pointBorderWidth: 1.5,
         tension: 0,
         fill: false,
         spanGaps: false,
@@ -338,6 +359,7 @@ const Performance = () => {
   const chartOptions = useMemo(() => {
     const times = chartData?._times ?? [];
     return {
+      animation: false,
       responsive: true,
       maintainAspectRatio: false,
       scales: {
@@ -400,34 +422,32 @@ const Performance = () => {
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm space-y-3">
-          <div className="flex flex-wrap gap-1">
-            {fields.map(f => (
-              <button
-                key={f}
-                onClick={() => setActiveField(f)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  activeField === f
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {f}
-              </button>
-            ))}
+        <div className="flex items-center gap-3">
+          <div className="w-64">
+            <SearchableDropdown
+              options={fields}
+              value={activeField}
+              onChange={setActiveField}
+              placeholder="Search fields..."
+              formatOption={(f) => f}
+            />
           </div>
 
-          <hr className="border-gray-200" />
+        </div>
 
+        <hr className="border-gray-200" />
+
+        <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             {/* TODO: Metric selector
-            <select
-              value={metric}
-              onChange={e => setMetric(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              {METRICS.map(m => <option key={m} value={m}>{m.toUpperCase()}</option>)}
-            </select>
-            */}
+              <select
+                value={metric}
+                onChange={e => setMetric(e.target.value)}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                {METRICS.map(m => <option key={m} value={m}>{m.toUpperCase()}</option>)}
+              </select>
+              */}
             <button
               onClick={handleEvaluate}
               disabled={!!actionLoading}
@@ -445,14 +465,51 @@ const Performance = () => {
               Monitor
             </button>
           </div>
+
+          {/* State — badge + timing + active jobs */}
+          {status && (
+            <div className="flex items-center gap-3">
+              <StateBadge state={status.state} />
+              {status.last_checked_at && (
+                <span className="text-xs text-gray-400">
+                  Last check{' '}
+                  <span className="text-gray-600 font-medium">
+                    {new Date(status.last_checked_at).toLocaleTimeString()}
+                  </span>
+                  {status.monitoring_interval_seconds && (
+                    <>
+                      {' · '}Next{' '}
+                      <span className="text-gray-600 font-medium">
+                        {new Date(new Date(status.last_checked_at).getTime() + status.monitoring_interval_seconds * 1000).toLocaleTimeString()}
+                      </span>
+                    </>
+                  )}
+                </span>
+              )}
+              {status.state === 'RETRAINING' && status.active_job_ids?.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  {status.active_job_ids.map(jobId => {
+                    const job = activeJobs[jobId];
+                    return (
+                      <div key={jobId} className="flex items-center gap-1 text-xs bg-blue-50 border border-blue-100 rounded px-2 py-1">
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500 shrink-0" />
+                        <span className="font-mono text-blue-700">{jobId.slice(0, 8)}…</span>
+                        {job?.progress != null && <span className="text-blue-500">{job.progress}%</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {actionMsg && (
-        <div className={`rounded-lg p-3 text-sm font-medium ${
-          actionMsg.type === 'success'
+        <div className={`rounded-lg p-3 text-sm font-medium ${actionMsg.type === 'success'
             ? 'bg-green-50 border border-green-200 text-green-800'
             : 'bg-red-50 border border-red-200 text-red-800'
-        }`}>
+          }`}>
           {actionMsg.text}
         </div>
       )}
@@ -472,11 +529,10 @@ const Performance = () => {
                     <button
                       key={w.label}
                       onClick={() => setTimeWindow(w.ms)}
-                      className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                        timeWindow === w.ms
+                      className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${timeWindow === w.ms
                           ? 'bg-blue-600 text-white'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
+                        }`}
                     >
                       {w.label}
                     </button>
@@ -490,11 +546,10 @@ const Performance = () => {
                     <button
                       key={t ?? 'all'}
                       onClick={() => setTriggerFilter(t)}
-                      className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                        triggerFilter === t
+                      className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${triggerFilter === t
                           ? 'bg-gray-700 text-white'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
+                        }`}
                     >
                       {t ?? 'All'}
                     </button>
@@ -513,11 +568,10 @@ const Performance = () => {
                         key={modelId}
                         onClick={() => toggleModel(modelId)}
                         title={modelId}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border-2 transition-colors ${
-                          isActive
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border-2 transition-colors ${isActive
                             ? 'text-white border-transparent'
                             : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
-                        }`}
+                          }`}
                         style={isActive ? { backgroundColor: color, borderColor: color } : {}}
                       >
                         <span
@@ -567,12 +621,12 @@ const Performance = () => {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-gray-900">{bestModel.model_name}</span>
                       {bestModel.architecture && (
-                        <span className="px-1.5 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded uppercase">
+                        <span className="px-2 py-0.5 text-xs font-bold bg-purple-200 text-purple-900 rounded uppercase tracking-wide">
                           {bestModel.architecture}
                         </span>
                       )}
                       {bestModel.latest_version != null && (
-                        <span className="px-1.5 py-0.5 text-xs font-mono bg-gray-100 text-gray-700 rounded">
+                        <span className="px-2 py-0.5 text-xs font-bold font-mono bg-gray-200 text-gray-800 rounded">
                           v{bestModel.latest_version}
                         </span>
                       )}
@@ -624,79 +678,6 @@ const Performance = () => {
               )}
             </div>
 
-            {/* State card */}
-            <div className="bg-white rounded-lg border border-gray-200 p-5 shadow-sm">
-              <h3 className="text-base font-semibold text-gray-900 mb-3">State</h3>
-              {status ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <StateBadge state={status.state} />
-                  </div>
-
-                  {status.state !== 'RETRAINING' && status.last_checked_at && (
-                    <dl className="space-y-1.5 text-sm">
-                      <div className="flex justify-between">
-                        <dt className="text-gray-500">Last check</dt>
-                        <dd className="text-gray-900 text-xs">{new Date(status.last_checked_at).toLocaleTimeString()}</dd>
-                      </div>
-                      {status.monitoring_interval_seconds != null && status.last_checked_at && (
-                        <div className="flex justify-between">
-                          <dt className="text-gray-500">Next check at</dt>
-                          <dd className="font-medium text-gray-900 text-xs">
-                            {new Date(new Date(status.last_checked_at).getTime() + status.monitoring_interval_seconds * 1000).toLocaleTimeString()}
-                          </dd>
-                        </div>
-                      )}
-                    </dl>
-                  )}
-
-                  <hr className="border-gray-100" />
-                  <dl className="space-y-1.5 text-sm">
-                    {status.monitoring_interval_seconds != null && (
-                      <div className="flex justify-between">
-                        <dt className="text-gray-500">Check interval</dt>
-                        <dd className="text-gray-900">{status.monitoring_interval_seconds}s</dd>
-                      </div>
-                    )}
-                    {status.monitor_degradation_threshold != null && (
-                      <div className="flex justify-between">
-                        <dt className="text-gray-500">Degradation threshold</dt>
-                        <dd className="text-gray-900">{status.monitor_degradation_threshold}</dd>
-                      </div>
-                    )}
-                    {status.monitoring_degradation_factor != null && (
-                      <div className="flex justify-between">
-                        <dt className="text-gray-500">Eval trigger factor</dt>
-                        <dd className="text-gray-900">{status.monitoring_degradation_factor}</dd>
-                      </div>
-                    )}
-                  </dl>
-
-                  {status.state === 'RETRAINING' && status.active_job_ids?.length > 0 && (
-                    <div className="space-y-2">
-                      {status.active_job_ids.map(jobId => {
-                        const job = activeJobs[jobId];
-                        return (
-                          <div key={jobId} className="text-xs bg-blue-50 rounded p-2 border border-blue-100">
-                            <div className="flex items-center gap-1.5 mb-1">
-                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500" />
-                              <span className="font-mono text-blue-700 truncate" title={jobId}>{jobId.slice(0, 12)}…</span>
-                            </div>
-                            {job && (
-                              <div className="text-blue-600">
-                                {job.status}{job.progress != null ? ` - ${job.progress}%` : ''}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-400">No status available.</p>
-              )}
-            </div>
           </div>
         </div>
       )}

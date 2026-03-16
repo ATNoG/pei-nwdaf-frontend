@@ -95,7 +95,7 @@ const SearchableDropdown = ({
     }
   };
 
-  const displayValue = searchTerm || (value ? formatOption(value) : '');
+  const displayValue = isOpen ? searchTerm : (value ? formatOption(value) : '');
 
   return (
     <div ref={dropdownRef} className="relative">
