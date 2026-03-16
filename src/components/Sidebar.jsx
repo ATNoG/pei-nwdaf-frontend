@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { FaHouse } from 'react-icons/fa6';
-import { FaRobot } from 'react-icons/fa';
+import { FaRobot, FaShieldAlt } from 'react-icons/fa';
 import { VscGraph } from 'react-icons/vsc';
 import { FaBars, FaChevronLeft, FaChartLine, FaCog } from 'react-icons/fa';
 
@@ -13,6 +13,7 @@ const Sidebar = () => {
     { name: 'ML', icon: <FaRobot />, path: '/ml' },
     { name: 'Analytics', icon: <VscGraph />, path: '/analytics' },
     { name: 'Performance', icon: <FaChartLine />, path: '/performance' },
+    { name: 'Policy', icon: <FaShieldAlt />, path: '/policy' },
   ];
 
   // Auto-collapse on small screens
