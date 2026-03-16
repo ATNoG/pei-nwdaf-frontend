@@ -44,7 +44,17 @@ services:
     # volumes:
     #   - .:/app
     #   - /app/node_modules
-    env_file: .env
+    environment:
+      - VITE_ML_HOST=${VITE_ML_HOST:-pei-ml}
+      - VITE_DATA_STORAGE_HOST=${VITE_DATA_STORAGE_HOST:-data-storage}
+      - VITE_MLFLOW_URL=${VITE_MLFLOW_URL:-http://localhost:5000}
+      - VITE_AVAILABLE_COMPONENTS=${VITE_AVAILABLE_COMPONENTS}
+      - VITE_RAW_DATA_URL=${VITE_RAW_DATA_URL:-http://localhost:7000}
+      - VITE_DATA_STORAGE_URL=${VITE_DATA_STORAGE_URL:-http://localhost:8000}
+      - VITE_ML_URL=${VITE_ML_URL:-http://localhost:8060}
+      - VITE_POLICY_SERVICE_URL=${VITE_POLICY_SERVICE_URL}
+      - POLICY_HOST=${POLICY_HOST:-policy-service}
+      - POLICY_PORT=${POLICY_PORT:-8788}
     working_dir: /app
     networks:
       - nwdaf-network
@@ -52,4 +62,4 @@ services:
 
 networks:
   nwdaf-network:
-    external: true
+    name: nwdaf-network
