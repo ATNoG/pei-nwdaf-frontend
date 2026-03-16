@@ -16,7 +16,7 @@ function AppContent() {
   const getPageTitle = () => {
     switch (location.pathname) {
       case '/':
-        return 'Dashboard';
+        return 'Ingestion';
       case '/ml':
         return 'ML';
       case '/analytics':
@@ -33,11 +33,11 @@ function AppContent() {
   const getPageSubtitle = () => {
     switch (location.pathname) {
       case '/':
-        return 'Real-time Network Monitoring & ML Control';
+        return 'Real-time Network Monitoring';
       case '/ml':
         return 'Browse and Manage model instances';
       case '/analytics':
-        return 'Cell Analytics Predictions & Insights';
+        return 'Cell Analytics Insights';
       case '/performance':
         return 'Real-time ML Model Performance Monitoring';
       case '/settings':

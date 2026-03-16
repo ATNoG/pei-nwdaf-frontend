@@ -44,6 +44,12 @@ html.cvd-rg [class*="bg-red-500"],
 html.cvd-rg [class*="bg-red-600"]    { background-color: #ee7733 !important; }
 html.cvd-rg [class*="border-red-"]   { border-color: #ee7733 !important; }
 
+html.cvd-rg [class*="text-orange-"]  { color: #005fa3 !important; }
+html.cvd-rg [class*="bg-orange-100"] { background-color: #cce5f6 !important; }
+html.cvd-rg [class*="bg-orange-500"],
+html.cvd-rg [class*="bg-orange-600"] { background-color: #0077bb !important; }
+html.cvd-rg [class*="border-orange-"]{ border-color: #0077bb !important; }
+
 /* Mode 2: Tritanopia safe (Blue-Yellow) */
 html.cvd-tritan [class*="text-yellow-"]   { color: #b0004e !important; }
 html.cvd-tritan [class*="bg-yellow-50"]   { background-color: #fce4ec !important; }
@@ -55,6 +61,12 @@ html.cvd-tritan [class*="bg-purple-50"]   { background-color: #fbe9e7 !important
 html.cvd-tritan [class*="bg-purple-100"]  { background-color: #ffccbc !important; }
 html.cvd-tritan [class*="bg-purple-600"]  { background-color: #f4511e !important; }
 html.cvd-tritan [class*="border-purple-"] { border-color: #f4511e !important; }
+
+html.cvd-tritan [class*="text-orange-"]   { color: #b0004e !important; }
+html.cvd-tritan [class*="bg-orange-100"]  { background-color: #f8bbd0 !important; }
+html.cvd-tritan [class*="bg-orange-500"],
+html.cvd-tritan [class*="bg-orange-600"]  { background-color: #d81b60 !important; }
+html.cvd-tritan [class*="border-orange-"] { border-color: #d81b60 !important; }
 
 /* High Contrast */
 html.high-contrast {
@@ -109,6 +121,18 @@ html.high-contrast [class*="from-red-"] {
   color: #fff !important;
   border: 2px solid #000 !important;
 }
+
+/* Exception for gradient text (logo) - must come after the above rule */
+html.high-contrast [class*="from-blue-"].bg-clip-text,
+html.high-contrast [class*="from-green-"].bg-clip-text,
+html.high-contrast [class*="from-red-"].bg-clip-text,
+html.high-contrast [class*="from-blue-"].text-transparent,
+html.high-contrast [class*="from-green-"].text-transparent,
+html.high-contrast [class*="from-red-"].text-transparent {
+  background-color: transparent !important;
+  color: #000000 !important;
+  border: none !important;
+}
 html.high-contrast [class*="text-green-"],
 html.high-contrast [class*="text-red-"],
 html.high-contrast [class*="text-yellow-"],
@@ -123,16 +147,25 @@ html.high-contrast header {
 html.high-contrast [class*="border-"] {
   border-color: var(--hc-border) !important;
 }
-html.high-contrast .bg-clip-text {
+html.high-contrast .bg-clip-text,
+html.high-contrast .text-transparent {
   -webkit-background-clip: unset !important;
   background-clip: unset !important;
   background-image: none !important;
-  color: var(--hc-fg) !important;
+  background-color: transparent !important;
+  border: none !important;
+  color: #000000 !important;
 }
 
 html.high-contrast header,
 html.high-contrast header * {
   color: #fff !important;
+}
+
+/* Override header text color for logo */
+html.high-contrast .bg-clip-text,
+html.high-contrast .text-transparent {
+  color: #000000 !important;
 }
 
 html.high-contrast .bg-blue-600,    html.high-contrast .bg-blue-600 *,
