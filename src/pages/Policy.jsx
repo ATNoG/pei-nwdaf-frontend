@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaShieldAlt, FaPlus, FaTrash, FaEdit, FaSave, FaSearch, FaSync, FaTimes, FaArrowRight } from 'react-icons/fa';
+import { FaShieldAlt, FaPlus, FaTrash, FaEdit, FaSave, FaSearch, FaSync, FaTimes, FaArrowRight, FaSearchPlus, FaChevronDown } from 'react-icons/fa';
 import FieldDiscoveryPanel from '../components/FieldDiscoveryPanel';
 import TransformerStepEditor from '../components/TransformerStepEditor';
 
@@ -187,6 +187,9 @@ const Policy = () => {
   // UI state
   const [showStepEditor, setShowStepEditor] = useState(false);
   const [editingStepIndex, setEditingStepIndex] = useState(null);
+  const [showStepDetailModal, setShowStepDetailModal] = useState(false);
+  const [detailStep, setDetailStep] = useState(null);
+  const [showPipelineDropdown, setShowPipelineDropdown] = useState(false);
   const [showNewPipelineModal, setShowNewPipelineModal] = useState(false);
   const [newPipelineSource, setNewPipelineSource] = useState('');
   const [newPipelineSink, setNewPipelineSink] = useState('');
@@ -286,6 +289,16 @@ const Policy = () => {
     }
   };
 
+  const handlePipelineSelect = (pipelineId) => {
+    if (hasUnsavedChanges) {
+      if (!confirm('You have unsaved changes. Are you sure you want to switch pipelines?')) {
+        return;
+      }
+    }
+    setSelectedPipeline(pipelineId);
+    setHasUnsavedChanges(false);
+  };
+
   const savePipeline = async () => {
     setIsSaving(true);
     try {
@@ -327,19 +340,21 @@ const Policy = () => {
     }
   };
 
-  const deletePipeline = async () => {
-    if (!confirm(`Delete pipeline "${selectedPipeline}"?`)) return;
+  const deletePipeline = async (pipelineId) => {
+    if (!confirm(`Delete pipeline "${pipelineId}"?`)) return;
 
     try {
-      const response = await fetch(`${POLICY_SERVICE_URL}/transformers/${selectedPipeline}`, {
+      const response = await fetch(`${POLICY_SERVICE_URL}/transformers/${pipelineId}`, {
         method: 'DELETE'
       });
       if (!response.ok) throw new Error('Failed to delete pipeline');
       showNotification('success', 'Pipeline deleted');
-      setSelectedPipeline('');
-      setPipelineSteps([]);
-      setDiscoveredFields([]);
-      setIsNewPipeline(false);
+      if (selectedPipeline === pipelineId) {
+        setSelectedPipeline('');
+        setPipelineSteps([]);
+        setDiscoveredFields([]);
+        setIsNewPipeline(false);
+      }
       await fetchPipelines();
     } catch (error) {
       showNotification('error', `Failed to delete pipeline: ${error.message}`);
@@ -522,45 +537,84 @@ const Policy = () => {
       </div>
 
       {/* Pipeline Selector */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Select Pipeline</label>
-        <div className="flex items-center space-x-4">
-          <select
-            value={selectedPipeline}
-            onChange={(e) => {
-              if (hasUnsavedChanges && !confirm('You have unsaved changes. Are you sure you want to switch pipelines?')) {
-                return;
-              }
-              setSelectedPipeline(e.target.value);
-            }}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="">-- Select a pipeline --</option>
-            {Object.keys(pipelines).map(id => (
-              <option key={id} value={id}>{id}</option>
-            ))}
-          </select>
+      <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+        <div className="flex items-center justify-center">
+          <div className="flex items-center space-x-4 flex-1 max-w-2xl">
+            <label className="text-sm font-medium text-gray-700">Selected Pipeline:</label>
+            <div className="relative flex-1 max-w-md">
+              <button
+                onClick={() => setShowPipelineDropdown(!showPipelineDropdown)}
+                className="w-full flex items-center justify-between px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              >
+                <span className={selectedPipeline ? 'text-gray-900' : 'text-gray-500'}>
+                  {selectedPipeline || 'Select a pipeline...'}
+                </span>
+                <FaChevronDown className={`ml-2 text-gray-400 transition-transform ${showPipelineDropdown ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Dropdown Menu */}
+              {showPipelineDropdown && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setShowPipelineDropdown(false)}
+                  />
+                  <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
+                    {Object.keys(pipelines).length === 0 ? (
+                      <div className="px-4 py-3 text-sm text-gray-500">
+                        No pipelines configured
+                      </div>
+                    ) : (
+                      Object.keys(pipelines).map(pipelineId => (
+                        <div
+                          key={pipelineId}
+                          className="flex items-center justify-between px-4 py-2 hover:bg-gray-50 cursor-pointer group"
+                          onClick={() => {
+                            handlePipelineSelect(pipelineId);
+                            setShowPipelineDropdown(false);
+                          }}
+                        >
+                          <span className={`text-sm ${selectedPipeline === pipelineId ? 'text-blue-600 font-medium' : 'text-gray-700'}`}>
+                            {pipelineId}
+                          </span>
+                          {selectedPipeline === pipelineId && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deletePipeline(pipelineId);
+                                setShowPipelineDropdown(false);
+                              }}
+                              className="p-1 text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="Delete pipeline"
+                            >
+                              <FaTrash className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Current Pipeline Info */}
           {selectedPipeline && (
-            <div className="flex items-center space-x-2">
-              {isNewPipeline ? (
+            <div className="flex items-center space-x-3 text-sm text-gray-600">
+              <span>{Object.keys(pipelines).length} pipeline{Object.keys(pipelines).length !== 1 ? 's' : ''} total</span>
+              {isNewPipeline && (
                 <span className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
                   New - Unsaved
                 </span>
-              ) : (
-                <button
-                  onClick={deletePipeline}
-                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  title="Delete pipeline"
-                >
-                  <FaTrash />
-                </button>
               )}
             </div>
           )}
         </div>
       </div>
 
-      {selectedPipeline && (
+      {/* Content Area */}
+      {selectedPipeline ? (
         <>
           {/* Field Discovery Panel */}
           <FieldDiscoveryPanel
@@ -581,7 +635,7 @@ const Policy = () => {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">Field Transformations</h3>
-                <p className="text-sm text-gray-600 mt-1">Applies different transformations to fields before they reach the sink</p>
+                <p className="text-sm text-gray-600 mt-1">Hashing and redaction transformations (field filtering is handled above)</p>
               </div>
               <button
                 onClick={() => { setEditingStepIndex(null); setShowStepEditor(true); }}
@@ -592,52 +646,99 @@ const Policy = () => {
               </button>
             </div>
 
-            {pipelineSteps.length === 0 ? (
+            {pipelineSteps.filter(s => s.type !== 'filter').length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <p>No field transformations configured.</p>
-                <p className="text-sm">Field filtering is handled automatically based on your selections above.</p>
+                <p className="text-sm">Add hashing or redaction transformations to protect sensitive data.</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {pipelineSteps.map((step, index) => (
-                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-3">
-                        <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded">
-                          {step.type}
-                        </span>
-                        <span className="text-sm text-gray-600">
-                          {TRANSFORMER_TYPES.find(t => t.type === step.type)?.description || step.type}
-                        </span>
-                      </div>
-                      {step.params && (
-                        <div className="mt-2 text-xs text-gray-500">
-                          {Object.entries(step.params).map(([key, value]) => (
-                            <span key={key} className="mr-3">
-                              <span className="font-medium">{key}:</span> {JSON.stringify(value)}
+                {pipelineSteps
+                  .map((step, index) => ({ step, index, originalIndex: index }))
+                  .filter(({ step }) => step.type !== 'filter')
+                  .map(({ step, index, originalIndex }) => (
+                    <div key={originalIndex} className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                      <div className="flex-1 min-w-0 mr-4">
+                        <div className="flex items-center space-x-3 mb-2">
+                          {step.type === 'hashing' ? (
+                            <span className="flex items-center space-x-1.5 px-2.5 py-1 bg-purple-100 text-purple-800 text-xs font-semibold rounded-full">
+                              <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+                              <span>Hashing</span>
                             </span>
-                          ))}
+                          ) : step.type === 'redaction' ? (
+                            <span className="flex items-center space-x-1.5 px-2.5 py-1 bg-red-100 text-red-800 text-xs font-semibold rounded-full">
+                              <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                              <span>Redaction</span>
+                            </span>
+                          ) : (
+                            <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded">
+                              {step.type}
+                            </span>
+                          )}
+                          <span className="text-sm text-gray-700 font-medium">
+                            {TRANSFORMER_TYPES.find(t => t.type === step.type)?.description || step.type}
+                          </span>
                         </div>
-                      )}
+                        {step.params?.fields && (
+                          <div className="text-xs text-gray-600">
+                            <span className="font-medium text-gray-500">Fields:</span>{' '}
+                            <span className="inline-flex flex-wrap gap-1 mt-1">
+                              {Array.isArray(step.params.fields) ? (
+                                step.params.fields.length <= 3 ? (
+                                  step.params.fields.map((field, i) => (
+                                    <span key={i} className="px-1.5 py-0.5 bg-gray-200 rounded text-gray-700">
+                                      {field}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <>
+                                    {step.params.fields.slice(0, 3).map((field, i) => (
+                                      <span key={i} className="px-1.5 py-0.5 bg-gray-200 rounded text-gray-700">
+                                        {field}
+                                      </span>
+                                    ))}
+                                    <span className="px-1.5 py-0.5 bg-gray-300 rounded text-gray-600 font-medium">
+                                      +{step.params.fields.length - 3} more
+                                    </span>
+                                  </>
+                                )
+                              ) : (
+                                <span className="px-1.5 py-0.5 bg-gray-200 rounded text-gray-700">
+                                  {step.params.fields}
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-1 flex-shrink-0">
+                        <button
+                          onClick={() => {
+                            setDetailStep(step);
+                            setShowStepDetailModal(true);
+                          }}
+                          className="p-2 text-gray-600 hover:bg-gray-200 hover:text-gray-800 rounded-lg transition-colors"
+                          title="View details"
+                        >
+                          <FaSearchPlus />
+                        </button>
+                        <button
+                          onClick={() => editStep(originalIndex)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Edit step"
+                        >
+                          <FaEdit />
+                        </button>
+                        <button
+                          onClick={() => deleteStep(originalIndex)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete step"
+                        >
+                          <FaTrash />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => editStep(index)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Edit step"
-                      >
-                        <FaEdit />
-                      </button>
-                      <button
-                        onClick={() => deleteStep(index)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Delete step"
-                      >
-                        <FaTrash />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             )}
           </div>
@@ -676,6 +777,10 @@ const Policy = () => {
             </button>
           </div>
         </>
+      ) : (
+        <div className="bg-white rounded-lg border border-gray-200 p-12 shadow-sm text-center">
+          <p className="text-gray-500">Select a pipeline to configure</p>
+        </div>
       )}
 
       {/* Step Editor Modal */}
@@ -686,6 +791,87 @@ const Policy = () => {
           onCancel={() => { setShowStepEditor(false); setEditingStepIndex(null); }}
           availableFields={discoveredFields.map(f => f.name)}
         />
+      )}
+
+      {/* Transformation Detail Modal */}
+      {showStepDetailModal && detailStep && (
+        <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                {detailStep.type === 'hashing' ? (
+                  <span className="flex items-center space-x-2 px-3 py-1.5 bg-purple-100 text-purple-800 text-sm font-semibold rounded-full">
+                    <span className="w-2.5 h-2.5 bg-purple-500 rounded-full"></span>
+                    <span>Hashing Transformation</span>
+                  </span>
+                ) : detailStep.type === 'redaction' ? (
+                  <span className="flex items-center space-x-2 px-3 py-1.5 bg-red-100 text-red-800 text-sm font-semibold rounded-full">
+                    <span className="w-2.5 h-2.5 bg-red-500 rounded-full"></span>
+                    <span>Redaction Transformation</span>
+                  </span>
+                ) : (
+                  <span className="px-3 py-1.5 bg-blue-100 text-blue-800 text-sm font-semibold rounded-full">
+                    {detailStep.type}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => { setShowStepDetailModal(false); setDetailStep(null); }}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <FaTimes className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <p className="text-gray-600 mb-6">
+                {TRANSFORMER_TYPES.find(t => t.type === detailStep.type)?.description || detailStep.type}
+              </p>
+
+              {detailStep.params && (
+                <div className="space-y-4">
+                  <h4 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">Parameters</h4>
+                  {Object.entries(detailStep.params).map(([key, value]) => (
+                    <div key={key} className="bg-gray-50 rounded-lg p-4">
+                      <div className="text-sm font-medium text-gray-700 mb-2 capitalize">
+                        {key.replace(/([A-Z])/g, ' $1').trim()}
+                      </div>
+                      <div className="text-gray-800">
+                        {Array.isArray(value) ? (
+                          <div className="flex flex-wrap gap-2">
+                            {value.map((item, i) => (
+                              <span key={i} className="px-2.5 py-1 bg-white border border-gray-200 rounded-md text-sm font-mono">
+                                {item}
+                              </span>
+                            ))}
+                          </div>
+                        ) : typeof value === 'object' ? (
+                          <pre className="text-xs bg-white border border-gray-200 rounded p-3 overflow-x-auto">
+                            {JSON.stringify(value, null, 2)}
+                          </pre>
+                        ) : (
+                          <span className="text-sm font-mono">{String(value)}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end p-6 border-t border-gray-200 bg-gray-50">
+              <button
+                onClick={() => { setShowStepDetailModal(false); setDetailStep(null); }}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* New Pipeline Modal */}
