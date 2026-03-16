@@ -22,10 +22,10 @@ const Toast = ({ message, onClose }) => {
 };
 
 // ModelCard
-const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete, isDefault, isTraining, copiedId, onCopyId }) => {
+const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete, isDefault, isTraining, copiedId, onCopyId, isNew }) => {
   const isBestForAny = model.best_for_fields?.length > 0;
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow [container-type:inline-size]">
+    <div className={`bg-white rounded-lg border p-6 shadow-sm hover:shadow-md transition-shadow [container-type:inline-size] ${isNew ? 'border-green-500 ring-2 ring-green-200' : 'border-gray-200'}`}>
       {/* Header: name+badges left, buttons right - stacks when card is narrow (large font sizes) */}
       <div className="flex flex-wrap items-start gap-3 mb-3">
         <div className="flex-1 min-w-0">
@@ -1082,6 +1082,15 @@ const MLModels = () => {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  // Track newly created models for highlighting (5 minutes)
+  const [newlyCreatedModels, setNewlyCreatedModels] = useState({});
+  const isNewlyCreated = useCallback((modelId) => {
+    const createdAt = newlyCreatedModels[modelId];
+    if (!createdAt) return false;
+    const fiveMinutes = 5 * 60 * 1000;
+    return Date.now() - createdAt < fiveMinutes;
+  }, [newlyCreatedModels]);
+
   const isDefaultModel = useCallback((modelName) => {
     if (!config?.inference_types) return false;
     return config.inference_types.some(inference => {
@@ -1325,6 +1334,8 @@ const MLModels = () => {
       }
       const data = await response.json();
       setTimedTrainingMessage({ type: 'success', text: `Model ${data.name} created successfully` });
+      // Track newly created model for highlighting
+      setNewlyCreatedModels(prev => ({ ...prev, [data.id]: Date.now() }));
       setShowCreateModal(false);
       await fetchModels(filterField);
       if (refetchConfig) await refetchConfig();
@@ -1588,6 +1599,7 @@ const MLModels = () => {
                     isTraining={trainingModelIds.has(model.id)}
                     copiedId={copiedId}
                     onCopyId={copyToClipboard}
+                    isNew={isNewlyCreated(model.id)}
                   />
                 ))}
             </div>
