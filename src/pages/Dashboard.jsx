@@ -148,7 +148,7 @@ const Dashboard = () => {
                   className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   {producers.map((p) => (
-                    <option key={p.id} value={p.id}>{p.id} - {p.url}</option>
+                    <option key={p.id} value={p.id}>{p.label} - {p.url}</option>
                   ))}
                 </select>
               </>

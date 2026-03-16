@@ -104,6 +104,19 @@ const fetchRegisteredComponents = async () => {
           });
 
         if (discovered.length > 0) {
+          // Special handling for ingestion-service: skip URL-based entries (contain _ or :)
+          // to reduce clutter, keep only subscription_id and label entries
+          if (comp.component_id === 'ingestion-service') {
+            const filtered = discovered.filter(rt =>
+              !rt.id.includes('_') && !rt.id.includes(':')
+            );
+            // Use filtered if we have entries, otherwise fall back to all
+            if (filtered.length > 0) {
+              discovered.length = 0;
+              discovered.push(...filtered);
+            }
+          }
+
           // Merge with default resourceTypes so hand-written descriptions aren't lost
           const defaultRTs = defaultEntry?.resourceTypes || [];
           const byId = {};
@@ -197,14 +210,47 @@ const Policy = () => {
   const [newPipelineSinkResourceType, setNewPipelineSinkResourceType] = useState('');
   const [notification, setNotification] = useState(null);
   const [availableComponents, setAvailableComponents] = useState([]);
+  const [producers, setProducers] = useState([]);  // Store producers with labels from data-ingestion
 
   // Fetch all pipelines on mount
   useEffect(() => {
     fetchPipelines();
+    fetchProducers();
     fetchRegisteredComponents().then(components => {
       setAvailableComponents(components);
     });
   }, []);
+
+  // Fetch producers from data-ingestion service
+  const fetchProducers = async () => {
+    try {
+      const res = await fetch('/data-ingestion/subscriptions');
+      if (!res.ok) return;
+      const data = await res.json();
+      const list = Array.isArray(data.producers) ? data.producers : [];
+      const parsed = list
+        .map((item) => {
+          const entries = Object.entries(item || {});
+          if (entries.length === 0) return null;
+          const [id, info] = entries[0];
+          if (typeof info === 'string') {
+            return { id, url: info, label: id };
+          }
+          return { id, url: info.url || '', label: info.label || id };
+        })
+        .filter(Boolean);
+      setProducers(parsed);
+    } catch (err) {
+      console.error('Failed to fetch producers:', err);
+    }
+  };
+
+  // Refresh producers when modal opens
+  useEffect(() => {
+    if (showNewPipelineModal) {
+      fetchProducers();
+    }
+  }, [showNewPipelineModal]);
 
   // Fetch discovered fields when pipeline is selected
   useEffect(() => {
@@ -1035,46 +1081,97 @@ const Policy = () => {
               {/* Source Resource Type Selector - shown when source has resourceTypes */}
               {newPipelineSource && (() => {
                 const sourceComponent = availableComponents.find(c => c.id === newPipelineSource);
-                const resourceTypes = sourceComponent?.resourceTypes;
+                let resourceTypes = sourceComponent?.resourceTypes;
 
                 if (!resourceTypes || resourceTypes.length === 0) {
                   return null;
                 }
 
+                // For ingestion-service, filter out duplicates (keep only label entries, drop subscription_id entries when label differs)
+                if (newPipelineSource === 'ingestion-service' && producers.length > 0) {
+                  resourceTypes = resourceTypes.filter(rt => {
+                    // If this resourceType matches a producer's label, keep it
+                    const producerByLabel = producers.find(p => p.label === rt.id);
+                    if (producerByLabel) {
+                      // If label differs from subscription_id, we'll show this entry with enhanced display
+                      // and skip the subscription_id entry
+                      return true;
+                    }
+                    // If this resourceType matches a producer's subscription_id, check if there's a different label
+                    const producerById = producers.find(p => p.id === rt.id);
+                    if (producerById && producerById.label !== producerById.id) {
+                      // Skip the subscription_id entry since the label entry will show both
+                      return false;
+                    }
+                    // Keep entries that don't match any producer (shouldn't happen, but be safe)
+                    return true;
+                  });
+                }
+
+                // For ingestion-service, enhance display with producer labels
+                const enhancedResourceTypes = resourceType => {
+                  if (newPipelineSource === 'ingestion-service') {
+                    // Find the producer that matches this resource type
+                    const producer = producers.find(p =>
+                      p.id === resourceType.id || p.label === resourceType.id
+                    );
+                    if (producer) {
+                      // Show "Label (subscription_id)" format if label differs from id
+                      if (producer.label !== producer.id) {
+                        return {
+                          ...resourceType,
+                          displayName: `${producer.label} (${producer.id})`,
+                          displayDescription: producer.url
+                        };
+                      }
+                      // Just show the label/id (same thing)
+                      return {
+                        ...resourceType,
+                        displayName: producer.label,
+                        displayDescription: producer.url
+                      };
+                    }
+                  }
+                  return resourceType;
+                };
+
                 return (
                   <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Select Resource Type for {sourceComponent.name} (Source)
+                      Select Producer for {sourceComponent.name} (Source)
                     </label>
                     <p className="text-xs text-gray-500 mb-3">
-                      {sourceComponent.name} supports multiple data types. Select which type this pipeline reads from.
+                      {sourceComponent.name} supports multiple data sources. Select which producer this pipeline reads from.
                     </p>
                     <div className="grid grid-cols-1 gap-3">
-                      {resourceTypes.map(resourceType => (
-                        <label
-                          key={resourceType.id}
-                          className={`flex items-start p-3 border rounded-lg cursor-pointer transition-colors ${
-                            newPipelineSourceResourceType === resourceType.id
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-300 hover:border-gray-400'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="sourceResourceType"
-                            value={resourceType.id}
-                            checked={newPipelineSourceResourceType === resourceType.id}
-                            onChange={(e) => setNewPipelineSourceResourceType(e.target.value)}
-                            className="mt-1 mr-3"
-                          />
-                          <div>
-                            <div className="font-medium text-gray-900">{resourceType.name}</div>
-                            {resourceType.description && (
-                              <div className="text-sm text-gray-500">{resourceType.description}</div>
-                            )}
-                          </div>
-                        </label>
-                      ))}
+                      {resourceTypes.map(resourceType => {
+                        const enhanced = enhancedResourceTypes(resourceType);
+                        return (
+                          <label
+                            key={resourceType.id}
+                            className={`flex items-start p-3 border rounded-lg cursor-pointer transition-colors ${
+                              newPipelineSourceResourceType === resourceType.id
+                                ? 'border-blue-500 bg-blue-50'
+                                : 'border-gray-300 hover:border-gray-400'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="sourceResourceType"
+                              value={resourceType.id}
+                              checked={newPipelineSourceResourceType === resourceType.id}
+                              onChange={(e) => setNewPipelineSourceResourceType(e.target.value)}
+                              className="mt-1 mr-3"
+                            />
+                            <div>
+                              <div className="font-medium text-gray-900">{enhanced.displayName || enhanced.name}</div>
+                              {enhanced.displayDescription && (
+                                <div className="text-sm text-gray-500">{enhanced.displayDescription}</div>
+                              )}
+                            </div>
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 );
@@ -1083,11 +1180,59 @@ const Policy = () => {
               {/* Sink Resource Type Selector - shown only when sink has resourceTypes */}
               {newPipelineSink && (() => {
                 const sinkComponent = availableComponents.find(c => c.id === newPipelineSink);
-                const resourceTypes = sinkComponent?.resourceTypes;
+                let resourceTypes = sinkComponent?.resourceTypes;
 
                 if (!resourceTypes || resourceTypes.length === 0) {
                   return null;
                 }
+
+                // For ingestion-service, filter out duplicates (keep only label entries, drop subscription_id entries when label differs)
+                if (newPipelineSink === 'ingestion-service' && producers.length > 0) {
+                  resourceTypes = resourceTypes.filter(rt => {
+                    // If this resourceType matches a producer's label, keep it
+                    const producerByLabel = producers.find(p => p.label === rt.id);
+                    if (producerByLabel) {
+                      // If label differs from subscription_id, we'll show this entry with enhanced display
+                      // and skip the subscription_id entry
+                      return true;
+                    }
+                    // If this resourceType matches a producer's subscription_id, check if there's a different label
+                    const producerById = producers.find(p => p.id === rt.id);
+                    if (producerById && producerById.label !== producerById.id) {
+                      // Skip the subscription_id entry since the label entry will show both
+                      return false;
+                    }
+                    // Keep entries that don't match any producer (shouldn't happen, but be safe)
+                    return true;
+                  });
+                }
+
+                // For ingestion-service, enhance display with producer labels
+                const enhancedResourceTypes = resourceType => {
+                  if (newPipelineSink === 'ingestion-service') {
+                    // Find the producer that matches this resource type
+                    const producer = producers.find(p =>
+                      p.id === resourceType.id || p.label === resourceType.id
+                    );
+                    if (producer) {
+                      // Show "Label (subscription_id)" format if label differs from id
+                      if (producer.label !== producer.id) {
+                        return {
+                          ...resourceType,
+                          displayName: `${producer.label} (${producer.id})`,
+                          displayDescription: producer.url
+                        };
+                      }
+                      // Just show the label/id (same thing)
+                      return {
+                        ...resourceType,
+                        displayName: producer.label,
+                        displayDescription: producer.url
+                      };
+                    }
+                  }
+                  return resourceType;
+                };
 
                 return (
                   <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
@@ -1098,31 +1243,34 @@ const Policy = () => {
                       {sinkComponent.name} supports multiple data types. Select which type this pipeline writes to.
                     </p>
                     <div className="grid grid-cols-1 gap-3">
-                      {resourceTypes.map(resourceType => (
-                        <label
-                          key={resourceType.id}
-                          className={`flex items-start p-3 border rounded-lg cursor-pointer transition-colors ${
-                            newPipelineSinkResourceType === resourceType.id
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-300 hover:border-gray-400'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="sinkResourceType"
-                            value={resourceType.id}
-                            checked={newPipelineSinkResourceType === resourceType.id}
-                            onChange={(e) => setNewPipelineSinkResourceType(e.target.value)}
-                            className="mt-1 mr-3"
-                          />
-                          <div>
-                            <div className="font-medium text-gray-900">{resourceType.name}</div>
-                            {resourceType.description && (
-                              <div className="text-sm text-gray-500">{resourceType.description}</div>
-                            )}
-                          </div>
-                        </label>
-                      ))}
+                      {resourceTypes.map(resourceType => {
+                        const enhanced = enhancedResourceTypes(resourceType);
+                        return (
+                          <label
+                            key={resourceType.id}
+                            className={`flex items-start p-3 border rounded-lg cursor-pointer transition-colors ${
+                              newPipelineSinkResourceType === resourceType.id
+                                ? 'border-blue-500 bg-blue-50'
+                                : 'border-gray-300 hover:border-gray-400'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="sinkResourceType"
+                              value={resourceType.id}
+                              checked={newPipelineSinkResourceType === resourceType.id}
+                              onChange={(e) => setNewPipelineSinkResourceType(e.target.value)}
+                              className="mt-1 mr-3"
+                            />
+                            <div>
+                              <div className="font-medium text-gray-900">{enhanced.displayName || enhanced.name}</div>
+                              {enhanced.displayDescription && (
+                                <div className="text-sm text-gray-500">{enhanced.displayDescription}</div>
+                              )}
+                            </div>
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 );
