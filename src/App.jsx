@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import MLModels from './pages/MLModels';
 import Analytics from './pages/Analytics';
 import Performance from './pages/Performance';
+import Policy from './pages/Policy';
 import Settings from './pages/Settings';
 import { ConfigProvider } from './contexts/ConfigContext';
 import { AccessibilityProvider } from './contexts/AccessibilityContext';
@@ -23,6 +24,8 @@ function AppContent() {
         return 'Analytics';
       case '/performance':
         return 'Performance';
+      case '/policy':
+        return 'Policy';
       case '/settings':
         return 'Settings';
       default:
@@ -40,6 +43,8 @@ function AppContent() {
         return 'Cell Analytics Insights';
       case '/performance':
         return 'Real-time ML Model Performance Monitoring';
+      case '/policy':
+        return 'Data transformation and field permissions';
       case '/settings':
         return 'Accessibility & Display Preferences';
       default:
@@ -69,6 +74,7 @@ function AppContent() {
             <Route path="/ml" element={<MLModels />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/performance" element={<Performance />} />
+            <Route path="/policy" element={<Policy />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </div>

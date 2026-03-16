@@ -5,6 +5,9 @@ import react from '@vitejs/plugin-react'
 const rawTarget = process.env.VITE_RAW_DATA_URL || 'http://localhost:7000'
 const storageTarget = process.env.VITE_DATA_STORAGE_URL || 'http://localhost:8000'
 const mlTarget = process.env.VITE_ML_URL || 'http://localhost:8060'
+const policyHost = process.env.POLICY_HOST || 'policy-service'
+const policyPort = process.env.POLICY_PORT || '8788'
+const policyTarget = process.env.VITE_POLICY_SERVICE_URL || `http://${policyHost}:${policyPort}`
 
 export default defineConfig({
 	plugins: [react()],
@@ -32,6 +35,12 @@ export default defineConfig({
 				secure: false,
 				rewrite: (path) => path.replace(/^\/pei-ml/, ''),
 				ws: true
+			},
+			'/policy-api': {
+				target: policyTarget,
+				changeOrigin: true,
+				secure: false,
+				rewrite: (path) => path.replace(/^\/policy-api/, '/api/v1')
 			}
 		}
 	}

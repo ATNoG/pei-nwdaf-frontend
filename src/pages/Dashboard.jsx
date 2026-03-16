@@ -53,8 +53,12 @@ const Dashboard = () => {
           .map((item) => {
             const entries = Object.entries(item || {});
             if (entries.length === 0) return null;
-            const [id, url] = entries[0];
-            return { id, url };
+            const [id, info] = entries[0];
+            // Handle both old format (url string) and new format (object with url, label)
+            if (typeof info === 'string') {
+              return { id, url: info, label: id };
+            }
+            return { id, url: info.url || '', label: info.label || id };
           })
           .filter(Boolean);
         setProducers(parsed);

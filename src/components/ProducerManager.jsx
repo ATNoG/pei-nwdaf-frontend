@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { FaEdit, FaTimes, FaCheck } from 'react-icons/fa';
 import { createPortal } from 'react-dom';
 
 const ProducerManager = ({ apiBase = '/data-ingestion', onRemove }) => {
@@ -7,6 +8,9 @@ const ProducerManager = ({ apiBase = '/data-ingestion', onRemove }) => {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [editingLabel, setEditingLabel] = useState(null);
+  const [labelValue, setLabelValue] = useState('');
+  const [savingLabel, setSavingLabel] = useState(false);
 
   const fetchProducers = async () => {
     try {
@@ -67,6 +71,41 @@ const ProducerManager = ({ apiBase = '/data-ingestion', onRemove }) => {
       if (onRemove) onRemove(id);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const startEditLabel = (producer) => {
+    setEditingLabel(producer.id);
+    setLabelValue(producer.label);
+  };
+
+  const cancelEditLabel = () => {
+    setEditingLabel(null);
+    setLabelValue('');
+  };
+
+  const saveLabel = async (subscriptionId) => {
+    if (!labelValue.trim()) {
+      setError('Label cannot be empty');
+      return;
+    }
+    setSavingLabel(true);
+    setError(null);
+    try {
+      const res = await fetch(`${apiBase}/subscriptions/${subscriptionId}/label`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: labelValue.trim() })
+      });
+      if (!res.ok) throw new Error(`Failed to update label: ${res.status}`);
+      await fetchProducers();
+      setEditingLabel(null);
+      setLabelValue('');
+    } catch (err) {
+      console.error(err);
+      setError(err.message);
+    } finally {
+      setSavingLabel(false);
     }
   };
 
