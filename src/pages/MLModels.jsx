@@ -166,8 +166,44 @@ const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete,
 // CreateModelModal
 const FieldCheckboxes = ({ fieldKey, label, fields, loadingFields, selected, onToggle }) => {
   const [filter, setFilter] = useState('');
+  const [recentItems, setRecentItems] = useState([]);
+  const storageKey = `recent-search-ml-${fieldKey}`;
+
+  // Load recent items from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setRecentItems(Array.isArray(parsed) ? parsed : []);
+      }
+    } catch (e) {
+      console.warn('Failed to load recent items from localStorage:', e);
+    }
+  }, [storageKey]);
+
+  // Save to recent items when a field is selected
+  const handleToggle = (field) => {
+    onToggle(field, fieldKey);
+    if (!selected.includes(field)) {
+      // Field is being selected, add to recent
+      try {
+        const updatedRecent = [field, ...recentItems.filter(item => item !== field)].slice(0, 5);
+        setRecentItems(updatedRecent);
+        localStorage.setItem(storageKey, JSON.stringify(updatedRecent));
+      } catch (e) {
+        console.warn('Failed to save recent item to localStorage:', e);
+      }
+    }
+  };
+
   const visible = fields.filter(f => f.toLowerCase().includes(filter.toLowerCase()));
   const unselected = visible.filter(f => !selected.includes(f));
+
+  // Recent items that are valid and not currently selected
+  const validRecentItems = recentItems
+    .filter(item => fields.includes(item) && !selected.includes(item))
+    .slice(0, 5);
 
   return (
     <div>
@@ -183,7 +219,7 @@ const FieldCheckboxes = ({ fieldKey, label, fields, loadingFields, selected, onT
                 <button
                   key={f}
                   type="button"
-                  onClick={() => onToggle(f, fieldKey)}
+                  onClick={() => handleToggle(f)}
                   className="flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full hover:bg-blue-200 transition-colors"
                 >
                   {f}
@@ -192,6 +228,29 @@ const FieldCheckboxes = ({ fieldKey, label, fields, loadingFields, selected, onT
                   </svg>
                 </button>
               ))}
+            </div>
+          )}
+          {/* Recent fields - shown when filter is empty and there are recent items */}
+          {!filter && validRecentItems.length > 0 && (
+            <div className="p-2 border-b border-gray-200 bg-blue-50/50">
+              <div className="text-xs text-gray-500 mb-1 flex items-center gap-1">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Recent
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {validRecentItems.map(f => (
+                  <button
+                    key={`recent-${f}`}
+                    type="button"
+                    onClick={() => handleToggle(f)}
+                    className="px-2 py-0.5 bg-white border border-blue-200 text-blue-700 text-xs rounded-full hover:bg-blue-100 transition-colors"
+                  >
+                    + {f}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           {/* Filter input */}
@@ -215,7 +274,7 @@ const FieldCheckboxes = ({ fieldKey, label, fields, loadingFields, selected, onT
                     <input
                       type="checkbox"
                       checked={false}
-                      onChange={() => onToggle(f, fieldKey)}
+                      onChange={() => handleToggle(f)}
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
                     />
                     <span className="text-gray-700 truncate">{f}</span>
@@ -1041,6 +1100,19 @@ const MLModels = () => {
   const [filterField, setFilterField] = useState('');
   const [fields, setFields] = useState([]);
   const [loadingFields, setLoadingFields] = useState(true);
+  const [recentFields, setRecentFields] = useState(() => {
+    // Lazy initializer - loads recent fields from localStorage
+    try {
+      const stored = localStorage.getItem('recent-search-ml-filter-fields');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return Array.isArray(parsed) ? parsed : [];
+      }
+    } catch (e) {
+      console.warn('Failed to load recent fields from localStorage:', e);
+    }
+    return [];
+  });
 
   // Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -1499,6 +1571,36 @@ const MLModels = () => {
                 </div>
                 {showFieldDropdown && (
                   <div className="absolute top-full mt-1 w-56 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto z-10">
+                    {/* Recent fields section */}
+                    {!fieldSearchQuery && recentFields.length > 0 && (
+                      <>
+                        <div className="px-3 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-b border-gray-100 sticky top-0">
+                          Recent
+                        </div>
+                        {recentFields
+                          .filter(f => fields.includes(f))
+                          .map(field => (
+                            <button
+                              key={`recent-${field}`}
+                              onClick={() => {
+                                setFilterField(field);
+                                setFieldSearchQuery('');
+                                setShowFieldDropdown(false);
+                              }}
+                              className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition-colors flex items-center gap-2 ${filterField === field ? 'bg-blue-100 font-medium' : ''
+                                }`}
+                            >
+                              <svg className="w-3 h-3 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              {field}
+                            </button>
+                          ))}
+                        <div className="px-3 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 border-t border-b border-gray-100">
+                          All Fields
+                        </div>
+                      </>
+                    )}
                     {[{ value: '', label: 'All fields' }, { value: 'anomaly', label: 'Anomaly' }, ...fields.map(f => ({ value: f, label: f }))]
                       .filter(option =>
                         !fieldSearchQuery ||
@@ -1511,6 +1613,16 @@ const MLModels = () => {
                             setFilterField(option.value);
                             setFieldSearchQuery('');
                             setShowFieldDropdown(false);
+                            // Save to recent fields if a field is selected
+                            if (option.value && option.value !== 'anomaly') {
+                              try {
+                                const updatedRecent = [option.value, ...recentFields.filter(f => f !== option.value)].slice(0, 5);
+                                setRecentFields(updatedRecent);
+                                localStorage.setItem('recent-search-ml-filter-fields', JSON.stringify(updatedRecent));
+                              } catch (e) {
+                                console.warn('Failed to save recent field to localStorage:', e);
+                              }
+                            }
                           }}
                           className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition-colors ${filterField === option.value ? 'bg-blue-100 font-medium' : ''
                             }`}
