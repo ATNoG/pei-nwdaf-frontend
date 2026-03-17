@@ -429,6 +429,7 @@ const Performance = () => {
               value={activeField}
               onChange={setActiveField}
               placeholder="Search fields..."
+              recentSearchKey="performance-fields"
               formatOption={(f) => f}
             />
           </div>

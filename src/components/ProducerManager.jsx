@@ -58,15 +58,30 @@ const ProducerManager = ({ apiBase = '/data-ingestion', onRemove }) => {
     setLoading(true);
     setError(null);
     try {
+      // First, create the subscription
       const res = await fetch(`${apiBase}/subscriptions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           producer_url: url.trim(),
-          label: label.trim() || undefined
         }),
       });
       if (!res.ok) throw new Error(`Failed to add producer: ${res.status}`);
+
+      // If a label was provided, update it using the label endpoint
+      const labelToSet = label.trim();
+      if (labelToSet) {
+        const data = await res.json();
+        const subscriptionId = data.subscription_id || data.id;
+        if (subscriptionId) {
+          await fetch(`${apiBase}/subscriptions/${subscriptionId}/label`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ label: labelToSet })
+          });
+        }
+      }
+
       setUrl('');
       setLabel('');
       setShowModal(false);
