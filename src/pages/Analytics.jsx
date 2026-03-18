@@ -215,6 +215,7 @@ const Analytics = () => {
                 placeholder={loadingFields ? 'Loading...' : fields.length > 0 ? 'Search fields...' : 'No fields available'}
                 disabled={loadingFields}
                 loading={loadingFields}
+                recentSearchKey="analytics-fields"
                 formatOption={(f) => {
                   if (f === 'anomaly') return 'Anomaly Detection';
                   return fieldsWithModels.has(f) ? f : `${f} (no model)`;
@@ -238,6 +239,7 @@ const Analytics = () => {
                 placeholder={loadingCells ? "Loading cells..." : cellList.length > 0 ? "Search or select a cell..." : "Enter cell ID manually"}
                 disabled={loadingCells}
                 loading={loadingCells}
+                recentSearchKey="analytics-cells"
                 formatOption={(cell) => cell.toString()}
                 filterOption={(cell, searchTerm) => cell.toString().startsWith(searchTerm)}
               />
@@ -288,6 +290,7 @@ const Analytics = () => {
                 placeholder={loadingModels ? 'Loading models...' : 'Search models...'}
                 disabled={formData.output_field === 'anomaly' || loadingModels || noModelsAvailable}
                 loading={loadingModels}
+                recentSearchKey="analytics-models"
                 formatOption={(id) => {
                   if (id === null || id === undefined) return 'Best model (auto)';
                   const m = models.find(m => m.id === id);

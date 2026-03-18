@@ -623,19 +623,17 @@ const Policy = () => {
                           <span className={`text-sm ${selectedPipeline === pipelineId ? 'text-blue-600 font-medium' : 'text-gray-700'}`}>
                             {pipelineId}
                           </span>
-                          {selectedPipeline === pipelineId && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deletePipeline(pipelineId);
-                                setShowPipelineDropdown(false);
-                              }}
-                              className="p-1 text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                              title="Delete pipeline"
-                            >
-                              <FaTrash className="w-3 h-3" />
-                            </button>
-                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deletePipeline(pipelineId);
+                              setShowPipelineDropdown(false);
+                            }}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Delete pipeline"
+                          >
+                            <FaTrash className="w-3 h-3" />
+                          </button>
                         </div>
                       ))
                     )}
@@ -643,6 +641,17 @@ const Policy = () => {
                 </>
               )}
             </div>
+
+            {/* Delete button outside dropdown */}
+            {selectedPipeline && (
+              <button
+                onClick={() => deletePipeline(selectedPipeline)}
+                className="px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                title="Delete current pipeline"
+              >
+                <FaTrash className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
           {/* Current Pipeline Info */}
