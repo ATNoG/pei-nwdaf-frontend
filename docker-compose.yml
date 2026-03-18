@@ -38,14 +38,11 @@ services:
     build: .
     container_name: frontend
     ports:
-      - "5173:5173"
+      - "5173:80"
     develop:
       watch:
         - path: .
           action: rebuild
-    # volumes:
-    #   - .:/app
-    #   - /app/node_modules
     environment:
       - VITE_ML_HOST=${VITE_ML_HOST:-pei-ml}
       - VITE_DATA_STORAGE_HOST=${VITE_DATA_STORAGE_HOST:-data-storage}

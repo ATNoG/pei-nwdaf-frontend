@@ -1,14 +1,18 @@
-FROM node:20-alpine
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json .
-
-RUN npm install
+COPY package.json package-lock.json* ./
+RUN npm ci
 
 COPY . .
 
-EXPOSE 5173
+RUN npm run build
 
-# Ensure Vite listens on all interfaces so host can access it when containerized
-CMD [ "npm", "run", "dev", "--", "--host", "0.0.0.0"]
+FROM nginx:alpine
+
+RUN rm -rf /usr/share/nginx/html/*
+
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+CMD ["nginx", "-g", "daemon off;"]
