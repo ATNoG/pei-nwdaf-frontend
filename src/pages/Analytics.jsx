@@ -446,7 +446,6 @@ const Analytics = () => {
                         <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">IP Address</th>
                         <th className="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Anomalies</th>
                         <th className="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Avg Error</th>
-                        <th className="px-4 py-2 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -459,18 +458,16 @@ const Analytics = () => {
                             {result.num_anomalies} / {result.num_windows}
                           </td>
                           <td className="px-4 py-2 text-right font-mono text-gray-900">
-                            {result.avg_reconstruction_error?.toFixed(4)}
-                          </td>
-                          <td className="px-4 py-2 text-center">
-                            {result.num_anomalies > 0 ? (
-                              <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded">
-                                Anomalous
-                              </span>
-                            ) : (
-                              <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">
-                                Normal
-                              </span>
-                            )}
+                            {(() => {
+                              const scores = result.scores ?? [];
+                              if (!Array.isArray(scores) || scores.length === 0) return 'N/A';
+                              const sum = scores.reduce((acc, w) => {
+                                const v = typeof w.reconstruction_error === 'number' ? w.reconstruction_error : parseFloat(w.reconstruction_error);
+                                return acc + (Number.isFinite(v) ? v : 0);
+                              }, 0);
+                              const avg = sum / scores.length;
+                              return Number.isFinite(avg) ? avg.toFixed(4) : 'N/A';
+                            })()}
                           </td>
                         </tr>
                       ))}
