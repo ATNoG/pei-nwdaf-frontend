@@ -150,30 +150,6 @@ const fetchRegisteredComponents = async () => {
 // Start with defaults, will be updated with fetched components
 let AVAILABLE_COMPONENTS = parseAvailableComponents();
 
-// Field categories for grouping
-const FIELD_CATEGORIES = {
-  location: {
-    label: 'Location',
-    fields: ['latitude', 'longitude', 'altitude', 'location_accuracy', 'velocity', 'velocity_accuracy', 'bearing', 'bearing_accuracy']
-  },
-  signal: {
-    label: 'Signal Quality',
-    fields: ['rsrp', 'rsrq', 'rssi', 'sinr', 'ta', 'cqi', 'ss_rsrp', 'ss_rsrq', 'ss_sinr']
-  },
-  network: {
-    label: 'Network',
-    fields: ['network', 'mcc', 'mnc', 'earfcn', 'cell_index', 'physical_cellid', 'tracking_area_code', 'primary_bandwidth', 'ul_bandwidth', 'cellbandwidths']
-  },
-  latency: {
-    label: 'Latency',
-    fields: ['mean_latency', 'min_latency', 'max_latency', 'mean_dev_latency']
-  },
-  other: {
-    label: 'Other',
-    fields: ['packet_loss', 'no_pings', 'server_ip', 'device', 'MNO', 'timestamp']
-  }
-};
-
 // Available transformer types
 const TRANSFORMER_TYPES = [
   { type: 'hashing', label: 'Hashing', description: 'Hash specified fields (preserves data type)' },
