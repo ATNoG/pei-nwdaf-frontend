@@ -27,6 +27,6 @@ RUN npm install -g serve
 COPY --from=builder /app/dist ./dist
 
 # Expose port 5173 (to match your existing setup)
-EXPOSE 80
+EXPOSE 5173
 
-CMD ["serve", "-s", "dist", "-l", "80"]
+CMD ["serve", "-s", "dist", "-l", "5173"]

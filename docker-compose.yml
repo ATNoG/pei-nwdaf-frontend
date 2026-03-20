@@ -48,7 +48,7 @@ services:
         - VITE_AVAILABLE_COMPONENTS=${VITE_AVAILABLE_COMPONENTS}
     container_name: frontend
     ports:
-      - "5173:80"
+      - "5173:5173"
     develop:
       watch:
         - path: .
