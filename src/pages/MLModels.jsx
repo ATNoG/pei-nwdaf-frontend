@@ -298,6 +298,7 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
     window_duration_seconds: 60,
     lookback_steps: 30,
     forecast_steps: 5,
+    percentile_threshold: 95.0
   });
   const [isCreating, setIsCreating] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -368,6 +369,7 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
           window_duration_seconds: parseInt(formData.window_duration_seconds),
           lookback_steps: parseInt(formData.lookback_steps),
           forecast_steps: parseInt(formData.forecast_steps),
+          percentile_threshold: parseFloat(formData.percentile_threshold),
           ...(showAdvanced ? { hidden_size: parseInt(hiddenSize) } : {}),
         },
       };
@@ -458,7 +460,8 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
                 required
               />
             </div>
-            <div>
+            {!isAnomaly && (
+              <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Lookback steps <span className="text-red-500">*</span></label>
               <input
                 type="number"
@@ -469,6 +472,28 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
                 required
               />
             </div>
+            )}
+            {isAnomaly && (
+              <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Percentile threshold <span className="text-red-500">*</span></label>
+              <input
+                type="number"
+                min="1"
+                value={formData.percentile_threshold}
+                onChange={(e) => {
+                    let v = parseFloat(e.target.value);
+                    if (Number.isNaN(v)) {
+                      setFormData({ ...formData, percentile_threshold: '' });
+                    } else {
+                      v = Math.max(1.0, Math.min(99.9, Math.round(v * 10) / 10));
+                      setFormData({ ...formData, percentile_threshold: v });
+                    }
+                  }}
+                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
+            </div>
+            )}
             {!isAnomaly && (
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Forecast steps <span className="text-red-500">*</span></label>
