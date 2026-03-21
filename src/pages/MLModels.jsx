@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
-import { useConfig } from '../contexts/ConfigContext';
 
 // Toast
 const Toast = ({ message, onClose }) => {
@@ -22,7 +21,7 @@ const Toast = ({ message, onClose }) => {
 };
 
 // ModelCard
-const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete, isDefault, isTraining, copiedId, onCopyId, isNew }) => {
+const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete, isTraining, copiedId, onCopyId, isNew }) => {
   const isBestForAny = model.best_for_fields?.length > 0;
   return (
     <div className={`bg-white rounded-lg border p-6 shadow-sm hover:shadow-md transition-shadow [container-type:inline-size] ${isNew ? 'border-green-500 ring-2 ring-green-200' : 'border-gray-200'}`}>
@@ -157,10 +156,9 @@ const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete,
     prevProps.model.latest_version === nextProps.model.latest_version &&
     prevProps.model.architecture === nextProps.model.architecture &&
     JSON.stringify(prevProps.model.best_for_fields) === JSON.stringify(nextProps.model.best_for_fields);
-  const isDefaultSame = prevProps.isDefault === nextProps.isDefault;
   const isTrainingSame = prevProps.isTraining === nextProps.isTraining;
   const copiedIdSame = prevProps.copiedId === nextProps.copiedId;
-  return modelSame && isDefaultSame && isTrainingSame && copiedIdSame;
+  return modelSame && isTrainingSame && copiedIdSame;
 });
 
 // CreateModelModal
@@ -1112,8 +1110,6 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
 const MLModels = () => {
   const mlUrl = '/' + import.meta.env.VITE_ML_HOST;
   const mlflowUrl = import.meta.env.VITE_MLFLOW_URL || 'http://localhost:5000';
-  const { config, loading: configLoading, refetch: refetchConfig } = useConfig();
-
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -1187,14 +1183,6 @@ const MLModels = () => {
     const fiveMinutes = 5 * 60 * 1000;
     return Date.now() - createdAt < fiveMinutes;
   }, [newlyCreatedModels]);
-
-  const isDefaultModel = useCallback((modelName) => {
-    if (!config?.inference_types) return false;
-    return config.inference_types.some(inference => {
-      const expectedName = `${inference.name}_${inference.default_model}_${inference.horizon}`;
-      return modelName === expectedName;
-    });
-  }, [config?.inference_types]);
 
   // Fetch fields on mount
   useEffect(() => {
@@ -1364,11 +1352,10 @@ const MLModels = () => {
       }
       setTimedTrainingMessage({ type: 'success', text: `${model.name} is now the best model for ${outputField}` });
       await fetchModels(filterField);
-      if (refetchConfig) await refetchConfig();
     } catch (err) {
       setTimedTrainingMessage({ type: 'error', text: `Failed to set best model: ${err.message}` });
     }
-  }, [mlUrl, fetchModels, filterField, refetchConfig]);
+  }, [mlUrl, fetchModels, filterField]);
 
   const handleSetAsDefault = useCallback(async (model) => {
     setTimedTrainingMessage(null);
@@ -1407,11 +1394,10 @@ const MLModels = () => {
       }
       setTimedTrainingMessage({ type: 'success', text: `Model ${model.name} deleted successfully` });
       await fetchModels(filterField);
-      if (refetchConfig) await refetchConfig();
     } catch (err) {
       setTimedTrainingMessage({ type: 'error', text: `Failed to delete model: ${err.message}` });
     }
-  }, [mlUrl, fetchModels, filterField, refetchConfig]);
+  }, [mlUrl, fetchModels, filterField]);
 
   const handleCreateModel = useCallback(async (formData, isAnomaly = false) => {
     setTimedTrainingMessage(null);
@@ -1435,13 +1421,12 @@ const MLModels = () => {
       setNewlyCreatedModels(prev => ({ ...prev, [data.id]: Date.now() }));
       setShowCreateModal(false);
       await fetchModels(filterField);
-      if (refetchConfig) await refetchConfig();
       return true;
     } catch (err) {
       setTimedTrainingMessage({ type: 'error', text: `Failed to create model: ${err.message}` });
       return false;
     }
-  }, [mlUrl, fetchModels, filterField, refetchConfig]);
+  }, [mlUrl, fetchModels, filterField]);
 
   const handleShowDetails = useCallback((model) => {
     setSelectedModel(model);
@@ -1558,7 +1543,7 @@ const MLModels = () => {
           <div className="bg-gray-50 border-y border-none px-6 py-3 -mx-6">
             <div className="flex items-center gap-3 flex-wrap">
               {/* Search */}
-              <div className="relative flex-1 min-w-[300px]">
+              <div className="relative flex-1 min-w-0 w-full sm:w-auto">
                 <input
                   type="text"
                   placeholder="Search models by name or ID..."
@@ -1732,7 +1717,6 @@ const MLModels = () => {
                     onTrain={handleTrain}
                     onSetDefault={handleSetDefault}
                     onDelete={handleDelete}
-                    isDefault={isDefaultModel(model.name)}
                     isTraining={trainingModelIds.has(model.id)}
                     copiedId={copiedId}
                     onCopyId={copyToClipboard}
