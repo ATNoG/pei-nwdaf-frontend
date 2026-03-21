@@ -88,7 +88,7 @@ function App() {
   return (
     <Router>
       <AccessibilityProvider>
-        <AppContent />
+          <AppContent />
       </AccessibilityProvider>
     </Router>
   );
