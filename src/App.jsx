@@ -7,7 +7,6 @@ import Analytics from './pages/Analytics';
 import Performance from './pages/Performance';
 import Policy from './pages/Policy';
 import Settings from './pages/Settings';
-import { ConfigProvider } from './contexts/ConfigContext';
 import { AccessibilityProvider } from './contexts/AccessibilityContext';
 
 function AppContent() {
@@ -87,9 +86,7 @@ function App() {
   return (
     <Router>
       <AccessibilityProvider>
-        <ConfigProvider>
           <AppContent />
-        </ConfigProvider>
       </AccessibilityProvider>
     </Router>
   );
