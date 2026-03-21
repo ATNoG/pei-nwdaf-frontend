@@ -7,7 +7,7 @@ import Analytics from './pages/Analytics';
 import Performance from './pages/Performance';
 import Policy from './pages/Policy';
 import Settings from './pages/Settings';
-import { ConfigProvider } from './contexts/ConfigContext';
+import NotFound from './pages/NotFound';
 import { AccessibilityProvider } from './contexts/AccessibilityContext';
 
 function AppContent() {
@@ -76,6 +76,7 @@ function AppContent() {
             <Route path="/performance" element={<Performance />} />
             <Route path="/policy" element={<Policy />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
       </div>
@@ -87,9 +88,7 @@ function App() {
   return (
     <Router>
       <AccessibilityProvider>
-        <ConfigProvider>
-          <AppContent />
-        </ConfigProvider>
+        <AppContent />
       </AccessibilityProvider>
     </Router>
   );
