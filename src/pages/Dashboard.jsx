@@ -140,16 +140,16 @@ const Dashboard = () => {
 
       {/* Real-time Data Section */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <h2 className="text-xl font-bold text-gray-900">Ingestion Data</h2>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             {producers.length > 0 ? (
               <>
-                <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Active Producer:</label>
+                <label className="text-sm font-medium text-gray-700 shrink-0">Active Producer:</label>
                 <select
                   value={selectedSubscription}
                   onChange={(e) => setSelectedSubscription(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   {producers.map((p) => (
                     <option key={p.id} value={p.id}>{p.label} - {p.url}</option>

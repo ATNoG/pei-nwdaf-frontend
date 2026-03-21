@@ -40,7 +40,7 @@ export default function NotFound() {
 
       <h1 className="text-4xl font-bold text-gray-800 mt-6 mb-2">Page Not Found</h1>
       <p className="text-gray-500 mb-8 max-w-sm">
-        The page you are looking for doesn't exist or has been moved.
+        The page you are looking for doesn't exist or has been moved
       </p>
       <Link
         to="/"

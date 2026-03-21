@@ -1543,7 +1543,7 @@ const MLModels = () => {
           <div className="bg-gray-50 border-y border-none px-6 py-3 -mx-6">
             <div className="flex items-center gap-3 flex-wrap">
               {/* Search */}
-              <div className="relative flex-1 min-w-[300px]">
+              <div className="relative flex-1 min-w-0 w-full sm:w-auto">
                 <input
                   type="text"
                   placeholder="Search models by name or ID..."
