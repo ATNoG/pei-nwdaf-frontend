@@ -293,7 +293,15 @@ const Performance = () => {
       ? allEntries.filter(e => new Date(e.measured_at).getTime() >= now - timeWindow)
       : allEntries;
     const entries = triggerFilter ? timeFiltered.filter(e => e.trigger === triggerFilter) : timeFiltered;
-    if (!entries.length) return null;
+    if (!entries.length) {
+      if (!timeWindow) return null;
+      const allTimes = [new Date(now - timeWindow).toISOString(), new Date(now).toISOString()];
+      const fmt = (t) => {
+        const d = new Date(t);
+        return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+      };
+      return { labels: allTimes.map(fmt), datasets: [], _models: [], _times: allTimes };
+    }
 
     const bestModelId = bestModel?.model_id;
 
@@ -558,7 +566,7 @@ const Performance = () => {
                 </div>
               </div>
             </div>
-            {chartData ? (
+            {chartData?.datasets.length > 0 ? (
               <>
                 {/* Model visibility selector */}
                 <div className="flex flex-wrap gap-1.5 mb-3">
@@ -604,6 +612,10 @@ const Performance = () => {
                   </span>
                 </div>
               </>
+            ) : chartData ? (
+              <div className="flex items-center justify-center h-80 text-gray-400 text-sm">
+                No data in this time range.
+              </div>
             ) : (
               <div className="flex items-center justify-center h-80 text-gray-400 text-sm">
                 No score history available for {activeField}.

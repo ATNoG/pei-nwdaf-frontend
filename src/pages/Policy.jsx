@@ -538,19 +538,19 @@ const Policy = () => {
 
       {/* Header */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="p-3 bg-blue-100 rounded-lg">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center space-x-4 min-w-0">
+            <div className="p-3 bg-blue-100 rounded-lg shrink-0">
               <FaShieldAlt className="text-2xl text-blue-600" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h2 className="text-2xl font-bold text-gray-900">Policy Configuration</h2>
               <p className="text-sm text-gray-600">Configure transformer pipelines and field permissions</p>
             </div>
           </div>
           <button
             onClick={createNewPipeline}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shrink-0"
           >
             <FaPlus />
             <span>New Pipeline</span>
