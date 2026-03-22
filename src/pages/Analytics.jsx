@@ -116,7 +116,7 @@ const Analytics = () => {
     try {
       // Use different endpoint for anomaly detection
       const endpoint = formData.output_field === 'anomaly'
-        ? `${mlUrl}/v1/anomaly/detect`
+        ? `${mlUrl}/v1/anomaly/detect/all`
         : `${mlUrl}/v1/inference`;
 
       const body = formData.output_field === 'anomaly'
@@ -360,7 +360,8 @@ const Analytics = () => {
           </div>
 
           <div className="p-6 space-y-6">
-            {/* Model info + timing summary */}
+            {/* Model info + timing summary — forecast only */}
+            {formData.output_field !== 'anomaly' && (
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
               <dl className="space-y-2 text-sm">
                 <div className="flex gap-2">
@@ -415,67 +416,60 @@ const Analytics = () => {
                     )}
                   </>
                 )}
-                {formData.output_field === 'anomaly' && (
-                  <>
-                    <div className="flex gap-2">
-                      <dt className="w-32 text-gray-500 shrink-0">Window Size</dt>
-                      <dd className="text-gray-900">
-                        {prediction.lookback_steps} x {prediction.window_duration_seconds}s
-                        {' '}= <span className="font-medium">{prediction.lookback_steps * prediction.window_duration_seconds}s</span>
-                      </dd>
-                    </div>
-                    <div className="flex gap-2">
-                      <dt className="w-32 text-gray-500 shrink-0">Threshold</dt>
-                      <dd className="text-gray-900 font-mono">
-                        {prediction.threshold?.toFixed(4) ?? 'N/A'}
-                      </dd>
-                    </div>
-                  </>
-                )}
               </dl>
             </div>
+            )}
 
-            {/* Anomaly Detection Results */}
-            {formData.output_field === 'anomaly' && prediction.results && (
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700 mb-3">Anomaly Detection</h4>
+            {/* Anomaly Detection Summary — IP rows, model columns */}
+            {formData.output_field === 'anomaly' && prediction?.ip_anomalies && (() => {
+              const modelNames = Object.keys(prediction.models ?? {});
+              const rows = Object.entries(prediction.ip_anomalies);
+              return (
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  {/* Model metadata header */}
+                  <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 space-y-1">
+                    {modelNames.map(name => {
+                      const m = prediction.models[name];
+                      return (
+                        <div key={name} className="flex flex-wrap gap-x-4 text-sm">
+                          <span className="font-semibold text-gray-800">{name}</span>
+                          <span className="text-gray-500">window: {m.window_duration_seconds}s</span>
+                          <span className="text-gray-500">threshold: <span className="font-mono">{m.threshold?.toFixed(4)}</span></span>
+                          <span className="text-gray-400 text-xs self-center">{m.fields?.join(', ')}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
                         <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">IP Address</th>
-                        <th className="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Anomalies</th>
-                        <th className="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Avg Error</th>
+                        {modelNames.map(name => (
+                          <th key={name} className="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">{name}</th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {prediction.results.map((result, idx) => (
-                        <tr key={idx} className="hover:bg-gray-50">
-                          <td className="px-4 py-2 text-gray-900 font-mono text-xs">
-                            {result.ip_src}
-                          </td>
-                          <td className="px-4 py-2 text-right text-gray-900">
-                            {result.num_anomalies} / {result.num_windows}
-                          </td>
-                          <td className="px-4 py-2 text-right font-mono text-gray-900">
-                            {(() => {
-                              const scores = result.scores ?? [];
-                              if (!Array.isArray(scores) || scores.length === 0) return 'N/A';
-                              const sum = scores.reduce((acc, w) => {
-                                const v = typeof w.reconstruction_error === 'number' ? w.reconstruction_error : parseFloat(w.reconstruction_error);
-                                return acc + (Number.isFinite(v) ? v : 0);
-                              }, 0);
-                              const avg = sum / scores.length;
-                              return Number.isFinite(avg) ? avg.toFixed(4) : 'N/A';
-                            })()}
-                          </td>
+                      {rows.map(([ip, modelCounts]) => (
+                        <tr key={ip} className="hover:bg-gray-50">
+                          <td className="px-4 py-2 text-gray-900 font-mono text-xs">{ip}</td>
+                          {modelNames.map(name => {
+                            const val = modelCounts[name] ?? '—';
+                            const [anom, total] = val.split('/').map(Number);
+                            const isAnomaly = anom > 0;
+                            return (
+                              <td key={name} className={`px-4 py-2 text-right font-mono ${isAnomaly ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                                {val}
+                              </td>
+                            );
+                          })}
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Forecast Predictions list */}
             {formData.output_field !== 'anomaly' && prediction.predictions?.length > 0 && (
