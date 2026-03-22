@@ -428,11 +428,11 @@ const Analytics = () => {
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                   {/* Model metadata header */}
                   <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 space-y-1">
-                    {modelNames.map(name => {
-                      const m = prediction.models[name];
+                    {modelNames.map(id => {
+                      const m = prediction.models[id];
                       return (
-                        <div key={name} className="flex flex-wrap gap-x-4 text-sm">
-                          <span className="font-semibold text-gray-800">{name}</span>
+                        <div key={id} className="flex flex-wrap gap-x-4 text-sm">
+                          <span className="font-semibold text-gray-800">{m.name}</span>
                           <span className="text-gray-500">window: {m.window_duration_seconds}s</span>
                           <span className="text-gray-500">threshold: <span className="font-mono">{m.threshold?.toFixed(4)}</span></span>
                           <span className="text-gray-400 text-xs self-center">{m.fields?.join(', ')}</span>
@@ -444,8 +444,8 @@ const Analytics = () => {
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
                         <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">IP Address</th>
-                        {modelNames.map(name => (
-                          <th key={name} className="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">{name}</th>
+                        {modelNames.map(id => (
+                          <th key={id} className="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">{prediction.models[id].name}</th>
                         ))}
                       </tr>
                     </thead>
@@ -453,12 +453,12 @@ const Analytics = () => {
                       {rows.map(([ip, modelCounts]) => (
                         <tr key={ip} className="hover:bg-gray-50">
                           <td className="px-4 py-2 text-gray-900 font-mono text-xs">{ip}</td>
-                          {modelNames.map(name => {
-                            const val = modelCounts[name] ?? '—';
+                          {modelNames.map(id => {
+                            const val = modelCounts[id] ?? '—';
                             const [anom, total] = val.split('/').map(Number);
                             const isAnomaly = anom > 0;
                             return (
-                              <td key={name} className={`px-4 py-2 text-right font-mono ${isAnomaly ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                              <td key={id} className={`px-4 py-2 text-right font-mono ${isAnomaly ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
                                 {val}
                               </td>
                             );
