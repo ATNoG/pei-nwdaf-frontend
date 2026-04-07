@@ -67,12 +67,22 @@ const fetchRegisteredComponents = async () => {
     registeredComponents = data.components.map(comp => {
       // Start from the default entry (if it exists) to keep nice display names
       const defaultEntry = defaultsById[comp.component_id];
+      // Build display name: use default entry if available, otherwise derive from ID.
+      // For ML models, strip the "ml-" prefix so "ml-test" shows as "Test", not "Ml Test".
+      let displayName = defaultEntry?.name;
+      if (!displayName) {
+        const rawId = comp.component_type === 'ml_model' && comp.component_id.startsWith('ml-')
+          ? comp.component_id.slice(3)
+          : comp.component_id;
+        displayName = rawId.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      }
+
       const base = {
         id: comp.component_id,
-        name: defaultEntry?.name
-          || comp.component_id.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+        name: displayName,
         group: defaultEntry?.group
-          || (comp.component_type === 'ml_model' ? 'ML Models' : comp.component_type || 'General')
+          || (comp.component_type === 'ml_model' ? 'ML Models' : comp.component_type || 'General'),
+        component_type: comp.component_type  // Preserve component_type for filtering
       };
 
       // Attach ML model metadata for tooltip/display in pipeline modal
@@ -202,7 +212,6 @@ const Policy = () => {
   const [editingStepIndex, setEditingStepIndex] = useState(null);
   const [showStepDetailModal, setShowStepDetailModal] = useState(false);
   const [detailStep, setDetailStep] = useState(null);
-  const [showPipelineDropdown, setShowPipelineDropdown] = useState(false);
   const [showNewPipelineModal, setShowNewPipelineModal] = useState(false);
   const [newPipelineSource, setNewPipelineSource] = useState('');
   const [newPipelineSink, setNewPipelineSink] = useState('');
@@ -211,6 +220,19 @@ const Policy = () => {
   const [notification, setNotification] = useState(null);
   const [availableComponents, setAvailableComponents] = useState([]);
   const [producers, setProducers] = useState([]);  // Store producers with labels from data-ingestion
+  const [selectedMLModels, setSelectedMLModels] = useState(new Set());  // Selected ML models for multi-selection
+  const [showPolicyFieldsModal, setShowPolicyFieldsModal] = useState(false);
+  const [policyFieldsModalData, setPolicyFieldsModalData] = useState(null);
+
+  // Two-level pipeline search state
+  const [pipelineSearchSource, setPipelineSearchSource] = useState('');
+  const [pipelineSearchSink, setPipelineSearchSink] = useState('');
+  const [availablePipelineSources, setAvailablePipelineSources] = useState([]);
+  const [availablePipelineSinks, setAvailablePipelineSinks] = useState([]);
+  const [showSinkDropdown, setShowSinkDropdown] = useState(false);
+
+  // ML model training fields highlight state
+  const [highlightedFields, setHighlightedFields] = useState(new Set());
 
   // Fetch all pipelines on mount
   useEffect(() => {
@@ -270,6 +292,51 @@ const Policy = () => {
       showNotification('error', `Failed to load pipelines: ${error.message}`);
     }
   };
+
+  // Build source/sink lookup from pipelines
+  useEffect(() => {
+    const sources = new Map(); // source -> Set of sinks (with resource types)
+    Object.keys(pipelines).forEach(pipelineId => {
+      const [source, sink] = parsePipelineId(pipelineId);
+      // Skip unknown/invalid pipeline IDs
+      if (source === 'unknown' || sink === 'unknown') return;
+      if (!sources.has(source)) sources.set(source, new Set());
+      sources.get(source).add(sink);
+    });
+    setAvailablePipelineSources(Array.from(sources.keys()));
+  }, [pipelines]);
+
+  // Update sink options when source changes
+  useEffect(() => {
+    if (!pipelineSearchSource) {
+      setAvailablePipelineSinks([]);
+      return;
+    }
+    const sinks = new Set();
+    Object.keys(pipelines).forEach(pipelineId => {
+      const [source, sink] = parsePipelineId(pipelineId);
+      // Skip unknown/invalid pipeline IDs
+      if (source === 'unknown' || sink === 'unknown') return;
+      if (source === pipelineSearchSource) sinks.add(sink);
+    });
+    const sinkArray = Array.from(sinks);
+    setAvailablePipelineSinks(sinkArray);
+    // Auto-select if only one sink available
+    if (sinkArray.length === 1) {
+      setPipelineSearchSink(sinkArray[0]);
+    }
+  }, [pipelineSearchSource, pipelines]);
+
+  // Load pipeline when both source and sink are selected
+  useEffect(() => {
+    if (pipelineSearchSource && pipelineSearchSink &&
+        pipelineSearchSource !== 'unknown' && pipelineSearchSink !== 'unknown') {
+      const pipelineId = `${pipelineSearchSource}_to_${pipelineSearchSink}`;
+      if (pipelines[pipelineId]) {
+        setSelectedPipeline(pipelineId);
+      }
+    }
+  }, [pipelineSearchSource, pipelineSearchSink, pipelines]);
 
   const fetchDiscoveredFields = async () => {
     setIsLoadingFields(true);
@@ -500,6 +567,33 @@ const Policy = () => {
       return;
     }
 
+    // Special handling for ML Service - need to select at least one model
+    if (newPipelineSink === 'ml-service') {
+      if (selectedMLModels.size === 0) {
+        showNotification('error', 'Please select at least one ML model');
+        return;
+      }
+
+      // Create pipeline IDs for each selected ML model
+      const sourcePart = newPipelineSourceResourceType
+        ? `${newPipelineSource}:${newPipelineSourceResourceType}`
+        : newPipelineSource;
+
+      // Select the first model's pipeline for editing
+      const firstModelId = Array.from(selectedMLModels)[0];
+      const newId = `${sourcePart}_to_${firstModelId}`;
+
+      setSelectedPipeline(newId);
+      setPipelineSteps([]);
+      setDiscoveredFields([]);
+      setSelectedFields(new Set());
+      setHasUnsavedChanges(true);
+      setIsNewPipeline(true);
+      setShowNewPipelineModal(false);
+      // Don't reset ML models yet - user may want to create more pipelines
+      return;
+    }
+
     // Check if sink requires a resource type selection
     const sinkComponent = availableComponents.find(c => c.id === newPipelineSink);
     const requiresResourceType = sinkComponent?.resourceTypes?.length > 0;
@@ -582,89 +676,189 @@ const Policy = () => {
         </div>
       </div>
 
-      {/* Pipeline Selector */}
+      {/* Pipeline Selector - Two-Level Search */}
       <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
-        <div className="flex items-center justify-center">
-          <div className="flex items-center space-x-4 flex-1 max-w-2xl">
-            <label className="text-sm font-medium text-gray-700">Selected Pipeline:</label>
-            <div className="relative flex-1 max-w-md">
-              <button
-                onClick={() => setShowPipelineDropdown(!showPipelineDropdown)}
-                className="w-full flex items-center justify-between px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4 flex-1 max-w-4xl">
+            {/* Source Dropdown */}
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
+              <select
+                value={pipelineSearchSource}
+                onChange={(e) => {
+                  setPipelineSearchSource(e.target.value);
+                  setPipelineSearchSink('');
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                <span className={selectedPipeline ? 'text-gray-900' : 'text-gray-500'}>
-                  {selectedPipeline || 'Select a pipeline...'}
-                </span>
-                <FaChevronDown className={`ml-2 text-gray-400 transition-transform ${showPipelineDropdown ? 'rotate-180' : ''}`} />
-              </button>
-
-              {/* Dropdown Menu */}
-              {showPipelineDropdown && (
-                <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    onClick={() => setShowPipelineDropdown(false)}
-                  />
-                  <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
-                    {Object.keys(pipelines).length === 0 ? (
-                      <div className="px-4 py-3 text-sm text-gray-500">
-                        No pipelines configured
-                      </div>
-                    ) : (
-                      Object.keys(pipelines).map(pipelineId => (
-                        <div
-                          key={pipelineId}
-                          className="flex items-center justify-between px-4 py-2 hover:bg-gray-50 cursor-pointer group"
-                          onClick={() => {
-                            handlePipelineSelect(pipelineId);
-                            setShowPipelineDropdown(false);
-                          }}
-                        >
-                          <span className={`text-sm ${selectedPipeline === pipelineId ? 'text-blue-600 font-medium' : 'text-gray-700'}`}>
-                            {pipelineId}
-                          </span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deletePipeline(pipelineId);
-                              setShowPipelineDropdown(false);
-                            }}
-                            className="p-1 text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                            title="Delete pipeline"
-                          >
-                            <FaTrash className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </>
-              )}
+                <option value="">Select source...</option>
+                {availablePipelineSources.map(source => (
+                  <option key={source} value={source}>{source}</option>
+                ))}
+              </select>
             </div>
 
-            {/* Delete button outside dropdown */}
-            {selectedPipeline && (
-              <button
-                onClick={() => deletePipeline(selectedPipeline)}
-                className="px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-                title="Delete current pipeline"
-              >
-                <FaTrash className="w-4 h-4" />
-              </button>
-            )}
+            {/* Arrow */}
+            <div className="flex items-center justify-center pt-5">
+              <FaArrowRight className="text-xl text-gray-400" />
+            </div>
+
+            {/* Sink Dropdown with inline delete buttons */}
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Sink {availablePipelineSinks.length > 0 && (
+                  <span className="text-xs text-gray-500 font-normal">({availablePipelineSinks.length} available)</span>
+                )}
+              </label>
+              <div className="flex items-center space-x-2">
+                <div className="relative flex-1">
+                  {/* Custom dropdown button */}
+                  <button
+                    onClick={() => {
+                      if (pipelineSearchSource) {
+                        setShowSinkDropdown(!showSinkDropdown);
+                      }
+                    }}
+                    disabled={!pipelineSearchSource}
+                    className="w-full flex items-center justify-between px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed bg-white text-left"
+                  >
+                    <span className={pipelineSearchSink ? 'text-gray-900' : 'text-gray-500'}>
+                      {pipelineSearchSink || 'Select sink...'}
+                    </span>
+                    <FaChevronDown className={`ml-2 text-gray-400 transition-transform ${showSinkDropdown ? 'rotate-180' : ''}`} />
+                  </button>
+
+                {/* Dropdown Menu with delete buttons */}
+                {showSinkDropdown && pipelineSearchSource && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setShowSinkDropdown(false)}
+                    />
+                    <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
+                      {availablePipelineSinks.map(sink => {
+                        const pipelineId = `${pipelineSearchSource}_to_${sink}`;
+                        return (
+                          <div
+                            key={sink}
+                            className="flex items-center justify-between px-3 py-2 hover:bg-gray-50 group"
+                          >
+                            <span
+                              className="flex-1 text-sm cursor-pointer"
+                              onClick={() => {
+                                setPipelineSearchSink(sink);
+                                setShowSinkDropdown(false);
+                              }}
+                            >
+                              {sink}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deletePipeline(pipelineId);
+                                // If this was the selected pipeline, clear selection
+                                if (selectedPipeline === pipelineId) {
+                                  setSelectedPipeline('');
+                                  setPipelineSearchSink('');
+                                }
+                                setShowSinkDropdown(false);
+                              }}
+                              className="p-1 text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="Delete pipeline"
+                            >
+                              <FaTrash className="w-3 h-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+                </div>
+                {/* Delete button for selected pipeline */}
+                {selectedPipeline && !isNewPipeline && (
+                  <button
+                    onClick={() => {
+                      deletePipeline(selectedPipeline);
+                      setPipelineSearchSource('');
+                      setPipelineSearchSink('');
+                    }}
+                    className="px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                    title="Delete current pipeline"
+                  >
+                    <FaTrash className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* Current Pipeline Info */}
-          {selectedPipeline && (
-            <div className="flex items-center space-x-3 text-sm text-gray-600">
-              <span>{Object.keys(pipelines).length} pipeline{Object.keys(pipelines).length !== 1 ? 's' : ''} total</span>
-              {isNewPipeline && (
-                <span className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
-                  New - Unsaved
-                </span>
-              )}
-            </div>
-          )}
+          {/* Right side: Pipeline Info + ML Model Highlight Checkboxes */}
+          <div className="flex items-center space-x-4">
+            {/* Current Pipeline Info */}
+            {selectedPipeline && (
+              <div className="flex items-center space-x-3 text-sm text-gray-600">
+                <span>{Object.keys(pipelines).length} pipeline{Object.keys(pipelines).length !== 1 ? 's' : ''} total</span>
+                {isNewPipeline && (
+                  <span className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
+                    New - Unsaved
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* ML Model Highlight Checkboxes */}
+            {selectedPipeline && (() => {
+              const [source, sink] = parsePipelineId(selectedPipeline);
+              const sourceComp = availableComponents.find(c => c.id === source || c.id === source?.split(':')[0]);
+              const sinkComp = availableComponents.find(c => c.id === sink || c.id === sink?.split(':')[0]);
+              const sourceIsML = sourceComp?.mlModelMeta?.inputFields?.length > 0;
+              const sinkIsML = sinkComp?.mlModelMeta?.inputFields?.length > 0;
+
+              if (!sourceIsML && !sinkIsML) return null;
+
+              return (
+                <div className="flex items-center space-x-3">
+                  {sourceIsML && (
+                    <label className="flex items-center text-xs text-gray-600 cursor-pointer">
+                      Highlight {sourceComp.name} training fields
+                      <input
+                        type="checkbox"
+                        checked={highlightedFields.size === sourceComp.mlModelMeta.inputFields.length &&
+                               sourceComp.mlModelMeta.inputFields.every(f => highlightedFields.has(f))}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setHighlightedFields(new Set(sourceComp.mlModelMeta.inputFields));
+                          } else {
+                            setHighlightedFields(new Set());
+                          }
+                        }}
+                        className="w-3 h-3 text-purple-600 rounded focus:ring-2 focus:ring-purple-500 ml-2"
+                      />
+                    </label>
+                  )}
+                  {sinkIsML && (
+                    <label className="flex items-center text-xs text-gray-600 cursor-pointer">
+                      Highlight {sinkComp.name} training fields
+                      <input
+                        type="checkbox"
+                        checked={highlightedFields.size === sinkComp.mlModelMeta.inputFields.length &&
+                               sinkComp.mlModelMeta.inputFields.every(f => highlightedFields.has(f))}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setHighlightedFields(new Set(sinkComp.mlModelMeta.inputFields));
+                          } else {
+                            setHighlightedFields(new Set());
+                          }
+                        }}
+                        className="w-3 h-3 text-purple-600 rounded focus:ring-2 focus:ring-purple-500 ml-2"
+                      />
+                    </label>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
         </div>
       </div>
 
@@ -683,6 +877,8 @@ const Policy = () => {
             isLoading={isLoadingFields}
             onDeselectAll={deselectAllFields}
             onSelectAll={selectAllFields}
+            highlightedFields={highlightedFields}
+            onClearHighlight={() => setHighlightedFields(new Set())}
           />
 
           {/* Field Transformations */}
@@ -982,12 +1178,14 @@ const Policy = () => {
                   >
                     <option value="">Select source...</option>
                     {Object.entries(
-                      availableComponents.reduce((groups, comp) => {
-                        const g = comp.group || 'General';
-                        if (!groups[g]) groups[g] = [];
-                        groups[g].push(comp);
-                        return groups;
-                      }, {})
+                      availableComponents
+                        .filter(c => c.component_type !== 'ml_model')  // Exclude ML models
+                        .reduce((groups, comp) => {
+                          const g = comp.group || 'General';
+                          if (!groups[g]) groups[g] = [];
+                          groups[g].push(comp);
+                          return groups;
+                        }, {})
                     ).map(([group, comps]) => (
                       <optgroup key={group} label={group}>
                         {comps.map(comp => (
@@ -1016,12 +1214,14 @@ const Policy = () => {
                   >
                     <option value="">Select sink...</option>
                     {Object.entries(
-                      availableComponents.reduce((groups, comp) => {
-                        const g = comp.group || 'General';
-                        if (!groups[g]) groups[g] = [];
-                        groups[g].push(comp);
-                        return groups;
-                      }, {})
+                      availableComponents
+                        .filter(c => c.component_type !== 'ml_model')  // Exclude ML models
+                        .reduce((groups, comp) => {
+                          const g = comp.group || 'General';
+                          if (!groups[g]) groups[g] = [];
+                          groups[g].push(comp);
+                          return groups;
+                        }, {})
                     ).map(([group, comps]) => (
                       <optgroup key={group} label={group}>
                         {comps.map(comp => (
@@ -1042,9 +1242,21 @@ const Policy = () => {
                 const meta = sourceComp.mlModelMeta;
                 return (
                   <div className="mb-4 bg-purple-50 border border-purple-200 rounded-lg p-4">
-                    <h4 className="text-sm font-medium text-purple-900 mb-2">
-                      🤖 ML Model: {sourceComp.name}
-                    </h4>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-medium text-purple-900">
+                        🤖 ML Model: {sourceComp.name}
+                      </h4>
+                      {meta.inputFields?.length > 0 && (
+                        <button
+                          onClick={() => {
+                            setHighlightedFields(new Set(meta.inputFields));
+                          }}
+                          className="text-sm px-3 py-1 bg-purple-200 text-purple-900 rounded hover:bg-purple-300 transition-colors"
+                        >
+                          Highlight Training Fields
+                        </button>
+                      )}
+                    </div>
                     <div className="grid grid-cols-2 gap-2 text-xs text-purple-800">
                       {meta.architecture && <div><span className="font-medium">Architecture:</span> {meta.architecture}</div>}
                       {meta.windowDuration && <div><span className="font-medium">Window:</span> {meta.windowDuration}s</div>}
@@ -1068,9 +1280,21 @@ const Policy = () => {
                 const meta = sinkComp.mlModelMeta;
                 return (
                   <div className="mb-4 bg-purple-50 border border-purple-200 rounded-lg p-4">
-                    <h4 className="text-sm font-medium text-purple-900 mb-2">
-                      🤖 ML Model: {sinkComp.name}
-                    </h4>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-medium text-purple-900">
+                        🤖 ML Model: {sinkComp.name}
+                      </h4>
+                      {meta.inputFields?.length > 0 && (
+                        <button
+                          onClick={() => {
+                            setHighlightedFields(new Set(meta.inputFields));
+                          }}
+                          className="text-sm px-3 py-1 bg-purple-200 text-purple-900 rounded hover:bg-purple-300 transition-colors"
+                        >
+                          Highlight Training Fields
+                        </button>
+                      )}
+                    </div>
                     <div className="grid grid-cols-2 gap-2 text-xs text-purple-800">
                       {meta.architecture && <div><span className="font-medium">Architecture:</span> {meta.architecture}</div>}
                       {meta.windowDuration && <div><span className="font-medium">Window:</span> {meta.windowDuration}s</div>}
@@ -1189,6 +1413,84 @@ const Policy = () => {
               {/* Sink Resource Type Selector - shown only when sink has resourceTypes */}
               {newPipelineSink && (() => {
                 const sinkComponent = availableComponents.find(c => c.id === newPipelineSink);
+
+                // Special handling for ML Service - show ML model cards for multi-selection
+                if (newPipelineSink === 'ml-service') {
+                  const mlModels = availableComponents.filter(c => c.group === 'ML Models');
+                  if (mlModels.length === 0) {
+                    return (
+                      <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <p className="text-sm text-yellow-800">No ML models registered with the Policy Service yet.</p>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="mb-6 bg-purple-50 border border-purple-200 rounded-lg p-4">
+                      <label className="block text-sm font-medium text-purple-900 mb-2">
+                        Select ML Models (Sink)
+                      </label>
+                      <p className="text-xs text-purple-700 mb-3">
+                        Choose one or more ML models to apply this policy pipeline to. Data will be filtered based on each model's input fields.
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-64 overflow-y-auto">
+                        {mlModels.map(model => {
+                          const meta = model.mlModelMeta || {};
+                          const isSelected = selectedMLModels.has(model.id);
+                          const hasPolicy = pipelines[`${newPipelineSourceResourceType ? `${newPipelineSource}:${newPipelineSourceResourceType}` : newPipelineSource}_to_${model.id}`];
+                          return (
+                            <label
+                              key={model.id}
+                              className={`relative p-3 border rounded-lg cursor-pointer transition-colors ${
+                                isSelected
+                                  ? 'border-purple-500 bg-purple-100'
+                                  : 'border-purple-200 bg-white hover:border-purple-300'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  const newSet = new Set(selectedMLModels);
+                                  if (e.target.checked) {
+                                    newSet.add(model.id);
+                                  } else {
+                                    newSet.delete(model.id);
+                                  }
+                                  setSelectedMLModels(newSet);
+                                }}
+                                className="sr-only"
+                              />
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="font-medium text-purple-900 text-sm">{model.name}</div>
+                                  {meta.architecture && (
+                                    <div className="text-xs text-purple-600">{meta.architecture}</div>
+                                  )}
+                                  {meta.inputFields && meta.inputFields.length > 0 && (
+                                    <div className="text-xs text-purple-500 mt-1">
+                                      {meta.inputFields.length} input field{meta.inputFields.length !== 1 ? 's' : ''}
+                                    </div>
+                                  )}
+                                </div>
+                                {hasPolicy && (
+                                  <div className="ml-2">
+                                    <FaShieldAlt className="text-purple-600" title="Policies Applied" />
+                                  </div>
+                                )}
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      {selectedMLModels.size > 0 && (
+                        <p className="text-xs text-purple-600 mt-2">
+                          {selectedMLModels.size} model{selectedMLModels.size !== 1 ? 's' : ''} selected
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
+
                 let resourceTypes = sinkComponent?.resourceTypes;
 
                 if (!resourceTypes || resourceTypes.length === 0) {
@@ -1299,25 +1601,35 @@ const Policy = () => {
                     </span>
                     <span className="text-blue-400">→</span>
                     <span className="font-medium">
-                      {newPipelineSink
-                        ? (newPipelineSinkResourceType
-                            ? `${newPipelineSink}:${newPipelineSinkResourceType}`
-                            : newPipelineSink)
-                        : '(sink)'}
+                      {newPipelineSink === 'ml-service'
+                        ? (selectedMLModels.size > 0
+                            ? `${selectedMLModels.size} ML model${selectedMLModels.size !== 1 ? 's' : ''}`
+                            : '(select models)')
+                        : (newPipelineSink
+                            ? (newPipelineSinkResourceType
+                                ? `${newPipelineSink}:${newPipelineSinkResourceType}`
+                                : newPipelineSink)
+                            : '(sink)')
+                      }
                     </span>
                   </div>
-                  {(newPipelineSource && newPipelineSink) && (
+                  {newPipelineSink !== 'ml-service' && newPipelineSource && newPipelineSink && (
                     <p className="text-sm text-blue-600 mt-2 text-center">
                       Pipeline ID: <code className="bg-blue-100 px-2 py-1 rounded">
                         {newPipelineSourceResourceType ? `${newPipelineSource}:${newPipelineSourceResourceType}` : newPipelineSource}_to_{newPipelineSinkResourceType ? `${newPipelineSink}:${newPipelineSinkResourceType}` : newPipelineSink}
                       </code>
                     </p>
                   )}
+                  {newPipelineSink === 'ml-service' && selectedMLModels.size > 0 && (
+                    <p className="text-sm text-blue-600 mt-2 text-center">
+                      Creating {selectedMLModels.size} pipeline{selectedMLModels.size !== 1 ? 's' : ''} (one per model)
+                    </p>
+                  )}
                 </div>
               )}
 
               {/* Existing Pipelines Warning */}
-              {newPipelineSource && newPipelineSink && (() => {
+              {newPipelineSource && newPipelineSink && newPipelineSink !== 'ml-service' && (() => {
                 const sourcePart = newPipelineSourceResourceType
                   ? `${newPipelineSource}:${newPipelineSourceResourceType}`
                   : newPipelineSource;
@@ -1350,6 +1662,7 @@ const Policy = () => {
                   setNewPipelineSink('');
                   setNewPipelineSourceResourceType('');
                   setNewPipelineSinkResourceType('');
+                  setSelectedMLModels(new Set());
                 }}
                 className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
               >
@@ -1361,6 +1674,8 @@ const Policy = () => {
                 disabled={!newPipelineSource || !newPipelineSink || (() => {
                   const sourceComponent = availableComponents.find(c => c.id === newPipelineSource);
                   if (sourceComponent?.resourceTypes?.length > 0 && !newPipelineSourceResourceType) return true;
+                  // For ML service, check if at least one model is selected
+                  if (newPipelineSink === 'ml-service') return selectedMLModels.size === 0;
                   const sinkComponent = availableComponents.find(c => c.id === newPipelineSink);
                   return sinkComponent?.resourceTypes?.length > 0 && !newPipelineSinkResourceType;
                 })()}
@@ -1368,6 +1683,7 @@ const Policy = () => {
                   !newPipelineSource || !newPipelineSink || (() => {
                     const sourceComponent = availableComponents.find(c => c.id === newPipelineSource);
                     if (sourceComponent?.resourceTypes?.length > 0 && !newPipelineSourceResourceType) return true;
+                    if (newPipelineSink === 'ml-service') return selectedMLModels.size === 0;
                     const sinkComponent = availableComponents.find(c => c.id === newPipelineSink);
                     return sinkComponent?.resourceTypes?.length > 0 && !newPipelineSinkResourceType;
                   })()
