@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
+import FeatureImportanceChart from '../components/FeatureImportanceChart';
 
 // Toast
 const Toast = ({ message, onClose }) => {
@@ -764,7 +765,7 @@ const AllJobsModal = ({ showModal, setShowModal, mlUrl, onJobsUpdate }) => {
   );
 };
 
-// TrainingModal — combined start training + job history
+// TrainingModal - combined start training + job history
 const TrainingModal = ({ model, mlUrl, onClose, onStartTraining, isTraining }) => {
   const [lookbackSeconds, setLookbackSeconds] = useState(3600);
   const [jobs, setJobs] = useState([]);
@@ -936,6 +937,41 @@ const TrainingModal = ({ model, mlUrl, onClose, onStartTraining, isTraining }) =
 
 // Model Details Modal
 const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadingDetails, modelDetails, mlUrl }) => {
+  const [importance, setImportance] = useState(null);
+  const [loadingImportance, setLoadingImportance] = useState(false);
+  const [triggeringImportance, setTriggeringImportance] = useState(false);
+
+  const isAnomaly = selectedModel?.modelType === 'anomaly';
+  const config = modelDetails?.config || {};
+  const outputField = config.output_fields?.[0] ?? selectedModel?.best_for_fields?.[0] ?? null;
+
+  useEffect(() => {
+    if (!showModal || !modelDetails?.id || isAnomaly || !outputField) {
+      setImportance(null);
+      return;
+    }
+    setLoadingImportance(true);
+    setImportance(null);
+    fetch(`${mlUrl}/v1/performance/${encodeURIComponent(outputField)}/importance?model_id=${encodeURIComponent(modelDetails.id)}`)
+      .then(r => r.ok ? r.json() : null)
+      .catch(() => null)
+      .then(data => setImportance(data))
+      .finally(() => setLoadingImportance(false));
+  }, [showModal, modelDetails?.id, isAnomaly, outputField, mlUrl]);
+
+  const handleRecomputeImportance = async () => {
+    if (!outputField || !modelDetails?.id) return;
+    setTriggeringImportance(true);
+    try {
+      const res = await fetch(
+        `${mlUrl}/v1/performance/${encodeURIComponent(outputField)}/models/${encodeURIComponent(modelDetails.id)}/importance`,
+        { method: 'POST' }
+      );
+      if (res.ok) setImportance(await res.json());
+    } catch { /* ignore */ }
+    finally { setTriggeringImportance(false); }
+  };
+
   if (!showModal || !selectedModel) return null;
 
   if (loadingDetails) {
@@ -965,8 +1001,6 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
       </div>
     );
   }
-
-  const config = modelDetails.config || {};
 
   return (
     <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -1076,6 +1110,51 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Feature Importance - forecast models only */}
+          {!isAnomaly && outputField && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-semibold text-gray-900">Feature Importance</h4>
+                  {importance?.metric && (
+                    <span className="px-2 py-0.5 text-xs font-bold bg-gray-100 text-gray-700 rounded uppercase tracking-wide">
+                      {importance.metric}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={handleRecomputeImportance}
+                  disabled={triggeringImportance}
+                  className="px-2.5 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                  title="Trigger fresh permutation importance computation"
+                >
+                  {triggeringImportance
+                    ? <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600" />
+                    : <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                  }
+                  Recompute
+                </button>
+              </div>
+              {loadingImportance ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+                </div>
+              ) : importance?.importances ? (
+                <FeatureImportanceChart
+                  importances={importance.importances}
+                  metric={importance.metric}
+                  computedAt={importance.computed_at}
+                />
+              ) : (
+                <div className="flex items-center justify-center py-8 text-sm text-gray-400">
+                  No importance data yet. Click Recompute to generate.
+                </div>
+              )}
             </div>
           )}
         </div>

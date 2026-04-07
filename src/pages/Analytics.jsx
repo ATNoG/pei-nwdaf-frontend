@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import SearchableDropdown from '../components/SearchableDropdown';
+import FeatureImportanceChart from '../components/FeatureImportanceChart';
 
 const Analytics = () => {
   const dataStorageUrl ='/' + import.meta.env.VITE_DATA_STORAGE_HOST;
@@ -23,6 +24,8 @@ const Analytics = () => {
 
   const [models, setModels] = useState([]);
   const [loadingModels, setLoadingModels] = useState(false);
+
+  const [explain, setExplain] = useState(false);
 
   // Fetch available cells on mount
   useEffect(() => {
@@ -125,6 +128,7 @@ const Analytics = () => {
             output_field: formData.output_field,
             cell_id: formData.cell_index,
             model_id: formData.model_id,
+            explain,
           };
 
       const response = await fetch(endpoint, {
@@ -314,6 +318,21 @@ const Analytics = () => {
                 </p>
               )}
             </div>
+
+            {formData.output_field !== 'anomaly' && (
+              <div className="flex items-end pb-1 md:col-start-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={explain}
+                    onChange={e => setExplain(e.target.checked)}
+                    disabled={noModelsAvailable}
+                    className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                  />
+                  <span className="text-base text-gray-700">Include local explanation (KernelSHAP)</span>
+                </label>
+              </div>
+            )}
           </div>
 
           {/* Submit Button */}
@@ -360,7 +379,7 @@ const Analytics = () => {
           </div>
 
           <div className="p-6 space-y-6">
-            {/* Model info + timing summary — forecast only */}
+            {/* Model info + timing summary - forecast only */}
             {formData.output_field !== 'anomaly' && (
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
               <dl className="space-y-2 text-sm">
@@ -420,7 +439,7 @@ const Analytics = () => {
             </div>
             )}
 
-            {/* Anomaly Detection Summary — IP rows, model columns */}
+            {/* Anomaly Detection Summary - IP rows, model columns */}
             {formData.output_field === 'anomaly' && prediction?.ip_anomalies && (() => {
               const modelNames = Object.keys(prediction.models ?? {});
               const rows = Object.entries(prediction.ip_anomalies);
@@ -454,7 +473,7 @@ const Analytics = () => {
                         <tr key={ip} className="hover:bg-gray-50">
                           <td className="px-4 py-2 text-gray-900 font-mono text-xs">{ip}</td>
                           {modelNames.map(id => {
-                            const val = modelCounts[id] ?? '—';
+                            const val = modelCounts[id] ?? '-';
                             const [anom, total] = val.split('/').map(Number);
                             const isAnomaly = anom > 0;
                             return (
@@ -513,6 +532,29 @@ const Analytics = () => {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            )}
+
+            {/* Local Explanation (KernelSHAP) */}
+            {prediction.explanation && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <h4 className="text-sm font-semibold text-gray-700">Local Explanation</h4>
+                  <span className="px-2 py-0.5 text-xs font-bold bg-gray-100 text-gray-600 rounded uppercase tracking-wide">
+                    {prediction.explanation.method}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mb-4">
+                  Baseline: <span className="font-mono font-medium text-gray-700">{prediction.explanation.baseline?.toFixed(4)}</span>
+                  {' · '}Positive values pushed the prediction above baseline, negative below.
+                </p>
+                <FeatureImportanceChart
+                  importances={Object.fromEntries(
+                    Object.entries(prediction.explanation.attributions).map(([k, v]) => [k, { mean: v }])
+                  )}
+                  metric="shap"
+                  computedAt={prediction.explanation.computed_at}
+                />
               </div>
             )}
           </div>
