@@ -26,7 +26,7 @@ const COLORS = [
 ];
 
 // Base shapes per model - ensures each series is identifiable by shape alone,
-const POINT_SHAPES = ['circle', 'triangle', 'rect', 'star', 'cross', 'crossRot'];
+const POINT_SHAPES = ['circle', 'triangle', 'rect'];
 
 const METRICS = ['rmse', 'mae', 'mse', 'r2'];
 
@@ -356,15 +356,29 @@ const Performance = () => {
     };
     const labels = allTimes.map(fmt);
 
+    const allModelIds = [...models].reverse().map(m => m.id);
+    const stableIndex = (modelId) => {
+      const idx = allModelIds.indexOf(modelId);
+      if (idx === -1) {
+        let h = 0;
+        for (let c of modelId) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+        return h % COLORS.length;
+      }
+      return idx;
+    };
+
     const modelMeta = [];
-    const alignedDatasets = Object.entries(byModel).map(([modelId, pts], i) => {
+    const alignedDatasets = Object.entries(byModel)
+      .sort(([a], [b]) => stableIndex(a) - stableIndex(b))
+      .map(([modelId, pts]) => {
       const modelName = models.find(m => m.id === modelId)?.name ?? modelId.slice(0, 8);
       const isBest = modelId === bestModelId;
-      const color = COLORS[i % COLORS.length];
+      const si = stableIndex(modelId);
+      const color = COLORS[si % COLORS.length];
       modelMeta.push({ modelId, modelName, color, isBest });
       const ptMap = Object.fromEntries(pts.map(p => [p.measured_at, p]));
       const aligned = allTimes.map(t => ptMap[t] ? ptMap[t].score : null);
-      const baseShape = POINT_SHAPES[i % POINT_SHAPES.length];
+      const baseShape = POINT_SHAPES[si % POINT_SHAPES.length];
       const styles = allTimes.map(t => ptMap[t]
         ? (ptMap[t].trigger === 'evaluate' ? 'rectRot' : baseShape)
         : baseShape);
@@ -381,8 +395,8 @@ const Performance = () => {
         pointRadius: radii,
         pointHoverRadius: 8,
         pointBackgroundColor: color,
-        pointBorderColor: '#fff',
-        pointBorderWidth: 1.5,
+        pointBorderWidth: 0,
+        pointHoverBorderWidth: 0,
         tension: 0,
         fill: false,
         spanGaps: false,
