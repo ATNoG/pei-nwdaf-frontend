@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import SearchableDropdown from '../components/SearchableDropdown';
 import { Line } from 'react-chartjs-2';
+import FeatureImportanceChart from '../components/FeatureImportanceChart';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -68,6 +69,11 @@ const Performance = () => {
   const [loadingFields, setLoadingFields] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
 
+  // Feature importance
+  const [importance, setImportance] = useState(null);
+  const [loadingImportance, setLoadingImportance] = useState(false);
+  const [recomputingImportance, setRecomputingImportance] = useState(false);
+
   // Actions
   const [metric, setMetric] = useState('rmse');
   const [triggerFilter, setTriggerFilter] = useState(null);
@@ -114,6 +120,15 @@ const Performance = () => {
       if (!res.ok) return;
       setModels(await res.json());
     } catch { /* ignore */ }
+  }, [mlUrl]);
+
+  const fetchImportance = useCallback(async (field) => {
+    setLoadingImportance(true);
+    try {
+      const res = await fetch(`${mlUrl}/v1/performance/${encodeURIComponent(field)}/importance`);
+      setImportance(res.ok ? await res.json() : null);
+    } catch { setImportance(null); }
+    finally { setLoadingImportance(false); }
   }, [mlUrl]);
 
   const fetchJobDetails = useCallback(async (jobIds) => {
@@ -201,6 +216,7 @@ const Performance = () => {
     setModels([]);
     setActiveJobs({});
     setVisibleModels(null);
+    setImportance(null);
 
     setLoadingData(true);
 
@@ -210,6 +226,7 @@ const Performance = () => {
       fetchBest(activeField),
       fetchHistory(activeField),
       fetchModels(activeField),
+      fetchImportance(activeField),
     ]).then(([statusData]) => {
       if (statusData?.active_job_ids?.length) {
         fetchJobDetails(statusData.active_job_ids);
@@ -230,7 +247,7 @@ const Performance = () => {
       clearInterval(statusIntervalRef.current);
       clearTimeout(refreshTimeoutRef.current);
     };
-  }, [activeField, fetchStatus, fetchBest, fetchHistory, fetchModels, fetchJobDetails]);
+  }, [activeField, fetchStatus, fetchBest, fetchHistory, fetchModels, fetchJobDetails, fetchImportance]);
 
   // 2s fast-poll while an action is running (so state badge updates immediately)
   useEffect(() => {
@@ -241,6 +258,19 @@ const Performance = () => {
     fastPollRef.current = setInterval(() => fetchStatus(activeField), 2000);
     return () => clearInterval(fastPollRef.current);
   }, [actionLoading, activeField, fetchStatus]);
+
+  const handleRecomputeImportance = async () => {
+    if (!bestModel?.model_id) return;
+    setRecomputingImportance(true);
+    try {
+      const res = await fetch(
+        `${mlUrl}/v1/performance/${encodeURIComponent(activeField)}/models/${encodeURIComponent(bestModel.model_id)}/importance`,
+        { method: 'POST' }
+      );
+      if (res.ok) setImportance(await res.json());
+    } catch { /* ignore */ }
+    finally { setRecomputingImportance(false); }
+  };
 
   const handleEvaluate = async () => {
     setActionLoading('evaluate');
@@ -311,7 +341,7 @@ const Performance = () => {
     // Sort each model's entries by time
     Object.values(byModel).forEach(pts => pts.sort((a, b) => new Date(a.measured_at) - new Date(b.measured_at)));
 
-    // All timestamps as labels (union, sorted) — with boundary ticks for fixed windows
+    // All timestamps as labels (union, sorted) - with boundary ticks for fixed windows
     const dataTimes = [...new Set(entries.map(e => e.measured_at))].sort();
     const allTimes = timeWindow
       ? [...new Set([new Date(now - timeWindow).toISOString(), ...dataTimes, new Date(now).toISOString()])].sort()
@@ -475,7 +505,7 @@ const Performance = () => {
             </button>
           </div>
 
-          {/* State — badge + timing + active jobs */}
+          {/* State - badge + timing + active jobs */}
           {status && (
             <div className="flex items-center gap-3">
               <StateBadge state={status.state} />
@@ -528,6 +558,7 @@ const Performance = () => {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
       ) : (
+        <>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
             <div className="mb-4 space-y-2">
@@ -693,6 +724,54 @@ const Performance = () => {
 
           </div>
         </div>
+
+        {/* Feature Importance panel - only when a best model is elected */}
+        {bestModel && (
+          <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-semibold text-gray-900">Feature Importance</h3>
+                {importance?.metric && (
+                  <span className="px-2 py-0.5 text-xs font-bold bg-gray-100 text-gray-700 rounded uppercase tracking-wide">
+                    {importance.metric}
+                  </span>
+                )}
+                <span className="text-xs text-gray-400">best model</span>
+              </div>
+              <button
+                onClick={handleRecomputeImportance}
+                disabled={recomputingImportance}
+                className="px-3 py-1.5 text-sm font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                title="Trigger fresh permutation importance computation"
+              >
+                {recomputingImportance
+                  ? <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-gray-600" />
+                  : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                }
+                Recompute
+              </button>
+            </div>
+
+            {loadingImportance ? (
+              <div className="flex items-center justify-center py-10">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+              </div>
+            ) : importance?.importances ? (
+              <FeatureImportanceChart
+                importances={importance.importances}
+                metric={importance.metric}
+                computedAt={importance.computed_at}
+              />
+            ) : (
+              <div className="flex items-center justify-center py-10 text-sm text-gray-400">
+                No importance data yet. Click Recompute to generate.
+              </div>
+            )}
+          </div>
+        )}
+        </>
       )}
     </div>
   );

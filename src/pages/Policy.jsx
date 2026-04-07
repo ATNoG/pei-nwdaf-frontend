@@ -128,11 +128,11 @@ const fetchRegisteredComponents = async () => {
           base.resourceTypes = Object.values(byId);
         } else if (defaultEntry?.resourceTypes?.length > 0) {
           // Component registered without self-referencing keys but default
-          // declares resource types (e.g. data-storage before DB connects) — keep defaults
+          // declares resource types (e.g. data-storage before DB connects) - keep defaults
           base.resourceTypes = defaultEntry.resourceTypes;
         }
       } else if (defaultEntry?.resourceTypes?.length > 0) {
-        // No allowed_fields at all — preserve hardcoded defaults
+        // No allowed_fields at all - preserve hardcoded defaults
         base.resourceTypes = defaultEntry.resourceTypes;
       }
 
@@ -1011,7 +1011,7 @@ const Policy = () => {
                 </div>
               </div>
 
-              {/* ML Model Metadata — shown when source is an ML model */}
+              {/* ML Model Metadata - shown when source is an ML model */}
               {newPipelineSource && (() => {
                 const sourceComp = availableComponents.find(c => c.id === newPipelineSource);
                 if (!sourceComp?.mlModelMeta) return null;
@@ -1037,7 +1037,7 @@ const Policy = () => {
                 );
               })()}
 
-              {/* ML Model Metadata — shown when sink is an ML model */}
+              {/* ML Model Metadata - shown when sink is an ML model */}
               {newPipelineSink && (() => {
                 const sinkComp = availableComponents.find(c => c.id === newPipelineSink);
                 if (!sinkComp?.mlModelMeta) return null;

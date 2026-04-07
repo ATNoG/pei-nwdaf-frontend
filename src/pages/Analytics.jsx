@@ -360,7 +360,7 @@ const Analytics = () => {
           </div>
 
           <div className="p-6 space-y-6">
-            {/* Model info + timing summary — forecast only */}
+            {/* Model info + timing summary - forecast only */}
             {formData.output_field !== 'anomaly' && (
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
               <dl className="space-y-2 text-sm">
@@ -420,7 +420,7 @@ const Analytics = () => {
             </div>
             )}
 
-            {/* Anomaly Detection Summary — IP rows, model columns */}
+            {/* Anomaly Detection Summary - IP rows, model columns */}
             {formData.output_field === 'anomaly' && prediction?.ip_anomalies && (() => {
               const modelNames = Object.keys(prediction.models ?? {});
               const rows = Object.entries(prediction.ip_anomalies);
@@ -454,7 +454,7 @@ const Analytics = () => {
                         <tr key={ip} className="hover:bg-gray-50">
                           <td className="px-4 py-2 text-gray-900 font-mono text-xs">{ip}</td>
                           {modelNames.map(id => {
-                            const val = modelCounts[id] ?? '—';
+                            const val = modelCounts[id] ?? '-';
                             const [anom, total] = val.split('/').map(Number);
                             const isAnomaly = anom > 0;
                             return (
