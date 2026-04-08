@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
+import { FaShieldAlt } from 'react-icons/fa';
+import { useConfig } from '../contexts/ConfigContext';
 import FeatureImportanceChart from '../components/FeatureImportanceChart';
 
 // Toast
@@ -21,8 +23,218 @@ const Toast = ({ message, onClose }) => {
   );
 };
 
+// Policy Status Badge
+const PolicyStatusBadge = ({ modelName, policyUrl }) => {
+  const [hasPipeline, setHasPipeline] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [pipelineDetails, setPipelineDetails] = useState([]);
+  const [modelMeta, setModelMeta] = useState(null);
+
+  useEffect(() => {
+    const fetchPolicyStatus = async () => {
+      try {
+        // First check if model is registered
+        const componentsResponse = await fetch(`${policyUrl}/components`);
+        if (!componentsResponse.ok) return;
+
+        const componentsData = await componentsResponse.json();
+        const modelComponent = componentsData.components?.find(
+          c => c.component_id === `ml-${modelName}` || c.component_id === modelName
+        );
+
+        if (!modelComponent) {
+          setHasPipeline(false);
+          return;
+        }
+
+        // Store model metadata (input/output fields)
+        const attrs = modelComponent.attributes || {};
+        setModelMeta({
+          inputFields: attrs.input_fields || [],
+          outputFields: attrs.output_fields || [],
+          architecture: attrs.architecture,
+          windowDuration: attrs.window_duration_seconds,
+        });
+
+        // Check if there are any pipelines (transformers) for this model
+        const transformersResponse = await fetch(`${policyUrl}/transformers`);
+        if (!transformersResponse.ok) return;
+
+        const transformersData = await transformersResponse.json();
+        const modelPipelineKeys = Object.keys(transformersData).filter(
+          key => key.endsWith(`_to_${modelComponent.component_id}`)
+        );
+
+        setHasPipeline(modelPipelineKeys.length > 0);
+
+        // Fetch full details for each pipeline
+        if (modelPipelineKeys.length > 0) {
+          const details = await Promise.all(
+            modelPipelineKeys.map(async (pipelineId) => {
+              const pipelineResponse = await fetch(`${policyUrl}/transformers/${pipelineId}`);
+              if (!pipelineResponse.ok) return null;
+              const pipelineData = await pipelineResponse.json();
+              // Extract source from pipeline ID (format: "source_to_ml-modelname")
+              const source = pipelineId.replace(`_to_${modelComponent.component_id}`, '');
+              return {
+                pipelineId,
+                source,
+                steps: pipelineData.steps || [],
+              };
+            })
+          );
+          setPipelineDetails(details.filter(Boolean));
+        }
+      } catch (err) {
+        console.warn('Failed to fetch policy status:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPolicyStatus();
+  }, [modelName, policyUrl]);
+
+  const handleBadgeClick = () => {
+    if (hasPipeline) {
+      setShowModal(true);
+    }
+  };
+
+  // Only show badge if model has a saved pipeline
+  if (loading || !hasPipeline) return null;
+
+  return (
+    <>
+      <span
+        className="px-2 py-0.5 text-xs font-bold text-blue-600 bg-blue-50 rounded inline-flex items-center leading-5 cursor-pointer hover:bg-blue-100 transition-colors"
+        title="Policies Applied - Click to view details"
+        onClick={handleBadgeClick}
+      >
+        <FaShieldAlt className="w-3 h-3" />
+      </span>
+
+      {/* Modal for showing policy details */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Policy Details</h3>
+              <button
+                onClick={() => setShowModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Model input/output fields */}
+            {modelMeta && (modelMeta.inputFields.length > 0 || modelMeta.outputFields.length > 0) && (
+              <div className="mb-4 pb-4 border-b border-gray-100">
+                <p className="text-sm text-gray-600 mb-2">Model <strong>{modelName}</strong></p>
+                <div className="grid grid-cols-2 gap-3">
+                  {modelMeta.inputFields.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Input Fields</p>
+                      <div className="flex flex-wrap gap-1">
+                        {modelMeta.inputFields.map(field => (
+                          <span key={field} className="px-1.5 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-800 rounded">
+                            {field}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {modelMeta.outputFields.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Output Fields</p>
+                      <div className="flex flex-wrap gap-1">
+                        {modelMeta.outputFields.map(field => (
+                          <span key={field} className="px-1.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800 rounded">
+                            {field}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Pipeline steps */}
+            <div>
+              <p className="text-sm font-semibold text-gray-700 mb-2">Active Pipelines</p>
+              {pipelineDetails.length > 0 ? (
+                <div className="space-y-3">
+                  {pipelineDetails.map(({ pipelineId, source, steps }) => (
+                    <div key={pipelineId} className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs font-mono text-gray-500 mb-2">{source} → {modelName}</p>
+                      {steps.length > 0 ? (
+                        <div className="space-y-2">
+                          {steps.map((step, i) => {
+                            const typeLabel = {
+                              filter: 'Filter',
+                              redaction: 'Redaction',
+                              hashing: 'Hashing',
+                              substitution: 'Substitution',
+                            }[step.type] || step.type;
+                            const typeColor = {
+                              filter: 'bg-yellow-100 text-yellow-800',
+                              redaction: 'bg-red-100 text-red-800',
+                              hashing: 'bg-orange-100 text-orange-800',
+                              substitution: 'bg-purple-100 text-purple-800',
+                            }[step.type] || 'bg-gray-100 text-gray-800';
+                            const fields = step.params?.fields || [];
+                            return (
+                              <div key={i} className="flex flex-wrap items-center gap-1.5">
+                                <span className={`px-1.5 py-0.5 text-xs font-bold rounded ${typeColor}`}>
+                                  {typeLabel}
+                                </span>
+                                {step.params?.mode && (
+                                  <span className="text-xs text-gray-500">({step.params.mode})</span>
+                                )}
+                                {fields.length > 0 && fields.map(f => (
+                                  <span key={f} className="px-1.5 py-0.5 text-xs bg-white border border-gray-200 rounded text-gray-700">
+                                    {f}
+                                  </span>
+                                ))}
+                                {step.params?.replacement && (
+                                  <span className="text-xs text-gray-400">→ "{step.params.replacement}"</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-500 italic">No transformation steps</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 italic">No pipelines configured</p>
+              )}
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => setShowModal(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
 // ModelCard
-const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete, isTraining, copiedId, onCopyId, isNew }) => {
+const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete, isTraining, copiedId, onCopyId, isNew, policyUrl }) => {
   const isBestForAny = model.best_for_fields?.length > 0;
   return (
     <div className={`bg-white rounded-lg border p-6 shadow-sm hover:shadow-md transition-shadow [container-type:inline-size] ${isNew ? 'border-green-500 ring-2 ring-green-200' : 'border-gray-200'}`}>
@@ -44,6 +256,7 @@ const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete,
                 anomaly
               </span>
             )}
+            <PolicyStatusBadge modelName={model.name} policyUrl={policyUrl} />
           </div>
           <div className="flex flex-wrap gap-1 mt-2 min-h-[22px]">
             {isBestForAny && model.best_for_fields.map(field => (
@@ -1800,6 +2013,7 @@ const MLModels = () => {
                     copiedId={copiedId}
                     onCopyId={copyToClipboard}
                     isNew={isNewlyCreated(model.id)}
+                    policyUrl={'/policy-api'}
                   />
                 ))}
             </div>
