@@ -19,6 +19,8 @@ services:
       - DECISION_PORT=${DECISION_PORT}
       - DATA_INGESTION_HOST=${DATA_INGESTION_HOST}
       - DATA_INGESTION_PORT=${DATA_INGESTION_PORT}
+      - DATA_STORAGE_HOST=${DATA_STORAGE_HOST}
+      - DATA_STORAGE_PORT=${DATA_STORAGE_PORT}
       - MLFLOW_HOST=${MLFLOW_HOST}
       - MLFLOW_PORT=${MLFLOW_PORT}
     healthcheck:
@@ -33,7 +35,17 @@ services:
 
   #---- Frontend
   frontend:
-    build: .
+    build:
+      context: .
+      args:
+        - VITE_ML_HOST=${VITE_ML_HOST:-pei-ml}
+        - VITE_DATA_STORAGE_HOST=${VITE_DATA_STORAGE_HOST:-data-storage}
+        - VITE_MLFLOW_URL=${VITE_MLFLOW_URL:-/mlflow}
+        - VITE_RAW_DATA_URL=${VITE_RAW_DATA_URL}
+        - VITE_DATA_STORAGE_URL=${VITE_DATA_STORAGE_URL}
+        - VITE_ML_URL=${VITE_ML_URL}
+        - VITE_POLICY_SERVICE_URL=${VITE_POLICY_SERVICE_URL}
+        - VITE_AVAILABLE_COMPONENTS=${VITE_AVAILABLE_COMPONENTS}
     container_name: frontend
     ports:
       - "5173:5173"
@@ -41,9 +53,6 @@ services:
       watch:
         - path: .
           action: rebuild
-    # volumes:
-    #   - .:/app
-    #   - /app/node_modules
     environment:
       - VITE_ML_HOST=${VITE_ML_HOST:-pei-ml}
       - VITE_DATA_STORAGE_HOST=${VITE_DATA_STORAGE_HOST:-data-storage}

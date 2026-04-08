@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import ServiceStatusOverview from '../components/ServiceStatusOverview';
 import DataTable from '../components/DataTable';
 import ProducerManager from '../components/ProducerManager';
@@ -83,44 +83,48 @@ const Dashboard = () => {
     return () => clearInterval(id);
   }, [rawDataUrl, selectedSubscription]);
 
+  // Helper to convert snake_case keys to human headers
+  const humanize = (s) => {
+    if (!s) return '';
+    return String(s).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  };
 
-  // Column definitions for raw data table - All columns
-  const rawDataColumns = [
+  // Fallback columns used until we have realtime data
+  const defaultRawDataColumns = [
     { header: 'Timestamp', accessor: 'timestamp' },
-    {
-      header: 'Mean Latency (ms)',
-      accessor: 'mean_latency',
-      render: (value) => {
-        if (!value) return '-';
-        const latency = parseFloat(value);
-        const color = latency < 30 ? 'text-green-600' : latency < 50 ? 'text-yellow-600' : 'text-red-600';
-        return <span className={`font-medium ${color}`}>{value}</span>;
-      }
-    },
-    { header: 'Datarate', accessor: 'datarate' },
-    {
-      header: 'RSRP (dBm)',
-      accessor: 'rsrp',
-      render: (value) => {
-        if (!value) return '-';
-        const rsrp = parseFloat(value);
-        const color = rsrp > -90 ? 'text-green-600' : rsrp > -100 ? 'text-yellow-600' : 'text-red-600';
-        return <span className={`font-medium ${color}`}>{value}</span>;
-      }
-    },
-    { header: 'SINR (dB)', accessor: 'sinr' },
-    { header: 'RSRQ (dB)', accessor: 'rsrq' },
-    { header: 'Direction', accessor: 'direction' },
-    { header: 'Network', accessor: 'network' },
-    { header: 'CQI', accessor: 'cqi' },
-    { header: 'Cell Index', accessor: 'cell_index' },
-    { header: 'Primary Bandwidth', accessor: 'primary_bandwidth' },
-    { header: 'UL Bandwidth', accessor: 'ul_bandwidth' },
-    { header: 'Latitude', accessor: 'latitude' },
-    { header: 'Longitude', accessor: 'longitude' },
-    { header: 'Altitude', accessor: 'altitude' },
-    { header: 'Velocity', accessor: 'velocity' },
+    { header: 'Payload', accessor: 'payload' },
   ];
+
+  // Safe getter that supports simple dot notation for nested values
+  const getValue = (obj, key) => {
+    if (!obj || !key) return undefined;
+    if (!key.includes('.')) return obj[key];
+    return key.split('.').reduce((o, k) => (o && k in o ? o[k] : undefined), obj);
+  };
+
+  const rawDataColumns = useMemo(() => {
+    if (!Array.isArray(realtimeData) || realtimeData.length === 0) {
+      return defaultRawDataColumns;
+    }
+
+    const sample = realtimeData[0];
+    // Ensure deterministic ordering: timestamp first if present, then rest alphabetically
+    const keys = Object.keys(sample);
+    keys.sort((a, b) => {
+      if (a === 'timestamp') return -1;
+      if (b === 'timestamp') return 1;
+      return a.localeCompare(b);
+    });
+
+    return keys.map((key) => {
+      const col = { accessor: key, header: humanize(key) };
+
+      // default: show value or '-' for null/undefined
+      col.render = (value) => (value == null || value === '' ? '-' : String(value));
+
+      return col;
+    });
+  }, [realtimeData]);
 
   return (
     <div className="space-y-8">
@@ -136,16 +140,16 @@ const Dashboard = () => {
 
       {/* Real-time Data Section */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <h2 className="text-xl font-bold text-gray-900">Ingestion Data</h2>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             {producers.length > 0 ? (
               <>
-                <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Active Producer:</label>
+                <label className="text-sm font-medium text-gray-700 shrink-0">Active Producer:</label>
                 <select
                   value={selectedSubscription}
                   onChange={(e) => setSelectedSubscription(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   {producers.map((p) => (
                     <option key={p.id} value={p.id}>{p.label} - {p.url}</option>
@@ -181,7 +185,7 @@ const Dashboard = () => {
                   >
                     {rawDataColumns.map((col) => (
                       <td key={col.accessor} className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {col.render ? col.render(row[col.accessor]) : (row[col.accessor] ?? '-')}
+                        {col.render ? col.render(getValue(row, col.accessor)) : (getValue(row, col.accessor) ?? '-')}
                       </td>
                     ))}
                   </tr>

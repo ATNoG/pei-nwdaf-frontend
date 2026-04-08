@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { FaShieldAlt } from 'react-icons/fa';
 import { useConfig } from '../contexts/ConfigContext';
+import FeatureImportanceChart from '../components/FeatureImportanceChart';
 
 // Toast
 const Toast = ({ message, onClose }) => {
@@ -233,7 +234,7 @@ const PolicyStatusBadge = ({ modelName, policyUrl }) => {
 };
 
 // ModelCard
-const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete, isDefault, isTraining, copiedId, onCopyId, isNew, policyUrl }) => {
+const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete, isTraining, copiedId, onCopyId, isNew, policyUrl }) => {
   const isBestForAny = model.best_for_fields?.length > 0;
   return (
     <div className={`bg-white rounded-lg border p-6 shadow-sm hover:shadow-md transition-shadow [container-type:inline-size] ${isNew ? 'border-green-500 ring-2 ring-green-200' : 'border-gray-200'}`}>
@@ -369,10 +370,9 @@ const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete,
     prevProps.model.latest_version === nextProps.model.latest_version &&
     prevProps.model.architecture === nextProps.model.architecture &&
     JSON.stringify(prevProps.model.best_for_fields) === JSON.stringify(nextProps.model.best_for_fields);
-  const isDefaultSame = prevProps.isDefault === nextProps.isDefault;
   const isTrainingSame = prevProps.isTraining === nextProps.isTraining;
   const copiedIdSame = prevProps.copiedId === nextProps.copiedId;
-  return modelSame && isDefaultSame && isTrainingSame && copiedIdSame;
+  return modelSame && isTrainingSame && copiedIdSame;
 });
 
 // CreateModelModal
@@ -510,6 +510,7 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
     window_duration_seconds: 60,
     lookback_steps: 30,
     forecast_steps: 5,
+    percentile_threshold: 95.0
   });
   const [isCreating, setIsCreating] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -580,6 +581,7 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
           window_duration_seconds: parseInt(formData.window_duration_seconds),
           lookback_steps: parseInt(formData.lookback_steps),
           forecast_steps: parseInt(formData.forecast_steps),
+          percentile_threshold: parseFloat(formData.percentile_threshold),
           ...(showAdvanced ? { hidden_size: parseInt(hiddenSize) } : {}),
         },
       };
@@ -670,7 +672,8 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
                 required
               />
             </div>
-            <div>
+            {!isAnomaly && (
+              <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Lookback steps <span className="text-red-500">*</span></label>
               <input
                 type="number"
@@ -681,6 +684,28 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
                 required
               />
             </div>
+            )}
+            {isAnomaly && (
+              <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Percentile threshold <span className="text-red-500">*</span></label>
+              <input
+                type="number"
+                min="1"
+                value={formData.percentile_threshold}
+                onChange={(e) => {
+                    let v = parseFloat(e.target.value);
+                    if (Number.isNaN(v)) {
+                      setFormData({ ...formData, percentile_threshold: '' });
+                    } else {
+                      v = Math.max(1.0, Math.min(99.9, Math.round(v * 10) / 10));
+                      setFormData({ ...formData, percentile_threshold: v });
+                    }
+                  }}
+                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
+            </div>
+            )}
             {!isAnomaly && (
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Forecast steps <span className="text-red-500">*</span></label>
@@ -953,7 +978,7 @@ const AllJobsModal = ({ showModal, setShowModal, mlUrl, onJobsUpdate }) => {
   );
 };
 
-// TrainingModal — combined start training + job history
+// TrainingModal - combined start training + job history
 const TrainingModal = ({ model, mlUrl, onClose, onStartTraining, isTraining }) => {
   const [lookbackSeconds, setLookbackSeconds] = useState(3600);
   const [jobs, setJobs] = useState([]);
@@ -1125,6 +1150,41 @@ const TrainingModal = ({ model, mlUrl, onClose, onStartTraining, isTraining }) =
 
 // Model Details Modal
 const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadingDetails, modelDetails, mlUrl }) => {
+  const [importance, setImportance] = useState(null);
+  const [loadingImportance, setLoadingImportance] = useState(false);
+  const [triggeringImportance, setTriggeringImportance] = useState(false);
+
+  const isAnomaly = selectedModel?.modelType === 'anomaly';
+  const config = modelDetails?.config || {};
+  const outputField = config.output_fields?.[0] ?? selectedModel?.best_for_fields?.[0] ?? null;
+
+  useEffect(() => {
+    if (!showModal || !modelDetails?.id || isAnomaly || !outputField) {
+      setImportance(null);
+      return;
+    }
+    setLoadingImportance(true);
+    setImportance(null);
+    fetch(`${mlUrl}/v1/performance/${encodeURIComponent(outputField)}/importance?model_id=${encodeURIComponent(modelDetails.id)}`)
+      .then(r => r.ok ? r.json() : null)
+      .catch(() => null)
+      .then(data => setImportance(data))
+      .finally(() => setLoadingImportance(false));
+  }, [showModal, modelDetails?.id, isAnomaly, outputField, mlUrl]);
+
+  const handleRecomputeImportance = async () => {
+    if (!outputField || !modelDetails?.id) return;
+    setTriggeringImportance(true);
+    try {
+      const res = await fetch(
+        `${mlUrl}/v1/performance/${encodeURIComponent(outputField)}/models/${encodeURIComponent(modelDetails.id)}/importance`,
+        { method: 'POST' }
+      );
+      if (res.ok) setImportance(await res.json());
+    } catch { /* ignore */ }
+    finally { setTriggeringImportance(false); }
+  };
+
   if (!showModal || !selectedModel) return null;
 
   if (loadingDetails) {
@@ -1154,8 +1214,6 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
       </div>
     );
   }
-
-  const config = modelDetails.config || {};
 
   return (
     <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -1267,6 +1325,51 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
               </div>
             </div>
           )}
+
+          {/* Feature Importance - forecast models only */}
+          {!isAnomaly && outputField && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-semibold text-gray-900">Feature Importance</h4>
+                  {importance?.metric && (
+                    <span className="px-2 py-0.5 text-xs font-bold bg-gray-100 text-gray-700 rounded uppercase tracking-wide">
+                      {importance.metric}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={handleRecomputeImportance}
+                  disabled={triggeringImportance}
+                  className="px-2.5 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                  title="Trigger fresh permutation importance computation"
+                >
+                  {triggeringImportance
+                    ? <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600" />
+                    : <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                  }
+                  Recompute
+                </button>
+              </div>
+              {loadingImportance ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+                </div>
+              ) : importance?.importances ? (
+                <FeatureImportanceChart
+                  importances={importance.importances}
+                  metric={importance.metric}
+                  computedAt={importance.computed_at}
+                />
+              ) : (
+                <div className="flex items-center justify-center py-8 text-sm text-gray-400">
+                  No importance data yet. Click Recompute to generate.
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex-shrink-0">
@@ -1299,8 +1402,6 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
 const MLModels = () => {
   const mlUrl = '/' + import.meta.env.VITE_ML_HOST;
   const mlflowUrl = import.meta.env.VITE_MLFLOW_URL || 'http://localhost:5000';
-  const { config, loading: configLoading, refetch: refetchConfig } = useConfig();
-
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -1374,14 +1475,6 @@ const MLModels = () => {
     const fiveMinutes = 5 * 60 * 1000;
     return Date.now() - createdAt < fiveMinutes;
   }, [newlyCreatedModels]);
-
-  const isDefaultModel = useCallback((modelName) => {
-    if (!config?.inference_types) return false;
-    return config.inference_types.some(inference => {
-      const expectedName = `${inference.name}_${inference.default_model}_${inference.horizon}`;
-      return modelName === expectedName;
-    });
-  }, [config?.inference_types]);
 
   // Fetch fields on mount
   useEffect(() => {
@@ -1551,11 +1644,10 @@ const MLModels = () => {
       }
       setTimedTrainingMessage({ type: 'success', text: `${model.name} is now the best model for ${outputField}` });
       await fetchModels(filterField);
-      if (refetchConfig) await refetchConfig();
     } catch (err) {
       setTimedTrainingMessage({ type: 'error', text: `Failed to set best model: ${err.message}` });
     }
-  }, [mlUrl, fetchModels, filterField, refetchConfig]);
+  }, [mlUrl, fetchModels, filterField]);
 
   const handleSetAsDefault = useCallback(async (model) => {
     setTimedTrainingMessage(null);
@@ -1594,11 +1686,10 @@ const MLModels = () => {
       }
       setTimedTrainingMessage({ type: 'success', text: `Model ${model.name} deleted successfully` });
       await fetchModels(filterField);
-      if (refetchConfig) await refetchConfig();
     } catch (err) {
       setTimedTrainingMessage({ type: 'error', text: `Failed to delete model: ${err.message}` });
     }
-  }, [mlUrl, fetchModels, filterField, refetchConfig]);
+  }, [mlUrl, fetchModels, filterField]);
 
   const handleCreateModel = useCallback(async (formData, isAnomaly = false) => {
     setTimedTrainingMessage(null);
@@ -1622,13 +1713,12 @@ const MLModels = () => {
       setNewlyCreatedModels(prev => ({ ...prev, [data.id]: Date.now() }));
       setShowCreateModal(false);
       await fetchModels(filterField);
-      if (refetchConfig) await refetchConfig();
       return true;
     } catch (err) {
       setTimedTrainingMessage({ type: 'error', text: `Failed to create model: ${err.message}` });
       return false;
     }
-  }, [mlUrl, fetchModels, filterField, refetchConfig]);
+  }, [mlUrl, fetchModels, filterField]);
 
   const handleShowDetails = useCallback((model) => {
     setSelectedModel(model);
@@ -1745,7 +1835,7 @@ const MLModels = () => {
           <div className="bg-gray-50 border-y border-none px-6 py-3 -mx-6">
             <div className="flex items-center gap-3 flex-wrap">
               {/* Search */}
-              <div className="relative flex-1 min-w-[300px]">
+              <div className="relative flex-1 min-w-0 w-full sm:w-auto">
                 <input
                   type="text"
                   placeholder="Search models by name or ID..."
@@ -1919,7 +2009,6 @@ const MLModels = () => {
                     onTrain={handleTrain}
                     onSetDefault={handleSetDefault}
                     onDelete={handleDelete}
-                    isDefault={isDefaultModel(model.name)}
                     isTraining={trainingModelIds.has(model.id)}
                     copiedId={copiedId}
                     onCopyId={copyToClipboard}

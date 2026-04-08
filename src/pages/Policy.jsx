@@ -138,11 +138,11 @@ const fetchRegisteredComponents = async () => {
           base.resourceTypes = Object.values(byId);
         } else if (defaultEntry?.resourceTypes?.length > 0) {
           // Component registered without self-referencing keys but default
-          // declares resource types (e.g. data-storage before DB connects) — keep defaults
+          // declares resource types (e.g. data-storage before DB connects) - keep defaults
           base.resourceTypes = defaultEntry.resourceTypes;
         }
       } else if (defaultEntry?.resourceTypes?.length > 0) {
-        // No allowed_fields at all — preserve hardcoded defaults
+        // No allowed_fields at all - preserve hardcoded defaults
         base.resourceTypes = defaultEntry.resourceTypes;
       }
 
@@ -159,30 +159,6 @@ const fetchRegisteredComponents = async () => {
 
 // Start with defaults, will be updated with fetched components
 let AVAILABLE_COMPONENTS = parseAvailableComponents();
-
-// Field categories for grouping
-const FIELD_CATEGORIES = {
-  location: {
-    label: 'Location',
-    fields: ['latitude', 'longitude', 'altitude', 'location_accuracy', 'velocity', 'velocity_accuracy', 'bearing', 'bearing_accuracy']
-  },
-  signal: {
-    label: 'Signal Quality',
-    fields: ['rsrp', 'rsrq', 'rssi', 'sinr', 'ta', 'cqi', 'ss_rsrp', 'ss_rsrq', 'ss_sinr']
-  },
-  network: {
-    label: 'Network',
-    fields: ['network', 'mcc', 'mnc', 'earfcn', 'cell_index', 'physical_cellid', 'tracking_area_code', 'primary_bandwidth', 'ul_bandwidth', 'cellbandwidths']
-  },
-  latency: {
-    label: 'Latency',
-    fields: ['mean_latency', 'min_latency', 'max_latency', 'mean_dev_latency']
-  },
-  other: {
-    label: 'Other',
-    fields: ['packet_loss', 'no_pings', 'server_ip', 'device', 'MNO', 'timestamp']
-  }
-};
 
 // Available transformer types
 const TRANSFORMER_TYPES = [
@@ -656,19 +632,19 @@ const Policy = () => {
 
       {/* Header */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="p-3 bg-blue-100 rounded-lg">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center space-x-4 min-w-0">
+            <div className="p-3 bg-blue-100 rounded-lg shrink-0">
               <FaShieldAlt className="text-2xl text-blue-600" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h2 className="text-2xl font-bold text-gray-900">Policy Configuration</h2>
               <p className="text-sm text-gray-600">Configure transformer pipelines and field permissions</p>
             </div>
           </div>
           <button
             onClick={createNewPipeline}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shrink-0"
           >
             <FaPlus />
             <span>New Pipeline</span>
@@ -1235,7 +1211,7 @@ const Policy = () => {
                 </div>
               </div>
 
-              {/* ML Model Metadata — shown when source is an ML model */}
+              {/* ML Model Metadata - shown when source is an ML model */}
               {newPipelineSource && (() => {
                 const sourceComp = availableComponents.find(c => c.id === newPipelineSource);
                 if (!sourceComp?.mlModelMeta) return null;
@@ -1273,7 +1249,7 @@ const Policy = () => {
                 );
               })()}
 
-              {/* ML Model Metadata — shown when sink is an ML model */}
+              {/* ML Model Metadata - shown when sink is an ML model */}
               {newPipelineSink && (() => {
                 const sinkComp = availableComponents.find(c => c.id === newPipelineSink);
                 if (!sinkComp?.mlModelMeta) return null;

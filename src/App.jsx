@@ -7,7 +7,7 @@ import Analytics from './pages/Analytics';
 import Performance from './pages/Performance';
 import Policy from './pages/Policy';
 import Settings from './pages/Settings';
-import { ConfigProvider } from './contexts/ConfigContext';
+import NotFound from './pages/NotFound';
 import { AccessibilityProvider } from './contexts/AccessibilityContext';
 
 function AppContent() {
@@ -60,7 +60,7 @@ function AppContent() {
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
         {/* Header */}
-        <header className="bg-gradient-to-r from-blue-500 to-blue-600 px-8 py-6 shadow-md">
+        <header className="bg-gradient-to-r from-blue-500 to-blue-600 px-4 sm:px-8 py-4 sm:py-6 shadow-md">
           <h1 className="text-3xl font-bold text-white">{getPageTitle()}</h1>
           <p className="text-blue-50 mt-1">
             {getPageSubtitle()}
@@ -68,7 +68,7 @@ function AppContent() {
         </header>
 
         {/* Page Content */}
-        <div className="p-8">
+        <div className="p-4 sm:p-8">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/ml" element={<MLModels />} />
@@ -76,6 +76,7 @@ function AppContent() {
             <Route path="/performance" element={<Performance />} />
             <Route path="/policy" element={<Policy />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
       </div>
@@ -87,9 +88,7 @@ function App() {
   return (
     <Router>
       <AccessibilityProvider>
-        <ConfigProvider>
           <AppContent />
-        </ConfigProvider>
       </AccessibilityProvider>
     </Router>
   );

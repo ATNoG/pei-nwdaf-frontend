@@ -1,14 +1,32 @@
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm ci
+COPY . .
+
+ARG VITE_ML_HOST=pei-ml
+ARG VITE_DATA_STORAGE_HOST=data-storage
+ARG VITE_MLFLOW_URL=/mlflow
+ARG VITE_RAW_DATA_URL
+ARG VITE_DATA_STORAGE_URL
+ARG VITE_ML_URL
+ARG VITE_POLICY_SERVICE_URL
+ARG VITE_AVAILABLE_COMPONENTS
+
+RUN npm run build
+
 FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package.json .
+# Install 'serve' - a minimal static file server with SPA support
+RUN npm install -g serve
 
-RUN npm install
+# Copy built assets
+COPY --from=builder /app/dist ./dist
 
-COPY . .
-
+# Expose port 5173 (to match your existing setup)
 EXPOSE 5173
 
-# Ensure Vite listens on all interfaces so host can access it when containerized
-CMD [ "npm", "run", "dev", "--", "--host", "0.0.0.0"]
+CMD ["serve", "-s", "dist", "-l", "5173"]
