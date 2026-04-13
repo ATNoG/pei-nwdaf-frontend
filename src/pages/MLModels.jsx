@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { FaShieldAlt } from 'react-icons/fa';
-import { useConfig } from '../contexts/ConfigContext';
 import FeatureImportanceChart from '../components/FeatureImportanceChart';
 
 // Toast
@@ -986,6 +985,44 @@ const TrainingModal = ({ model, mlUrl, onClose, onStartTraining, isTraining }) =
   const [cancellingIds, setCancellingIds] = useState(new Set());
   const intervalRef = useRef(null);
 
+  const [resourceCpu, setResourceCpu] = useState('');
+  const [resourceMemory, setResourceMemory] = useState('');
+  const [loadingResources, setLoadingResources] = useState(true);
+  const [savingResources, setSavingResources] = useState(false);
+  const [resourceSaveMsg, setResourceSaveMsg] = useState(null);
+
+  useEffect(() => {
+    if (!model) return;
+    setLoadingResources(true);
+    fetch(`${mlUrl}/v1/resources/defaults/${model.id}`)
+      .then(r => r.ok ? r.json() : null)
+      .catch(() => null)
+      .then(data => {
+        setResourceCpu(data?.cpu ?? '');
+        setResourceMemory(data?.memory ?? '');
+      })
+      .finally(() => setLoadingResources(false));
+  }, [model, mlUrl]);
+
+  const saveResourceDefaults = async () => {
+    setSavingResources(true);
+    setResourceSaveMsg(null);
+    try {
+      const res = await fetch(`${mlUrl}/v1/resources/defaults/${model.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cpu: resourceCpu, memory: resourceMemory }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setResourceSaveMsg({ type: 'success', text: 'Resources saved.' });
+    } catch (err) {
+      setResourceSaveMsg({ type: 'error', text: `Failed to save: ${err.message}` });
+    } finally {
+      setSavingResources(false);
+      setTimeout(() => setResourceSaveMsg(null), 3000);
+    }
+  };
+
   const fetchJobs = useCallback(async () => {
     if (!model) return;
     try {
@@ -1057,6 +1094,56 @@ const TrainingModal = ({ model, mlUrl, onClose, onStartTraining, isTraining }) =
         </div>
 
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
+          {/* Resource Defaults */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
+            <h4 className="text-sm font-semibold text-gray-900">Training Resources</h4>
+            {loadingResources ? (
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
+                Loading…
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">CPU request</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 500m"
+                      value={resourceCpu}
+                      onChange={(e) => setResourceCpu(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Memory request</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 512Mi"
+                      value={resourceMemory}
+                      onChange={(e) => setResourceMemory(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={saveResourceDefaults}
+                    disabled={savingResources || !resourceCpu || !resourceMemory}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  >
+                    {savingResources ? 'Saving…' : 'Save Resources'}
+                  </button>
+                  {resourceSaveMsg && (
+                    <span className={`text-xs font-medium ${resourceSaveMsg.type === 'success' ? 'text-green-700' : 'text-red-600'}`}>
+                      {resourceSaveMsg.text}
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Start Training */}
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
             <h4 className="text-sm font-semibold text-gray-900">Start New Training Run</h4>
