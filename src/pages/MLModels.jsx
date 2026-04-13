@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
+import { FaShieldAlt } from 'react-icons/fa';
+import FeatureImportanceChart from '../components/FeatureImportanceChart';
 
 // Toast
 const Toast = ({ message, onClose }) => {
@@ -20,8 +22,218 @@ const Toast = ({ message, onClose }) => {
   );
 };
 
+// Policy Status Badge
+const PolicyStatusBadge = ({ modelName, policyUrl }) => {
+  const [hasPipeline, setHasPipeline] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [pipelineDetails, setPipelineDetails] = useState([]);
+  const [modelMeta, setModelMeta] = useState(null);
+
+  useEffect(() => {
+    const fetchPolicyStatus = async () => {
+      try {
+        // First check if model is registered
+        const componentsResponse = await fetch(`${policyUrl}/components`);
+        if (!componentsResponse.ok) return;
+
+        const componentsData = await componentsResponse.json();
+        const modelComponent = componentsData.components?.find(
+          c => c.component_id === `ml-${modelName}` || c.component_id === modelName
+        );
+
+        if (!modelComponent) {
+          setHasPipeline(false);
+          return;
+        }
+
+        // Store model metadata (input/output fields)
+        const attrs = modelComponent.attributes || {};
+        setModelMeta({
+          inputFields: attrs.input_fields || [],
+          outputFields: attrs.output_fields || [],
+          architecture: attrs.architecture,
+          windowDuration: attrs.window_duration_seconds,
+        });
+
+        // Check if there are any pipelines (transformers) for this model
+        const transformersResponse = await fetch(`${policyUrl}/transformers`);
+        if (!transformersResponse.ok) return;
+
+        const transformersData = await transformersResponse.json();
+        const modelPipelineKeys = Object.keys(transformersData).filter(
+          key => key.endsWith(`_to_${modelComponent.component_id}`)
+        );
+
+        setHasPipeline(modelPipelineKeys.length > 0);
+
+        // Fetch full details for each pipeline
+        if (modelPipelineKeys.length > 0) {
+          const details = await Promise.all(
+            modelPipelineKeys.map(async (pipelineId) => {
+              const pipelineResponse = await fetch(`${policyUrl}/transformers/${pipelineId}`);
+              if (!pipelineResponse.ok) return null;
+              const pipelineData = await pipelineResponse.json();
+              // Extract source from pipeline ID (format: "source_to_ml-modelname")
+              const source = pipelineId.replace(`_to_${modelComponent.component_id}`, '');
+              return {
+                pipelineId,
+                source,
+                steps: pipelineData.steps || [],
+              };
+            })
+          );
+          setPipelineDetails(details.filter(Boolean));
+        }
+      } catch (err) {
+        console.warn('Failed to fetch policy status:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPolicyStatus();
+  }, [modelName, policyUrl]);
+
+  const handleBadgeClick = () => {
+    if (hasPipeline) {
+      setShowModal(true);
+    }
+  };
+
+  // Only show badge if model has a saved pipeline
+  if (loading || !hasPipeline) return null;
+
+  return (
+    <>
+      <span
+        className="px-2 py-0.5 text-xs font-bold text-blue-600 bg-blue-50 rounded inline-flex items-center leading-5 cursor-pointer hover:bg-blue-100 transition-colors"
+        title="Policies Applied - Click to view details"
+        onClick={handleBadgeClick}
+      >
+        <FaShieldAlt className="w-3 h-3" />
+      </span>
+
+      {/* Modal for showing policy details */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Policy Details</h3>
+              <button
+                onClick={() => setShowModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Model input/output fields */}
+            {modelMeta && (modelMeta.inputFields.length > 0 || modelMeta.outputFields.length > 0) && (
+              <div className="mb-4 pb-4 border-b border-gray-100">
+                <p className="text-sm text-gray-600 mb-2">Model <strong>{modelName}</strong></p>
+                <div className="grid grid-cols-2 gap-3">
+                  {modelMeta.inputFields.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Input Fields</p>
+                      <div className="flex flex-wrap gap-1">
+                        {modelMeta.inputFields.map(field => (
+                          <span key={field} className="px-1.5 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-800 rounded">
+                            {field}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {modelMeta.outputFields.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Output Fields</p>
+                      <div className="flex flex-wrap gap-1">
+                        {modelMeta.outputFields.map(field => (
+                          <span key={field} className="px-1.5 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800 rounded">
+                            {field}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Pipeline steps */}
+            <div>
+              <p className="text-sm font-semibold text-gray-700 mb-2">Active Pipelines</p>
+              {pipelineDetails.length > 0 ? (
+                <div className="space-y-3">
+                  {pipelineDetails.map(({ pipelineId, source, steps }) => (
+                    <div key={pipelineId} className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs font-mono text-gray-500 mb-2">{source} → {modelName}</p>
+                      {steps.length > 0 ? (
+                        <div className="space-y-2">
+                          {steps.map((step, i) => {
+                            const typeLabel = {
+                              filter: 'Filter',
+                              redaction: 'Redaction',
+                              hashing: 'Hashing',
+                              substitution: 'Substitution',
+                            }[step.type] || step.type;
+                            const typeColor = {
+                              filter: 'bg-yellow-100 text-yellow-800',
+                              redaction: 'bg-red-100 text-red-800',
+                              hashing: 'bg-orange-100 text-orange-800',
+                              substitution: 'bg-purple-100 text-purple-800',
+                            }[step.type] || 'bg-gray-100 text-gray-800';
+                            const fields = step.params?.fields || [];
+                            return (
+                              <div key={i} className="flex flex-wrap items-center gap-1.5">
+                                <span className={`px-1.5 py-0.5 text-xs font-bold rounded ${typeColor}`}>
+                                  {typeLabel}
+                                </span>
+                                {step.params?.mode && (
+                                  <span className="text-xs text-gray-500">({step.params.mode})</span>
+                                )}
+                                {fields.length > 0 && fields.map(f => (
+                                  <span key={f} className="px-1.5 py-0.5 text-xs bg-white border border-gray-200 rounded text-gray-700">
+                                    {f}
+                                  </span>
+                                ))}
+                                {step.params?.replacement && (
+                                  <span className="text-xs text-gray-400">→ "{step.params.replacement}"</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-500 italic">No transformation steps</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 italic">No pipelines configured</p>
+              )}
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => setShowModal(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
 // ModelCard
-const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete, isTraining, copiedId, onCopyId, isNew }) => {
+const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete, isTraining, copiedId, onCopyId, isNew, policyUrl }) => {
   const isBestForAny = model.best_for_fields?.length > 0;
   return (
     <div className={`bg-white rounded-lg border p-6 shadow-sm hover:shadow-md transition-shadow [container-type:inline-size] ${isNew ? 'border-green-500 ring-2 ring-green-200' : 'border-gray-200'}`}>
@@ -43,6 +255,7 @@ const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete,
                 anomaly
               </span>
             )}
+            <PolicyStatusBadge modelName={model.name} policyUrl={policyUrl} />
           </div>
           <div className="flex flex-wrap gap-1 mt-2 min-h-[22px]">
             {isBestForAny && model.best_for_fields.map(field => (
@@ -764,13 +977,51 @@ const AllJobsModal = ({ showModal, setShowModal, mlUrl, onJobsUpdate }) => {
   );
 };
 
-// TrainingModal — combined start training + job history
+// TrainingModal - combined start training + job history
 const TrainingModal = ({ model, mlUrl, onClose, onStartTraining, isTraining }) => {
   const [lookbackSeconds, setLookbackSeconds] = useState(3600);
   const [jobs, setJobs] = useState([]);
   const [loadingJobs, setLoadingJobs] = useState(true);
   const [cancellingIds, setCancellingIds] = useState(new Set());
   const intervalRef = useRef(null);
+
+  const [resourceCpu, setResourceCpu] = useState('');
+  const [resourceMemory, setResourceMemory] = useState('');
+  const [loadingResources, setLoadingResources] = useState(true);
+  const [savingResources, setSavingResources] = useState(false);
+  const [resourceSaveMsg, setResourceSaveMsg] = useState(null);
+
+  useEffect(() => {
+    if (!model) return;
+    setLoadingResources(true);
+    fetch(`${mlUrl}/v1/resources/defaults/${model.id}`)
+      .then(r => r.ok ? r.json() : null)
+      .catch(() => null)
+      .then(data => {
+        setResourceCpu(data?.cpu ?? '');
+        setResourceMemory(data?.memory ?? '');
+      })
+      .finally(() => setLoadingResources(false));
+  }, [model, mlUrl]);
+
+  const saveResourceDefaults = async () => {
+    setSavingResources(true);
+    setResourceSaveMsg(null);
+    try {
+      const res = await fetch(`${mlUrl}/v1/resources/defaults/${model.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cpu: resourceCpu, memory: resourceMemory }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setResourceSaveMsg({ type: 'success', text: 'Resources saved.' });
+    } catch (err) {
+      setResourceSaveMsg({ type: 'error', text: `Failed to save: ${err.message}` });
+    } finally {
+      setSavingResources(false);
+      setTimeout(() => setResourceSaveMsg(null), 3000);
+    }
+  };
 
   const fetchJobs = useCallback(async () => {
     if (!model) return;
@@ -843,6 +1094,56 @@ const TrainingModal = ({ model, mlUrl, onClose, onStartTraining, isTraining }) =
         </div>
 
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
+          {/* Resource Defaults */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
+            <h4 className="text-sm font-semibold text-gray-900">Training Resources</h4>
+            {loadingResources ? (
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
+                Loading…
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">CPU request</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 500m"
+                      value={resourceCpu}
+                      onChange={(e) => setResourceCpu(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Memory request</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 512Mi"
+                      value={resourceMemory}
+                      onChange={(e) => setResourceMemory(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={saveResourceDefaults}
+                    disabled={savingResources || !resourceCpu || !resourceMemory}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  >
+                    {savingResources ? 'Saving…' : 'Save Resources'}
+                  </button>
+                  {resourceSaveMsg && (
+                    <span className={`text-xs font-medium ${resourceSaveMsg.type === 'success' ? 'text-green-700' : 'text-red-600'}`}>
+                      {resourceSaveMsg.text}
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Start Training */}
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
             <h4 className="text-sm font-semibold text-gray-900">Start New Training Run</h4>
@@ -936,6 +1237,41 @@ const TrainingModal = ({ model, mlUrl, onClose, onStartTraining, isTraining }) =
 
 // Model Details Modal
 const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadingDetails, modelDetails, mlUrl }) => {
+  const [importance, setImportance] = useState(null);
+  const [loadingImportance, setLoadingImportance] = useState(false);
+  const [triggeringImportance, setTriggeringImportance] = useState(false);
+
+  const isAnomaly = selectedModel?.modelType === 'anomaly';
+  const config = modelDetails?.config || {};
+  const outputField = config.output_fields?.[0] ?? selectedModel?.best_for_fields?.[0] ?? null;
+
+  useEffect(() => {
+    if (!showModal || !modelDetails?.id || isAnomaly || !outputField) {
+      setImportance(null);
+      return;
+    }
+    setLoadingImportance(true);
+    setImportance(null);
+    fetch(`${mlUrl}/v1/performance/${encodeURIComponent(outputField)}/importance?model_id=${encodeURIComponent(modelDetails.id)}`)
+      .then(r => r.ok ? r.json() : null)
+      .catch(() => null)
+      .then(data => setImportance(data))
+      .finally(() => setLoadingImportance(false));
+  }, [showModal, modelDetails?.id, isAnomaly, outputField, mlUrl]);
+
+  const handleRecomputeImportance = async () => {
+    if (!outputField || !modelDetails?.id) return;
+    setTriggeringImportance(true);
+    try {
+      const res = await fetch(
+        `${mlUrl}/v1/performance/${encodeURIComponent(outputField)}/models/${encodeURIComponent(modelDetails.id)}/importance`,
+        { method: 'POST' }
+      );
+      if (res.ok) setImportance(await res.json());
+    } catch { /* ignore */ }
+    finally { setTriggeringImportance(false); }
+  };
+
   if (!showModal || !selectedModel) return null;
 
   if (loadingDetails) {
@@ -965,8 +1301,6 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
       </div>
     );
   }
-
-  const config = modelDetails.config || {};
 
   return (
     <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -1076,6 +1410,51 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Feature Importance - forecast models only */}
+          {!isAnomaly && outputField && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-semibold text-gray-900">Feature Importance</h4>
+                  {importance?.metric && (
+                    <span className="px-2 py-0.5 text-xs font-bold bg-gray-100 text-gray-700 rounded uppercase tracking-wide">
+                      {importance.metric}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={handleRecomputeImportance}
+                  disabled={triggeringImportance}
+                  className="px-2.5 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                  title="Trigger fresh permutation importance computation"
+                >
+                  {triggeringImportance
+                    ? <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600" />
+                    : <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                  }
+                  Recompute
+                </button>
+              </div>
+              {loadingImportance ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+                </div>
+              ) : importance?.importances ? (
+                <FeatureImportanceChart
+                  importances={importance.importances}
+                  metric={importance.metric}
+                  computedAt={importance.computed_at}
+                />
+              ) : (
+                <div className="flex items-center justify-center py-8 text-sm text-gray-400">
+                  No importance data yet. Click Recompute to generate.
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1721,6 +2100,7 @@ const MLModels = () => {
                     copiedId={copiedId}
                     onCopyId={copyToClipboard}
                     isNew={isNewlyCreated(model.id)}
+                    policyUrl={'/policy-api'}
                   />
                 ))}
             </div>

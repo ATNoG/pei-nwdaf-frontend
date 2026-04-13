@@ -11,7 +11,9 @@ const FieldDiscoveryPanel = ({
   syncStatus,
   isLoading,
   onDeselectAll,
-  onSelectAll
+  onSelectAll,
+  highlightedFields = new Set(),
+  onClearHighlight
 }) => {
   // Search state
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -76,9 +78,24 @@ const FieldDiscoveryPanel = ({
           <h3 className="text-lg font-semibold text-gray-900">Field Discovery</h3>
           <p className="text-sm text-gray-600 mt-1">
             {selectedCount} of {totalFields} fields selected
+            {highlightedFields.size > 0 && (
+              <span className="ml-2 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded">
+                {highlightedFields.size} training field{highlightedFields.size !== 1 ? 's' : ''} highlighted
+              </span>
+            )}
           </p>
         </div>
         <div className="flex items-center space-x-2">
+          {highlightedFields.size > 0 && onClearHighlight && (
+            <button
+              onClick={onClearHighlight}
+              className="flex items-center space-x-2 px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors"
+              title="Clear highlight"
+            >
+              <FaTimes />
+              <span>Clear Highlight</span>
+            </button>
+          )}
           <button
             onClick={onRefresh}
             disabled={isLoading}
@@ -199,25 +216,30 @@ const FieldDiscoveryPanel = ({
             {/* Fields Grid - bounded with scroll */}
             <div className="p-4 bg-white max-h-96 overflow-y-auto">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {filteredFields.map(field => (
-                  <label
-                    key={field.name}
-                    className={`flex items-center space-x-2 p-2 rounded-lg border cursor-pointer transition-colors ${
-                      selectedFields.has(field.name)
-                        ? 'bg-blue-50 border-blue-300'
-                        : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                    }`}
-                    title={field.name}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedFields.has(field.name)}
-                      onChange={() => onToggleField(field.name)}
-                      className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 flex-shrink-0"
-                    />
-                    <span className="text-sm text-gray-700 truncate">{field.name}</span>
-                  </label>
-                ))}
+                {filteredFields.map(field => {
+                  const isHighlighted = highlightedFields.has(field.name);
+                  return (
+                    <label
+                      key={field.name}
+                      className={`flex items-center space-x-2 p-2 rounded-lg border cursor-pointer transition-colors ${
+                        isHighlighted
+                          ? 'bg-yellow-100 border-yellow-400 ring-2 ring-yellow-300'
+                          : selectedFields.has(field.name)
+                            ? 'bg-blue-50 border-blue-300'
+                            : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                      }`}
+                      title={field.name}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedFields.has(field.name)}
+                        onChange={() => onToggleField(field.name)}
+                        className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 flex-shrink-0"
+                      />
+                      <span className="text-sm text-gray-700 truncate">{field.name}</span>
+                    </label>
+                  );
+                })}
               </div>
               {filteredFields.length === 0 && searchQuery && (
                 <div className="text-center py-8 text-gray-500">
@@ -282,11 +304,20 @@ const FieldDiscoveryPanel = ({
 
       {/* Footer Info */}
       {totalFields > 0 && (
-        <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-          <p className="text-sm text-blue-800">
-            <strong>Note:</strong> Only selected fields will be included in the pipeline.
-            Changes are applied when you click "Save Pipeline".
-          </p>
+        <div className="mt-4 space-y-3">
+          <div className="p-4 bg-blue-50 rounded-lg">
+            <p className="text-sm text-blue-800">
+              <strong>Note:</strong> Only selected fields will be included in the pipeline.
+              Changes are applied when you click "Save Pipeline".
+            </p>
+          </div>
+          {highlightedFields.size > 0 && (
+            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-sm text-yellow-800">
+                <strong>Training Fields Highlighted:</strong> {highlightedFields.size} field{highlightedFields.size !== 1 ? 's' : ''} marked with yellow background are used by this ML model for training.
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>
