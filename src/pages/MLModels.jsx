@@ -818,7 +818,21 @@ const AllJobsModal = ({ showModal, setShowModal, mlUrl, onJobsUpdate }) => {
   const intervalRef = useRef(null);
 
   const copyToClipboard = (text, id) => {
-    navigator.clipboard.writeText(text);
+    const doFallback = () => {
+      const el = document.createElement('textarea');
+      el.value = text;
+      el.style.position = 'fixed';
+      el.style.opacity = '0';
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(doFallback);
+    } else {
+      doFallback();
+    }
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
@@ -1549,7 +1563,21 @@ const MLModels = () => {
   // Copy to clipboard
   const [copiedId, setCopiedId] = useState(null);
   const copyToClipboard = (text, id) => {
-    navigator.clipboard.writeText(text);
+    const doFallback = () => {
+      const el = document.createElement('textarea');
+      el.value = text;
+      el.style.position = 'fixed';
+      el.style.opacity = '0';
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(doFallback);
+    } else {
+      doFallback();
+    }
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
