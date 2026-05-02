@@ -235,18 +235,29 @@ const PolicyStatusBadge = ({ modelName, policyUrl }) => {
 // ModelCard
 const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete, isTraining, copiedId, onCopyId, isNew, policyUrl }) => {
   const isBestForAny = model.best_for_fields?.length > 0;
+  const isTrained = model.latest_version != null;
+  const eventColor = EVENT_COLORS[model.event_type] || 'bg-gray-100 text-gray-700';
+
   return (
-    <div className={`bg-white rounded-lg border p-6 shadow-sm hover:shadow-md transition-shadow [container-type:inline-size] ${isNew ? 'border-green-500 ring-2 ring-green-200' : 'border-gray-200'}`}>
-      {/* Header: name+badges left, buttons right - stacks when card is narrow (large font sizes) */}
+    <div className={`bg-white rounded-lg border p-5 shadow-sm hover:shadow-md transition-shadow [container-type:inline-size] ${isNew ? 'border-green-500 ring-2 ring-green-200' : 'border-gray-200'}`}>
+      {/* Header */}
       <div className="flex flex-wrap items-start gap-3 mb-3">
         <div className="flex-1 min-w-0">
-          <h3 className="text-lg font-semibold text-gray-900 break-words">{model.name || 'Unnamed Model'}</h3>
-          <div className="flex items-center gap-2 mt-2 flex-wrap">
-            <span className="px-2 py-0.5 text-xs font-bold font-mono bg-gray-200 text-gray-800 rounded">
-              v{model.latest_version ?? 'N/A'}
+          <div className="flex items-center gap-2 mb-1">
+            <span className={`w-2 h-2 rounded-full shrink-0 ${isTrained ? 'bg-green-400' : 'bg-gray-300'}`} title={isTrained ? `Trained (v${model.latest_version})` : 'Not trained'} />
+            <h3 className="text-base font-semibold text-gray-900 break-words leading-tight">{model.name || 'Unnamed Model'}</h3>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className={`px-2 py-0.5 text-xs font-bold font-mono rounded ${isTrained ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-600'}`}>
+              {isTrained ? `v${model.latest_version}` : 'untrained'}
             </span>
+            {model.event_type && (
+              <span className={`px-2 py-0.5 text-xs font-bold rounded uppercase tracking-wide ${eventColor}`}>
+                {model.event_type}
+              </span>
+            )}
             {model.architecture && (
-              <span className="px-2 py-0.5 text-xs font-bold bg-purple-200 text-purple-900 rounded uppercase tracking-wide">
+              <span className="px-2 py-0.5 text-xs font-semibold bg-purple-100 text-purple-800 rounded uppercase tracking-wide">
                 {model.architecture}
               </span>
             )}
@@ -257,13 +268,15 @@ const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete,
             )}
             <PolicyStatusBadge modelName={model.name} policyUrl={policyUrl} />
           </div>
-          <div className="flex flex-wrap gap-1 mt-2 min-h-[22px]">
-            {isBestForAny && model.best_for_fields.map(field => (
-              <span key={field} className="px-2 py-0.5 text-xs font-bold bg-green-200 text-green-900 rounded-full">
-                Best for: {field}
-              </span>
-            ))}
-          </div>
+          {isBestForAny && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {model.best_for_fields.map(field => (
+                <span key={field} className="px-2 py-0.5 text-xs font-bold bg-green-200 text-green-900 rounded-full">
+                  ★ {field}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="model-card-actions shrink-0 flex flex-col gap-2">
@@ -317,42 +330,44 @@ const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete,
         {/* /flex-wrap header */}
       </div>
 
-      <hr className="border-gray-200 mt-1 mb-3" />
-      <div className="space-y-2 text-sm">
-        {model.created_at && (
+      <hr className="border-gray-100 mt-3 mb-3" />
+      <div className="space-y-1.5 text-sm">
+        {model.training_loss != null && (
           <div className="flex justify-between">
-            <span className="text-gray-600">Created at:</span>
-            <span className="font-medium text-gray-900">
-              {new Date(model.created_at).toLocaleDateString()}
-            </span>
+            <span className="text-gray-500">Training loss:</span>
+            <span className="font-mono text-gray-900 text-xs">{Number(model.training_loss).toFixed(6)}</span>
           </div>
         )}
         {model.last_trained_at && (
           <div className="flex justify-between">
-            <span className='text-gray-600'>Last trained at:</span>
-            <span className="font-medium text-gray-900">
-              {new Date(model.last_trained_at).toLocaleString()}
-            </span>
+            <span className="text-gray-500">Last trained:</span>
+            <span className="text-gray-900 text-xs">{new Date(model.last_trained_at).toLocaleString()}</span>
+          </div>
+        )}
+        {model.created_at && (
+          <div className="flex justify-between">
+            <span className="text-gray-500">Created:</span>
+            <span className="text-gray-900 text-xs">{new Date(model.created_at).toLocaleDateString()}</span>
           </div>
         )}
         {model.id && (
           <div className="flex justify-between items-center">
-            <span className='text-gray-600'>ID:</span>
-            <div className="flex items-center gap-2 ml-2 min-w-0">
-              <span className="font-medium text-gray-900 truncate font-mono text-xs" title={model.id}>
-                {model.id}
+            <span className="text-gray-500">ID:</span>
+            <div className="flex items-center gap-1 min-w-0">
+              <span className="text-gray-700 truncate font-mono text-xs" title={model.id}>
+                {model.id.slice(0, 8)}…
               </span>
               <button
                 onClick={() => onCopyId(model.id, model.id)}
                 className="p-1 hover:bg-gray-200 rounded transition-colors shrink-0"
-                title="Copy model ID"
+                title="Copy full ID"
               >
                 {copiedId === model.id ? (
-                  <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                 ) : (
-                  <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
                 )}
@@ -364,18 +379,19 @@ const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete,
     </div>
   );
 }, (prevProps, nextProps) => {
-  const modelSame = prevProps.model.id === nextProps.model.id &&
+  const modelSame =
+    prevProps.model.id === nextProps.model.id &&
     prevProps.model.created_at === nextProps.model.created_at &&
     prevProps.model.latest_version === nextProps.model.latest_version &&
     prevProps.model.architecture === nextProps.model.architecture &&
+    prevProps.model.event_type === nextProps.model.event_type &&
+    prevProps.model.training_loss === nextProps.model.training_loss &&
     JSON.stringify(prevProps.model.best_for_fields) === JSON.stringify(nextProps.model.best_for_fields);
-  const isTrainingSame = prevProps.isTraining === nextProps.isTraining;
-  const copiedIdSame = prevProps.copiedId === nextProps.copiedId;
-  return modelSame && isTrainingSame && copiedIdSame;
+  return modelSame && prevProps.isTraining === nextProps.isTraining && prevProps.copiedId === nextProps.copiedId;
 });
 
 // CreateModelModal
-const FieldCheckboxes = ({ fieldKey, label, fields, loadingFields, selected, onToggle }) => {
+const FieldCheckboxes = ({ fieldKey, label, fields, loadingFields, selected, onToggle, fieldEventMap = {}, activeEvents = new Set() }) => {
   const [filter, setFilter] = useState('');
   const [recentItems, setRecentItems] = useState([]);
   const storageKey = `recent-search-ml-${fieldKey}`;
@@ -408,7 +424,11 @@ const FieldCheckboxes = ({ fieldKey, label, fields, loadingFields, selected, onT
     }
   };
 
-  const visible = fields.filter(f => f.toLowerCase().includes(filter.toLowerCase()));
+  // Filter by text, then by active events (only show compatible fields)
+  const eventCompatible = activeEvents.size > 0
+    ? fields.filter(f => selected.includes(f) || (fieldEventMap[f] || []).some(e => activeEvents.has(e)))
+    : fields;
+  const visible = eventCompatible.filter(f => f.toLowerCase().includes(filter.toLowerCase()));
   const unselected = visible.filter(f => !selected.includes(f));
 
   // Recent items that are valid and not currently selected
@@ -426,19 +446,25 @@ const FieldCheckboxes = ({ fieldKey, label, fields, loadingFields, selected, onT
           {/* Selected chips */}
           {selected.length > 0 && (
             <div className="flex flex-wrap gap-1 p-2 border-b border-gray-200">
-              {selected.map(f => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => handleToggle(f)}
-                  className="flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full hover:bg-blue-200 transition-colors"
-                >
-                  {f}
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              ))}
+              {selected.map(f => {
+                const events = fieldEventMap[f] || [];
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => handleToggle(f)}
+                    className="flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full hover:bg-blue-200 transition-colors"
+                  >
+                    {events.length > 0 && (
+                      <span className="text-blue-400 font-normal">{events[0]}/</span>
+                    )}
+                    {f}
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                );
+              })}
             </div>
           )}
           {/* Recent fields - shown when filter is empty and there are recent items */}
@@ -500,7 +526,22 @@ const FieldCheckboxes = ({ fieldKey, label, fields, loadingFields, selected, onT
   );
 };
 
-const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCreateModel, mlUrl }) => {
+const EVENT_COLORS = {
+  PERF_DATA:   'bg-blue-100 text-blue-800',
+  UE_MOBILITY: 'bg-purple-100 text-purple-800',
+  UE_COMM:     'bg-green-100 text-green-800',
+};
+
+const intersectSets = (sets) => {
+  if (sets.length === 0) return new Set();
+  let result = new Set(sets[0]);
+  for (let i = 1; i < sets.length; i++) {
+    result = new Set([...result].filter(x => sets[i].includes(x)));
+  }
+  return result;
+};
+
+const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCreateModel, mlUrl, dataStorageUrl }) => {
   const [formData, setFormData] = useState({
     name: '',
     architecture: 'ann',
@@ -514,13 +555,12 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
   const [isCreating, setIsCreating] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [hiddenSize, setHiddenSize] = useState(32);
-  const [fields, setFields] = useState([]);
+  const [fieldEventMap, setFieldEventMap] = useState({});  // {field: [events]}
   const [loadingFields, setLoadingFields] = useState(true);
   const [isAnomaly, setIsAnomaly] = useState(false);
 
   useEffect(() => {
     if (!showCreateModal) {
-      // Reset form when modal closes
       setIsAnomaly(false);
       setFormData({
         name: '',
@@ -538,17 +578,25 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
     const fetchFields = async () => {
       setLoadingFields(true);
       try {
-        const response = await fetch(`${mlUrl}/v1/fields`);
+        const response = await fetch(`${dataStorageUrl}/api/v1/processed/fields`);
         if (response.ok) {
           const data = await response.json();
-          setFields((data.fields ?? []).map(f => (typeof f === 'object' ? f.name : f)));
+          setFieldEventMap(typeof data === 'object' && !Array.isArray(data) ? data : {});
         }
       } finally {
         setLoadingFields(false);
       }
     };
     fetchFields();
-  }, [showCreateModal, mlUrl]);
+  }, [showCreateModal, dataStorageUrl]);
+
+  const allFields = Object.keys(fieldEventMap).sort();
+
+  // Derive active events from all selected fields (intersection)
+  const allSelected = [...formData.input_fields, ...formData.output_fields];
+  const activeEvents = allSelected.length > 0
+    ? intersectSets(allSelected.map(f => fieldEventMap[f] || []))
+    : new Set();
 
   if (!showCreateModal) return null;
 
@@ -650,12 +698,25 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
             </div>
           )}
 
+          {/* Event preview */}
+          {allSelected.length > 0 && (
+            <div className="flex items-center gap-2 py-2 px-3 rounded-lg bg-gray-50 border border-gray-200">
+              <span className="text-xs font-medium text-gray-500">Event:</span>
+              {activeEvents.size > 0
+                ? [...activeEvents].map(e => (
+                    <span key={e} className={`px-2 py-0.5 text-xs font-semibold rounded-full ${EVENT_COLORS[e] || 'bg-gray-100 text-gray-700'}`}>{e}</span>
+                  ))
+                : <span className="text-xs text-red-600 font-medium">No common event — fields incompatible</span>
+              }
+            </div>
+          )}
+
           {/* Input Fields */}
-          <FieldCheckboxes fieldKey="input_fields" label="Input Fields" fields={fields} loadingFields={loadingFields} selected={formData.input_fields} onToggle={toggleField} />
+          <FieldCheckboxes fieldKey="input_fields" label="Input Fields" fields={allFields} loadingFields={loadingFields} selected={formData.input_fields} onToggle={toggleField} fieldEventMap={fieldEventMap} activeEvents={activeEvents} />
 
           {/* Output Fields - Hidden for anomaly */}
           {!isAnomaly && (
-            <FieldCheckboxes fieldKey="output_fields" label="Output Fields" fields={fields} loadingFields={loadingFields} selected={formData.output_fields} onToggle={toggleField} />
+            <FieldCheckboxes fieldKey="output_fields" label="Output Fields" fields={allFields} loadingFields={loadingFields} selected={formData.output_fields} onToggle={toggleField} fieldEventMap={fieldEventMap} activeEvents={activeEvents} />
           )}
 
           {/* Steps grid */}
@@ -892,6 +953,7 @@ const AllJobsModal = ({ showModal, setShowModal, mlUrl, onJobsUpdate }) => {
     if (status === 'completed') return `${base} bg-green-100 text-green-800`;
     if (status === 'failed') return `${base} bg-red-100 text-red-800`;
     if (status === 'running') return `${base} bg-yellow-100 text-yellow-800`;
+    if (status === 'pending') return `${base} bg-blue-100 text-blue-800`;
     return `${base} bg-gray-100 text-gray-700`;
   };
 
@@ -1088,6 +1150,7 @@ const TrainingModal = ({ model, mlUrl, onClose, onStartTraining, isTraining }) =
     if (status === 'completed') return `${base} bg-green-100 text-green-800`;
     if (status === 'failed') return `${base} bg-red-100 text-red-800`;
     if (status === 'running') return `${base} bg-yellow-100 text-yellow-800`;
+    if (status === 'pending') return `${base} bg-blue-100 text-blue-800`;
     return `${base} bg-gray-100 text-gray-700`;
   };
 
@@ -1162,12 +1225,18 @@ const TrainingModal = ({ model, mlUrl, onClose, onStartTraining, isTraining }) =
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
             <h4 className="text-sm font-semibold text-gray-900">Start New Training Run</h4>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Lookback window (seconds)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Lookback window (seconds) <span className="text-gray-400 font-normal text-xs">max 30 days = 2592000</span>
+              </label>
               <input
                 type="number"
                 min="1"
+                max="2592000"
                 value={lookbackSeconds}
-                onChange={(e) => setLookbackSeconds(parseInt(e.target.value))}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value);
+                  if (!isNaN(v)) setLookbackSeconds(Math.min(Math.max(1, v), 2592000));
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
               />
             </div>
@@ -1333,27 +1402,50 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
 
         <div className="p-6 space-y-6 overflow-y-auto flex-1">
           {/* Basic Info */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="text-sm font-semibold text-blue-900 mb-3">Basic Information</h4>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <span className="text-gray-600">ID:</span>
-                <span className="ml-2 font-mono text-xs text-gray-900 break-all">{modelDetails.id}</span>
-              </div>
-              <div>
-                <span className="text-gray-600">Architecture:</span>
-                <span className="ml-2 font-medium text-gray-900 uppercase">{modelDetails.architecture ?? config.architecture ?? 'N/A'}</span>
-              </div>
-              <div>
-                <span className="text-gray-600">Version:</span>
-                <span className="ml-2 font-medium text-gray-900">v{modelDetails.latest_version ?? 'N/A'}</span>
-              </div>
-              <div>
-                <span className="text-gray-600">Created:</span>
-                <span className="ml-2 font-medium text-gray-900">
-                  {modelDetails.created_at ? new Date(modelDetails.created_at).toLocaleString() : 'N/A'}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <h4 className="text-sm font-semibold text-gray-800">Basic Information</h4>
+              {modelDetails.event_type && (
+                <span className={`px-2 py-0.5 text-xs font-bold rounded uppercase tracking-wide ${EVENT_COLORS[modelDetails.event_type] || 'bg-gray-100 text-gray-700'}`}>
+                  {modelDetails.event_type}
                 </span>
+              )}
+              {(modelDetails.architecture ?? config.architecture) && (
+                <span className="px-2 py-0.5 text-xs font-semibold bg-purple-100 text-purple-800 rounded uppercase">
+                  {modelDetails.architecture ?? config.architecture}
+                </span>
+              )}
+              <span className={`px-2 py-0.5 text-xs font-bold rounded ${modelDetails.latest_version != null ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-600'}`}>
+                {modelDetails.latest_version != null ? `v${modelDetails.latest_version}` : 'untrained'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="col-span-2">
+                <span className="text-gray-500 text-xs">ID</span>
+                <p className="font-mono text-xs text-gray-900 break-all">{modelDetails.id}</p>
               </div>
+              <div>
+                <span className="text-gray-500 text-xs">Created</span>
+                <p className="text-gray-900 text-xs">{modelDetails.created_at ? new Date(modelDetails.created_at).toLocaleString() : 'N/A'}</p>
+              </div>
+              {modelDetails.last_trained_at && (
+                <div>
+                  <span className="text-gray-500 text-xs">Last trained</span>
+                  <p className="text-gray-900 text-xs">{new Date(modelDetails.last_trained_at).toLocaleString()}</p>
+                </div>
+              )}
+              {modelDetails.training_loss != null && (
+                <div>
+                  <span className="text-gray-500 text-xs">Training loss</span>
+                  <p className="font-mono text-gray-900 text-xs">{Number(modelDetails.training_loss).toFixed(6)}</p>
+                </div>
+              )}
+              {modelDetails.mlflow_run_id && (
+                <div>
+                  <span className="text-gray-500 text-xs">MLflow Run</span>
+                  <p className="font-mono text-xs text-blue-700 truncate" title={modelDetails.mlflow_run_id}>{modelDetails.mlflow_run_id.slice(0, 12)}…</p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1512,6 +1604,7 @@ const MLModels = () => {
 
   // Field filter
   const [filterField, setFilterField] = useState('');
+  const [filterEvent, setFilterEvent] = useState('');
   const [fields, setFields] = useState([]);
   const [loadingFields, setLoadingFields] = useState(true);
   const [recentFields, setRecentFields] = useState(() => {
@@ -1856,6 +1949,7 @@ const MLModels = () => {
         setShowCreateModal={setShowCreateModal}
         handleCreateModel={handleCreateModel}
         mlUrl={mlUrl}
+        dataStorageUrl={'/' + import.meta.env.VITE_DATA_STORAGE_HOST}
       />
       {forceTarget && (
         <ForceFieldPickerModal
@@ -2051,13 +2145,27 @@ const MLModels = () => {
                 )}
               </div>
 
+              {/* Event type filter */}
+              <div className="flex gap-1">
+                {['', 'PERF_DATA', 'UE_MOBILITY', 'UE_COMM'].map(evt => (
+                  <button
+                    key={evt || 'all'}
+                    onClick={() => setFilterEvent(evt)}
+                    className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                      filterEvent === evt
+                        ? evt === '' ? 'bg-gray-700 text-white' : `${EVENT_COLORS[evt]} ring-1 ring-current`
+                        : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {evt || 'All'}
+                  </button>
+                ))}
+              </div>
+
               {/* Clear Filters */}
-              {(searchQuery || filterField) && (
+              {(searchQuery || filterField || filterEvent) && (
                 <button
-                  onClick={() => {
-                    setSearchQuery('');
-                    setFilterField('');
-                  }}
+                  onClick={() => { setSearchQuery(''); setFilterField(''); setFilterEvent(''); }}
                   className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   Clear Filters
@@ -2098,21 +2206,18 @@ const MLModels = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {models
                 .filter(model => {
-                  // Filter by field
                   if (filterField === 'anomaly') {
-                    // Only show anomaly models
                     if (model.modelType !== 'anomaly') return false;
                   } else if (filterField) {
-                    // Only show forecast models when a specific field is selected
                     if (model.modelType === 'anomaly') return false;
                   }
-
-                  // Filter by search query
+                  if (filterEvent && model.event_type !== filterEvent) return false;
                   if (!searchQuery) return true;
-                  const query = searchQuery.toLowerCase();
+                  const q = searchQuery.toLowerCase();
                   return (
-                    model.name?.toLowerCase().includes(query) ||
-                    model.id?.toLowerCase().includes(query)
+                    model.name?.toLowerCase().includes(q) ||
+                    model.id?.toLowerCase().includes(q) ||
+                    model.event_type?.toLowerCase().includes(q)
                   );
                 })
                 .map((model) => (
@@ -2132,26 +2237,27 @@ const MLModels = () => {
                   />
                 ))}
             </div>
-            <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 text-center">
-              <p className="text-sm text-gray-600">
-                Total Models: <span className="font-semibold text-gray-900">{models.filter(m => {
-                  // Filter by field
-                  if (filterField === 'anomaly') {
-                    // Only show anomaly models
-                    if (m.modelType !== 'anomaly') return false;
-                  } else if (filterField) {
-                    // Only show forecast models when a specific field is selected
-                    if (m.modelType === 'anomaly') return false;
-                  }
-
-                  // Filter by search query
-                  if (!searchQuery) return true;
-                  const query = searchQuery.toLowerCase();
-                  return m.name?.toLowerCase().includes(query) || m.id?.toLowerCase().includes(query);
-                }).length}</span>
-                {filterField && <span className="ml-2 text-gray-400">filtered by <span className="font-mono">{filterField}</span></span>}
-                {searchQuery && <span className="ml-2 text-gray-400">matching <span className="font-mono">"{searchQuery}"</span></span>}
-              </p>
+            <div className="bg-gray-50 rounded-lg border border-gray-200 p-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-4 text-sm text-gray-600">
+                <span>Total: <span className="font-semibold text-gray-900">{models.length}</span></span>
+                <span>Trained: <span className="font-semibold text-green-700">{models.filter(m => m.latest_version != null).length}</span></span>
+                <span>Anomaly: <span className="font-semibold text-orange-700">{models.filter(m => m.modelType === 'anomaly').length}</span></span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap text-xs">
+                {['PERF_DATA','UE_MOBILITY','UE_COMM'].map(evt => {
+                  const count = models.filter(m => m.event_type === evt).length;
+                  return count > 0 ? (
+                    <span key={evt} className={`px-2 py-0.5 rounded font-medium ${EVENT_COLORS[evt]}`}>
+                      {evt}: {count}
+                    </span>
+                  ) : null;
+                })}
+                {(filterField || filterEvent || searchQuery) && (
+                  <span className="text-gray-400 ml-1">
+                    showing filtered results
+                  </span>
+                )}
+              </div>
             </div>
           </>
         )}
