@@ -10,75 +10,43 @@ import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
 import { AccessibilityProvider } from './contexts/AccessibilityContext';
 
+const PAGE_META = {
+  '/':            { title: 'Ingestion',    subtitle: 'Real-time network data streaming' },
+  '/ml':          { title: 'ML Models',    subtitle: 'Browse and manage model instances' },
+  '/analytics':   { title: 'Analytics',    subtitle: 'Cell analytics and predictions' },
+  '/performance': { title: 'Performance',  subtitle: 'Real-time ML model monitoring' },
+  '/policy':      { title: 'Policy',       subtitle: 'Data transformation and field permissions' },
+  '/settings':    { title: 'Settings',     subtitle: 'Accessibility and display preferences' },
+};
+
 function AppContent() {
   const location = useLocation();
-
-  // Get page title based on current route
-  const getPageTitle = () => {
-    switch (location.pathname) {
-      case '/':
-        return 'Ingestion';
-      case '/ml':
-        return 'ML';
-      case '/analytics':
-        return 'Analytics';
-      case '/performance':
-        return 'Performance';
-      case '/policy':
-        return 'Policy';
-      case '/settings':
-        return 'Settings';
-      default:
-        return 'AION';
-    }
-  };
-
-  const getPageSubtitle = () => {
-    switch (location.pathname) {
-      case '/':
-        return 'Real-time Network Monitoring';
-      case '/ml':
-        return 'Browse and Manage model instances';
-      case '/analytics':
-        return 'Cell Analytics Insights';
-      case '/performance':
-        return 'Real-time ML Model Performance Monitoring';
-      case '/policy':
-        return 'Data transformation and field permissions';
-      case '/settings':
-        return 'Accessibility & Display Preferences';
-      default:
-        return '';
-    }
-  };
+  const meta = PAGE_META[location.pathname] ?? { title: 'AION', subtitle: '' };
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
+    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
       <Sidebar />
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-auto">
-        {/* Header */}
-        <header className="bg-gradient-to-r from-blue-500 to-blue-600 px-4 sm:px-8 py-4 sm:py-6 shadow-md">
-          <h1 className="text-3xl font-bold text-white">{getPageTitle()}</h1>
-          <p className="text-blue-50 mt-1">
-            {getPageSubtitle()}
-          </p>
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <header className="page-header shrink-0">
+          <div className="page-header-accent" aria-hidden="true" />
+          <div>
+            <h1>{meta.title}</h1>
+            {meta.subtitle && <p>{meta.subtitle}</p>}
+          </div>
         </header>
 
-        {/* Page Content */}
-        <div className="p-4 sm:p-8">
+        <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/ml" element={<MLModels />} />
-            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/"            element={<Dashboard />} />
+            <Route path="/ml"          element={<MLModels />} />
+            <Route path="/analytics"   element={<Analytics />} />
             <Route path="/performance" element={<Performance />} />
-            <Route path="/policy" element={<Policy />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="*" element={<NotFound />} />
+            <Route path="/policy"      element={<Policy />} />
+            <Route path="/settings"    element={<Settings />} />
+            <Route path="*"            element={<NotFound />} />
           </Routes>
-        </div>
+        </main>
       </div>
     </div>
   );
@@ -88,7 +56,7 @@ function App() {
   return (
     <Router>
       <AccessibilityProvider>
-          <AppContent />
+        <AppContent />
       </AccessibilityProvider>
     </Router>
   );
