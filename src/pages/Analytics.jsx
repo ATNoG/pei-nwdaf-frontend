@@ -2,53 +2,55 @@ import React, { useState, useEffect } from 'react';
 import SearchableDropdown from '../components/SearchableDropdown';
 import FeatureImportanceChart from '../components/FeatureImportanceChart';
 
-const Analytics = () => {
-  const dataStorageUrl ='/' + import.meta.env.VITE_DATA_STORAGE_HOST;
-  const mlUrl = '/' + import.meta.env.VITE_ML_HOST;
+const fmtTs = (epoch) => epoch ? new Date(epoch * 1000).toLocaleString() : 'N/A';
 
-  const [formData, setFormData] = useState({
-    output_field: '',
-    cell_index: 26379009,
-    model_id: null,
+const Analytics = () => {
+  const mlUrl = '/' + import.meta.env.VITE_ML_HOST;
+  const dataStorageUrl = '/' + import.meta.env.VITE_DATA_STORAGE_HOST;
+
+  const STORAGE_KEY = 'aion-analytics-form';
+  const [formData, setFormData] = useState(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
+      if (saved && typeof saved === 'object') return { output_field: '', snssai_sst: '', dnn: '', snssai_sd: '', model_id: null, lookback_seconds: 1800, ...saved };
+    } catch {}
+    return { output_field: '', snssai_sst: '', dnn: '', snssai_sd: '', model_id: null, lookback_seconds: 1800 };
   });
+
+  // Persist form state across navigation
+  useEffect(() => {
+    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(formData)); } catch {}
+  }, [formData]);
 
   const [prediction, setPrediction] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [cellList, setCellList] = useState([]);
-  const [loadingCells, setLoadingCells] = useState(true);
+  const [explain, setExplain] = useState(false);
 
   const [fields, setFields] = useState([]);
   const [loadingFields, setLoadingFields] = useState(true);
   const [fieldsWithModels, setFieldsWithModels] = useState(new Set());
-
+  const [fieldEventMap, setFieldEventMap] = useState({});  // {field: [events]}
   const [models, setModels] = useState([]);
   const [loadingModels, setLoadingModels] = useState(false);
 
-  const [explain, setExplain] = useState(false);
+  const isAnomaly = formData.output_field === 'anomaly';
 
-  // Fetch available cells on mount
+  // Derive event from selected field (first from intersection, or first from field's events)
+  const derivedEvent = (() => {
+    if (isAnomaly || !formData.output_field) return null;
+    const events = fieldEventMap[formData.output_field];
+    return events?.length > 0 ? events[0] : null;
+  })();
+
+  // Fetch field→event map from data-storage
   useEffect(() => {
-    const fetchCells = async () => {
-      try {
-        const response = await fetch(`${dataStorageUrl}/api/v1/cell`);
-        if (response.ok) {
-          const data = await response.json();
-          setCellList(data);
-          if (data.length > 0 && !formData.cell_index) {
-            setFormData(prev => ({ ...prev, cell_index: data[0] }));
-          }
-        } else {
-          throw new Error(`Server responded with status: ${response.status}`);
-        }
-      } finally {
-        setLoadingCells(false);
-      }
-    };
-    fetchCells();
+    fetch(`${dataStorageUrl}/api/v1/processed/fields`)
+      .then(r => r.ok ? r.json() : {})
+      .then(data => setFieldEventMap(typeof data === 'object' && !Array.isArray(data) ? data : {}))
+      .catch(() => {});
   }, []);
 
-  // Fetch available output fields on mount (with model status)
   useEffect(() => {
     const fetchFields = async () => {
       try {
@@ -56,20 +58,10 @@ const Analytics = () => {
         if (!response.ok) return;
         const data = await response.json();
         const fieldList = (data.fields ?? []).map(f => f.name);
-
-        // Add anomaly as a special field
         const allFields = ['anomaly', ...fieldList];
         setFields(allFields);
-
-        // Don't add anomaly to fieldsWithModels - it's a special case
-        const fieldsWithModelsSet = new Set(
-          (data.fields ?? []).filter(f => f.has_models).map(f => f.name)
-        );
-        setFieldsWithModels(fieldsWithModelsSet);
-
-        if (allFields.length > 0) {
-          setFormData(prev => ({ ...prev, output_field: allFields[0] }));
-        }
+        setFieldsWithModels(new Set((data.fields ?? []).filter(f => f.has_models).map(f => f.name)));
+        if (allFields.length > 0) setFormData(prev => ({ ...prev, output_field: allFields[0] }));
       } finally {
         setLoadingFields(false);
       }
@@ -77,38 +69,22 @@ const Analytics = () => {
     fetchFields();
   }, []);
 
-  // Fetch models when output_field changes, only if that field has trained models
   useEffect(() => {
     if (!formData.output_field) return;
-
     setModels([]);
     setFormData(prev => ({ ...prev, model_id: null }));
-
-    // Skip fetching models for anomaly - it always uses best model
-    if (formData.output_field === 'anomaly') return;
-
-    if (!fieldsWithModels.has(formData.output_field)) return;
-
+    if (isAnomaly || !fieldsWithModels.has(formData.output_field)) return;
     const fetchModels = async () => {
       setLoadingModels(true);
       try {
-        const response = await fetch(
-          `${mlUrl}/v1/models?output_field=${encodeURIComponent(formData.output_field)}`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setModels(data);
-        }
+        const response = await fetch(`${mlUrl}/v1/models?output_field=${encodeURIComponent(formData.output_field)}`);
+        if (response.ok) setModels(await response.json());
       } finally {
         setLoadingModels(false);
       }
     };
     fetchModels();
   }, [formData.output_field, fieldsWithModels]);
-
-  const handleFieldChange = (e) => {
-    setFormData(prev => ({ ...prev, output_field: e.target.value }));
-  };
 
   const fetchPrediction = async (e) => {
     e.preventDefault();
@@ -117,19 +93,17 @@ const Analytics = () => {
     setPrediction(null);
 
     try {
-      // Use different endpoint for anomaly detection
-      const endpoint = formData.output_field === 'anomaly'
-        ? `${mlUrl}/v1/anomaly/detect/all`
-        : `${mlUrl}/v1/inference`;
+      const tags = {
+        snssai_sst: formData.snssai_sst,
+        dnn: formData.dnn,
+        ...(formData.snssai_sd ? { snssai_sd: formData.snssai_sd } : {}),
+        ...(derivedEvent ? { event: derivedEvent } : {}),
+      };
 
-      const body = formData.output_field === 'anomaly'
-        ? { cell_id: formData.cell_index }
-        : {
-            output_field: formData.output_field,
-            cell_id: formData.cell_index,
-            model_id: formData.model_id,
-            explain,
-          };
+      const endpoint = isAnomaly ? `${mlUrl}/v1/anomaly/detect` : `${mlUrl}/v1/inference`;
+      const body = isAnomaly
+        ? { tags, model_id: formData.model_id || undefined, lookback_seconds: formData.lookback_seconds, explain }
+        : { output_field: formData.output_field, tags, model_id: formData.model_id, explain };
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -141,48 +115,25 @@ const Analytics = () => {
         let errMsg;
         try {
           const errBody = await response.json();
-
-          // Parse error detail from backend
           if (errBody.detail) {
             if (Array.isArray(errBody.detail)) {
-              // Pydantic validation errors
-              errMsg = errBody.detail.map(d => {
-                const field = d.loc?.slice(1).join('.') || 'input';
-                return `${field}: ${d.msg}`;
-              }).join('; ');
+              errMsg = errBody.detail.map(d => `${d.loc?.slice(1).join('.') || 'input'}: ${d.msg}`).join('; ');
             } else if (typeof errBody.detail === 'object' && errBody.detail.message) {
-              // Structured error with message
               errMsg = errBody.detail.message;
             } else {
-              // Simple string error
               errMsg = errBody.detail;
             }
           } else {
-            // Fallback messages when no detail provided
-            switch (response.status) {
-              case 404:
-                errMsg = 'Resource not found. The requested model or data does not exist.';
-                break;
-              case 422:
-                errMsg = 'Validation error. Please check your input parameters.';
-                break;
-              case 500:
-                errMsg = 'Internal server error. Please try again later.';
-                break;
-              default:
-                errMsg = `Request failed with status ${response.status}`;
-            }
+            errMsg = `Request failed with status ${response.status}`;
           }
-        } catch (parseError) {
-          // Failed to parse error response
-          errMsg = `Request failed with status ${response.status}. Unable to parse error details.`;
+        } catch {
+          errMsg = `Request failed with status ${response.status}`;
         }
         setError(errMsg);
         return;
       }
 
-      const data = await response.json();
-      setPrediction(data);
+      setPrediction(await response.json());
     } catch (err) {
       setError(`Failed to fetch prediction: ${err.message}`);
     } finally {
@@ -190,373 +141,308 @@ const Analytics = () => {
     }
   };
 
-  const noModelsAvailable = !loadingModels && models.length === 0 && formData.output_field && formData.output_field !== 'anomaly';
+  const noModelsAvailable = !loadingModels && models.length === 0 && formData.output_field && !isAnomaly;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Analytics Predictions</h2>
-        <p className="text-sm text-gray-600">
-          Get ML predictions for network metrics including latency, throughput and more
-        </p>
+      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-gray-900 mb-1">Analytics Predictions</h2>
+        <p className="text-sm text-gray-500">Run forecast or anomaly detection on network data</p>
       </div>
 
-      {/* Request Form */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+      {/* Form */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Request Parameters</h3>
         <form onSubmit={fetchPrediction} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Output Field */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Output Field
-              </label>
+              <div className="flex items-center gap-2 mb-2">
+                <label className="block text-sm font-medium text-gray-700">Output Field</label>
+                {derivedEvent && (
+                  <span className="px-2 py-0.5 text-xs font-bold rounded uppercase bg-blue-100 text-blue-800">{derivedEvent}</span>
+                )}
+              </div>
               <SearchableDropdown
                 options={fields}
                 value={formData.output_field}
-                onChange={(field) => handleFieldChange({ target: { value: field } })}
-                placeholder={loadingFields ? 'Loading...' : fields.length > 0 ? 'Search fields...' : 'No fields available'}
+                onChange={(field) => setFormData(prev => ({ ...prev, output_field: field }))}
+                placeholder={loadingFields ? 'Loading...' : 'Search fields...'}
                 disabled={loadingFields}
                 loading={loadingFields}
                 recentSearchKey="analytics-fields"
-                formatOption={(f) => {
-                  if (f === 'anomaly') return 'Anomaly Detection';
-                  return fieldsWithModels.has(f) ? f : `${f} (no model)`;
-                }}
-                filterOption={(f, term) => {
-                  const label = f === 'anomaly' ? 'anomaly detection' : f;
-                  return label.toLowerCase().includes(term.toLowerCase());
-                }}
+                formatOption={(f) => f === 'anomaly' ? 'Anomaly Detection' : fieldsWithModels.has(f) ? f : `${f} (no model)`}
+                filterOption={(f, term) => (f === 'anomaly' ? 'anomaly detection' : f).toLowerCase().includes(term.toLowerCase())}
               />
             </div>
 
-            {/* Cell ID */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Cell ID {cellList.length > 0 && `(${cellList.length} available)`}
-              </label>
-              <SearchableDropdown
-                options={cellList}
-                value={formData.cell_index}
-                onChange={(cell) => setFormData(prev => ({ ...prev, cell_index: cell }))}
-                placeholder={loadingCells ? "Loading cells..." : cellList.length > 0 ? "Search or select a cell..." : "Enter cell ID manually"}
-                disabled={loadingCells}
-                loading={loadingCells}
-                recentSearchKey="analytics-cells"
-                formatOption={(cell) => cell.toString()}
-                filterOption={(cell, searchTerm) => cell.toString().startsWith(searchTerm)}
-              />
+            {/* Network Tags */}
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">S-NSSAI SST <span className="text-red-500">*</span></label>
+                  <input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" placeholder="e.g. 1" value={formData.snssai_sst} onChange={e => setFormData(prev => ({ ...prev, snssai_sst: e.target.value }))} required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">DNN <span className="text-red-500">*</span></label>
+                  <input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" placeholder="e.g. internet" value={formData.dnn} onChange={e => setFormData(prev => ({ ...prev, dnn: e.target.value }))} required />
+                </div>
+              </div>
+              <input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" placeholder="S-NSSAI SD (optional)" value={formData.snssai_sd} onChange={e => setFormData(prev => ({ ...prev, snssai_sd: e.target.value }))} />
             </div>
 
-            {/* HORIZON - commented out, may be re-enabled later */}
-            {/*
+            {/* Model */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Horizon (seconds)
-              </label>
-              <select
-                name="horizon"
-                value={formData.horizon}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                disabled={configLoading}
-              >
-                {configLoading ? (
-                  <option>Loading...</option>
-                ) : config?.inference_types ? (
-                  config.inference_types
-                    .filter(t => t.name === formData.analytics_type)
-                    .map(t => (
-                      <option key={`${t.name}-${t.horizon}`} value={t.horizon}>
-                        {t.horizon}s - {t.description}
-                      </option>
-                    ))
-                ) : (
-                  <>
-                    <option value={60}>60s</option>
-                    <option value={300}>300s</option>
-                  </>
-                )}
-              </select>
-            </div>
-            */}
-
-            {/* Model (optional) */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Model {formData.output_field !== 'anomaly' && <span className="text-gray-400 font-normal">(optional)</span>}
+                Model <span className="text-gray-400 font-normal">(optional)</span>
               </label>
               <SearchableDropdown
-                options={formData.output_field === 'anomaly' ? [null] : [null, ...models.map(m => m.id)]}
+                options={[null, ...models.map(m => m.id)]}
                 value={formData.model_id}
                 onChange={(id) => setFormData(prev => ({ ...prev, model_id: id }))}
-                placeholder={loadingModels ? 'Loading models...' : 'Search models...'}
-                disabled={formData.output_field === 'anomaly' || loadingModels || noModelsAvailable}
+                placeholder={loadingModels ? 'Loading models...' : 'Best model (auto)'}
+                disabled={loadingModels || noModelsAvailable}
                 loading={loadingModels}
                 recentSearchKey="analytics-models"
                 formatOption={(id) => {
-                  if (id === null || id === undefined) return 'Best model (auto)';
+                  if (!id) return 'Best model (auto)';
                   const m = models.find(m => m.id === id);
-                  return m ? `${m.name} – ${m.id}` : id;
+                  return m ? `${m.name} – ${m.id.slice(0, 8)}` : id;
                 }}
                 filterOption={(id, term) => {
-                  if (id === null || id === undefined) return 'best model auto'.includes(term.toLowerCase());
+                  if (!id) return 'best model auto'.includes(term.toLowerCase());
                   const m = models.find(m => m.id === id);
-                  const label = m ? `${m.name} ${m.id}` : id;
-                  return label.toLowerCase().includes(term.toLowerCase());
+                  return (m ? `${m.name} ${m.id}` : id).toLowerCase().includes(term.toLowerCase());
                 }}
               />
-              {formData.output_field === 'anomaly' && (
-                <p className="mt-1 text-sm text-blue-700">
-                  Anomaly detection uses the best available model.
-                </p>
-              )}
-              {noModelsAvailable && formData.output_field !== 'anomaly' && (
-                <p className="mt-1 text-sm text-yellow-700">
-                  No trained models available for this field.
-                </p>
-              )}
+              {noModelsAvailable && <p className="mt-1 text-xs text-yellow-700">No trained models for this field.</p>}
             </div>
 
-            {formData.output_field !== 'anomaly' && (
-              <div className="flex items-end pb-1 md:col-start-2">
-                <label className="flex items-center gap-2 cursor-pointer">
+            {/* Lookback (anomaly) / Explain (both) */}
+            <div className="space-y-3">
+              {isAnomaly && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Lookback <span className="text-gray-400 font-normal text-xs">(seconds, default 30min)</span>
+                  </label>
                   <input
-                    type="checkbox"
-                    checked={explain}
-                    onChange={e => setExplain(e.target.checked)}
-                    disabled={noModelsAvailable}
-                    className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                    type="number" min="60" max="2592000"
+                    value={formData.lookback_seconds}
+                    onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v)) setFormData(prev => ({ ...prev, lookback_seconds: Math.min(Math.max(60, v), 2592000) })); }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                   />
-                  <span className="text-base text-gray-700">Include local explanation (KernelSHAP)</span>
-                </label>
-              </div>
-            )}
+                </div>
+              )}
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={explain}
+                  onChange={e => setExplain(e.target.checked)}
+                  disabled={noModelsAvailable}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                />
+                <span className="text-sm text-gray-700">
+                  Include local explanation (KernelSHAP)
+                  {isAnomaly && <span className="ml-1 text-xs text-gray-400">— anomalous windows only</span>}
+                </span>
+              </label>
+            </div>
           </div>
 
-          {/* Submit Button */}
           <button
             type="submit"
-            disabled={loading || noModelsAvailable}
-            className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={loading || (!isAnomaly && noModelsAvailable) || !formData.snssai_sst.trim() || !formData.dnn.trim()}
+            className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            {loading ? (
-              <span className="flex items-center justify-center">
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Fetching Prediction...
-              </span>
-            ) : (
-              'Get Prediction'
-            )}
+            {loading && <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>}
+            {loading ? 'Fetching...' : isAnomaly ? 'Run Anomaly Detection' : 'Get Prediction'}
           </button>
         </form>
       </div>
 
-      {/* Error Display */}
+      {/* Error */}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-start space-x-3">
-            <div>
-              <p className="font-semibold text-red-900 mb-1">Error</p>
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
-          </div>
+          <p className="font-semibold text-red-900 mb-1">Error</p>
+          <p className="text-sm text-red-800">{error}</p>
         </div>
       )}
 
-      {/* Prediction Results */}
+      {/* Results */}
       {prediction && (
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-green-50 to-blue-50">
-            <h3 className="text-lg font-semibold text-gray-900">
-              {formData.output_field === 'anomaly' ? 'Anomaly Detection Results' : 'Prediction Results'}
-            </h3>
-            <p className="text-sm text-gray-600">Inference for Cell ID: {formData.cell_index}</p>
+            <h3 className="text-lg font-semibold text-gray-900">{isAnomaly ? 'Anomaly Detection Results' : 'Prediction Results'}</h3>
+            <p className="text-sm text-gray-500">
+              sst={formData.snssai_sst} dnn={formData.dnn}{formData.snssai_sd ? ` sd=${formData.snssai_sd}` : ''}
+            </p>
           </div>
 
           <div className="p-6 space-y-6">
-            {/* Model info + timing summary - forecast only */}
-            {formData.output_field !== 'anomaly' && (
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <dl className="space-y-2 text-sm">
+
+            {/* ── FORECAST ── */}
+            {!isAnomaly && <>
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 text-sm space-y-1.5">
                 <div className="flex gap-2">
-                  <dt className="w-32 text-gray-500 shrink-0">Model</dt>
-                  <dd className="text-gray-900 font-medium">
-                    {prediction.model_name} (v{prediction.model_version}{prediction.architecture && `, ${prediction.architecture}`})
-                    {prediction.model_id && (
-                      <span className="ml-2 text-gray-400 font-normal text-xs">{prediction.model_id}</span>
-                    )}
-                  </dd>
-                </div>
-                {formData.output_field !== 'anomaly' && (
-                  <>
-                    <div className="flex gap-2">
-                      <dt className="w-32 text-gray-500 shrink-0">Lookahead</dt>
-                      <dd className="text-gray-900">
-                        {prediction.forecast_steps} steps x {prediction.window_duration_seconds}s
-                        {' '}= <span className="font-medium">{prediction.forecast_steps * prediction.window_duration_seconds}s total</span>
-                      </dd>
-                    </div>
-                    <div className="flex gap-2">
-                      <dt className="w-32 text-gray-500 shrink-0">Input data</dt>
-                      <dd className="text-gray-900">
-                        {prediction.input_data_start && prediction.input_data_end ? (
-                          <>
-                            <span className="font-mono text-xs">
-                              {new Date(prediction.input_data_start * 1000).toLocaleString()}
-                            </span>
-                            {' '}&rarr;{' '}
-                            <span className="font-mono text-xs">
-                              {new Date(prediction.input_data_end * 1000).toLocaleString()}
-                            </span>
-                            <span className="ml-2 text-gray-500">
-                              ({prediction.lookback_steps} windows, {((prediction.input_data_end - prediction.input_data_start) / 1).toFixed(0)}s duration)
-                            </span>
-                          </>
-                        ) : (
-                          <span>{prediction.lookback_steps} x {prediction.window_duration_seconds}s lookback</span>
-                        )}
-                      </dd>
-                    </div>
-                    {prediction.window_overlap != null && (
-                      <div className="flex gap-2">
-                        <dt className="w-32 text-gray-500 shrink-0">Window overlap</dt>
-                        <dd className="text-gray-900">
-                          <span className="font-medium">{prediction.window_overlap}s</span>
-                          <span className="ml-2 text-gray-500">
-                            (step size: {prediction.window_duration_seconds - prediction.window_overlap}s)
-                          </span>
-                        </dd>
-                      </div>
-                    )}
-                  </>
-                )}
-              </dl>
-            </div>
-            )}
-
-            {/* Anomaly Detection Summary - IP rows, model columns */}
-            {formData.output_field === 'anomaly' && prediction?.ip_anomalies && (() => {
-              const modelNames = Object.keys(prediction.models ?? {});
-              const rows = Object.entries(prediction.ip_anomalies);
-              return (
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  {/* Model metadata header */}
-                  <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 space-y-1">
-                    {modelNames.map(id => {
-                      const m = prediction.models[id];
-                      return (
-                        <div key={id} className="flex flex-wrap gap-x-4 text-sm">
-                          <span className="font-semibold text-gray-800">{m.name}</span>
-                          <span className="text-gray-500">window: {m.window_duration_seconds}s</span>
-                          <span className="text-gray-500">threshold: <span className="font-mono">{m.threshold?.toFixed(4)}</span></span>
-                          <span className="text-gray-400 text-xs self-center">{m.fields?.join(', ')}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="overflow-x-auto"><table className="w-full text-sm">
-                    <thead className="bg-gray-50 border-b border-gray-200">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">IP Address</th>
-                        {modelNames.map(id => (
-                          <th key={id} className="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">{prediction.models[id].name}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {rows.map(([ip, modelCounts]) => (
-                        <tr key={ip} className="hover:bg-gray-50">
-                          <td className="px-4 py-2 text-gray-900 font-mono text-xs">{ip}</td>
-                          {modelNames.map(id => {
-                            const val = modelCounts[id] ?? '-';
-                            const [anom, total] = val.split('/').map(Number);
-                            const isAnomaly = anom > 0;
-                            return (
-                              <td key={id} className={`px-4 py-2 text-right font-mono ${isAnomaly ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
-                                {val}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table></div>
-                </div>
-              );
-            })()}
-
-            {/* Forecast Predictions list */}
-            {formData.output_field !== 'anomaly' && prediction.predictions?.length > 0 && (
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700 mb-3">
-                  Predictions - <span className="font-normal text-gray-500">{formData.output_field}</span>
-                </h4>
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 border-b border-gray-200">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Step</th>
-                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Window Start</th>
-                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Window End</th>
-                        <th className="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Value</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {prediction.predictions.map((p) => (
-                        <tr key={p.step} className="hover:bg-gray-50">
-                          <td className="px-4 py-2 text-gray-600">
-                            {p.step}
-                          </td>
-                          <td className="px-4 py-2 text-gray-700 font-mono text-xs">
-                            {p.window_start_time
-                              ? new Date(p.window_start_time * 1000).toLocaleString()
-                              : 'N/A'}
-                          </td>
-                          <td className="px-4 py-2 text-gray-700 font-mono text-xs">
-                            {p.window_end_time
-                              ? new Date(p.window_end_time * 1000).toLocaleString()
-                              : 'N/A'}
-                          </td>
-                          <td className="px-4 py-2 text-right font-mono text-gray-900">
-                            {p.values[formData.output_field] != null
-                              ? p.values[formData.output_field].toFixed(4)
-                              : 'N/A'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* Local Explanation (KernelSHAP) */}
-            {prediction.explanation && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <h4 className="text-sm font-semibold text-gray-700">Local Explanation</h4>
-                  <span className="px-2 py-0.5 text-xs font-bold bg-gray-100 text-gray-600 rounded uppercase tracking-wide">
-                    {prediction.explanation.method}
+                  <span className="w-28 text-gray-500 shrink-0">Model</span>
+                  <span className="font-medium text-gray-900">
+                    {prediction.model_name} (v{prediction.model_version}{prediction.architecture ? `, ${prediction.architecture}` : ''})
+                    <span className="ml-2 text-gray-400 font-normal text-xs">{prediction.model_id}</span>
                   </span>
                 </div>
-                <p className="text-xs text-gray-500 mb-4">
-                  Baseline: <span className="font-mono font-medium text-gray-700">{prediction.explanation.baseline?.toFixed(4)}</span>
-                  {' · '}Positive values pushed the prediction above baseline, negative below.
-                </p>
-                <FeatureImportanceChart
-                  importances={Object.fromEntries(
-                    Object.entries(prediction.explanation.attributions).map(([k, v]) => [k, { mean: v }])
-                  )}
-                  metric="shap"
-                  computedAt={prediction.explanation.computed_at}
-                />
+                <div className="flex gap-2">
+                  <span className="w-28 text-gray-500 shrink-0">Lookahead</span>
+                  <span>{prediction.forecast_steps} steps × {prediction.window_duration_seconds}s = <strong>{prediction.forecast_steps * prediction.window_duration_seconds}s</strong></span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="w-28 text-gray-500 shrink-0">Input data</span>
+                  <span className="font-mono text-xs">
+                    {fmtTs(prediction.input_data_start)} → {fmtTs(prediction.input_data_end)}
+                    <span className="ml-2 text-gray-400">({prediction.lookback_steps} windows)</span>
+                  </span>
+                </div>
               </div>
-            )}
+
+              {prediction.predictions?.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2">Predictions — <span className="font-normal text-gray-500">{formData.output_field}</span></h4>
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Step</th>
+                          <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Window Start</th>
+                          <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Window End</th>
+                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {prediction.predictions.map(p => (
+                          <tr key={p.step} className="hover:bg-gray-50">
+                            <td className="px-4 py-2 text-gray-600">{p.step}</td>
+                            <td className="px-4 py-2 text-gray-700 font-mono text-xs">{fmtTs(p.window_start_time)}</td>
+                            <td className="px-4 py-2 text-gray-700 font-mono text-xs">{fmtTs(p.window_end_time)}</td>
+                            <td className="px-4 py-2 text-right font-mono text-gray-900">
+                              {p.values[formData.output_field] != null ? p.values[formData.output_field].toFixed(4) : 'N/A'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {prediction.explanation && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <h4 className="text-sm font-semibold text-gray-700">Local Explanation</h4>
+                    <span className="px-2 py-0.5 text-xs font-bold bg-gray-100 text-gray-600 rounded uppercase">{prediction.explanation.method}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-3">Baseline: <span className="font-mono font-medium text-gray-700">{prediction.explanation.baseline?.toFixed(4)}</span> · Positive = pushed above baseline.</p>
+                  <FeatureImportanceChart
+                    importances={Object.fromEntries(Object.entries(prediction.explanation.attributions).map(([k, v]) => [k, { mean: v }]))}
+                    metric="shap"
+                    computedAt={prediction.explanation.computed_at}
+                  />
+                </div>
+              )}
+            </>}
+
+            {/* ── ANOMALY ── */}
+            {isAnomaly && (() => {
+              const models = prediction.models ?? {};
+              const counts = prediction.anomaly_counts ?? {};
+              const results = prediction.results ?? [];
+
+              return <>
+                {/* Model summary cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {Object.entries(models).map(([id, m]) => {
+                    const countStr = counts[id] ?? '0/0';
+                    const [anom, total] = countStr.split('/').map(Number);
+                    const hasAnomaly = anom > 0;
+                    return (
+                      <div key={id} className={`rounded-lg border p-4 ${hasAnomaly ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-semibold text-gray-900 text-sm">{m.name}</span>
+                          <span className={`text-lg font-bold font-mono ${hasAnomaly ? 'text-red-700' : 'text-green-700'}`}>{countStr}</span>
+                        </div>
+                        <div className="text-xs text-gray-500 space-y-0.5">
+                          <div>Threshold: <span className="font-mono">{m.threshold?.toFixed(6)}</span></div>
+                          <div>Window: {m.window_duration_seconds}s</div>
+                          <div>Fields: {m.fields?.join(', ')}</div>
+                        </div>
+                        {hasAnomaly && <p className="mt-2 text-xs font-semibold text-red-700">{anom} anomalous window{anom > 1 ? 's' : ''} detected</p>}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Per-model window scores */}
+                {results.map(result => {
+                  const hasScores = result.scores?.length > 0;
+                  const anomalousWindows = result.scores?.filter(s => s.is_anomaly) ?? [];
+                  return (
+                    <div key={result.model_id}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <h4 className="text-sm font-semibold text-gray-700">{result.model_name}</h4>
+                        <span className="text-xs text-gray-400">threshold: <span className="font-mono">{result.threshold_value?.toFixed(6)}</span></span>
+                        <span className="text-xs text-gray-400">{result.num_anomalies}/{result.num_windows} windows</span>
+                      </div>
+
+                      {hasScores && (
+                        <div className="border border-gray-200 rounded-lg overflow-hidden mb-3">
+                          <table className="w-full text-sm">
+                            <thead className="bg-gray-50 border-b border-gray-200">
+                              <tr>
+                                <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Window Start</th>
+                                <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Error</th>
+                                <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {result.scores.map((s, i) => (
+                                <tr key={i} className={s.is_anomaly ? 'bg-red-50' : 'hover:bg-gray-50'}>
+                                  <td className="px-3 py-2 font-mono text-xs text-gray-700">{fmtTs(s.window_start_time)}</td>
+                                  <td className="px-3 py-2 text-right font-mono text-xs text-gray-900">{s.reconstruction_error?.toFixed(6)}</td>
+                                  <td className="px-3 py-2 text-center">
+                                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${s.is_anomaly ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                                      {s.is_anomaly ? 'ANOMALY' : 'OK'}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* SHAP explanations for anomalous windows */}
+                      {anomalousWindows.filter(s => s.explanation).map((s, i) => (
+                        <div key={i} className="mb-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-xs font-semibold text-red-700">Explanation — anomalous window @ {fmtTs(s.window_start_time)}</span>
+                            <span className="px-1.5 py-0.5 text-xs bg-gray-100 text-gray-600 rounded uppercase">{s.explanation.method}</span>
+                          </div>
+                          <p className="text-xs text-gray-500 mb-2">Baseline error: <span className="font-mono">{s.explanation.baseline?.toFixed(6)}</span> · Reconstruction error: <span className="font-mono">{s.reconstruction_error?.toFixed(6)}</span></p>
+                          <FeatureImportanceChart
+                            importances={Object.fromEntries(Object.entries(s.explanation.attributions).map(([k, v]) => [k, { mean: v }]))}
+                            metric="shap"
+                            computedAt={s.explanation.computed_at}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+
+                {results.length === 0 && (
+                  <p className="text-sm text-gray-400 text-center py-4">No per-window results returned. Enable explain or check model training.</p>
+                )}
+              </>;
+            })()}
+
           </div>
         </div>
       )}

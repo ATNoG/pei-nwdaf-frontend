@@ -55,8 +55,12 @@ const StateBadge = ({ state }) => {
 const Performance = () => {
   const mlUrl = '/' + import.meta.env.VITE_ML_HOST;
 
+  const PERF_KEY = 'aion-performance-state';
+
   const [fields, setFields] = useState([]);
-  const [activeField, setActiveField] = useState('');
+  const [activeField, setActiveField] = useState(() => {
+    try { return sessionStorage.getItem(PERF_KEY) || ''; } catch { return ''; }
+  });
 
   // Per-field data
   const [status, setStatus] = useState(null);
@@ -458,7 +462,7 @@ const Performance = () => {
 
   if (!fields.length) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm text-center text-gray-500">
+      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm text-center text-gray-500">
         No fields available from the ML service.
       </div>
     );
@@ -479,7 +483,7 @@ const Performance = () => {
             <SearchableDropdown
               options={fields}
               value={activeField}
-              onChange={setActiveField}
+              onChange={(v) => { setActiveField(v); try { sessionStorage.setItem(PERF_KEY, v); } catch {} }}
               placeholder="Search fields..."
               recentSearchKey="performance-fields"
               formatOption={(f) => f}
@@ -574,7 +578,7 @@ const Performance = () => {
       ) : (
         <>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+          <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
             <div className="mb-4 space-y-2">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-semibold text-gray-900">Score History</h3>
@@ -741,7 +745,7 @@ const Performance = () => {
 
         {/* Feature Importance panel - only when a best model is elected */}
         {bestModel && (
-          <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-semibold text-gray-900">Feature Importance</h3>
