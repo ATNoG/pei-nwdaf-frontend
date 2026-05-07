@@ -631,14 +631,14 @@ const Policy = () => {
       )}
 
       {/* Header */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center space-x-4 min-w-0">
             <div className="p-3 bg-blue-100 rounded-lg shrink-0">
               <FaShieldAlt className="text-2xl text-blue-600" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-2xl font-bold text-gray-900">Policy Configuration</h2>
+              <h2 className="text-xl font-semibold text-gray-900">Policy Configuration</h2>
               <p className="text-sm text-gray-600">Configure transformer pipelines and field permissions</p>
             </div>
           </div>
@@ -776,7 +776,7 @@ const Policy = () => {
               <div className="flex items-center space-x-3 text-sm text-gray-600">
                 <span>{Object.keys(pipelines).length} pipeline{Object.keys(pipelines).length !== 1 ? 's' : ''} total</span>
                 {isNewPipeline && (
-                  <span className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
+                  <span className="text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded">
                     New - Unsaved
                   </span>
                 )}
@@ -858,7 +858,7 @@ const Policy = () => {
           />
 
           {/* Field Transformations */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">Field Transformations</h3>
@@ -888,8 +888,8 @@ const Policy = () => {
                       <div className="flex-1 min-w-0 mr-4">
                         <div className="flex items-center space-x-3 mb-2">
                           {step.type === 'hashing' ? (
-                            <span className="flex items-center space-x-1.5 px-2.5 py-1 bg-purple-100 text-purple-800 text-xs font-semibold rounded-full">
-                              <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+                            <span className="flex items-center space-x-1.5 px-2.5 py-1 bg-purple-100 text-blue-800 text-xs font-semibold rounded-full">
+                              <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
                               <span>Hashing</span>
                             </span>
                           ) : step.type === 'redaction' ? (
@@ -1023,13 +1023,13 @@ const Policy = () => {
       {/* Transformation Detail Modal */}
       {showStepDetailModal && detailStep && (
         <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <div className="flex items-center space-x-3">
                 {detailStep.type === 'hashing' ? (
-                  <span className="flex items-center space-x-2 px-3 py-1.5 bg-purple-100 text-purple-800 text-sm font-semibold rounded-full">
-                    <span className="w-2.5 h-2.5 bg-purple-500 rounded-full"></span>
+                  <span className="flex items-center space-x-2 px-3 py-1.5 bg-purple-100 text-blue-800 text-sm font-semibold rounded-full">
+                    <span className="w-2.5 h-2.5 bg-blue-500 rounded-full"></span>
                     <span>Hashing Transformation</span>
                   </span>
                 ) : detailStep.type === 'redaction' ? (
@@ -1104,7 +1104,7 @@ const Policy = () => {
       {/* New Pipeline Modal */}
       {showNewPipelineModal && (
         <div className="fixed inset-0 bg-gray-900/20 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <div className="flex items-center space-x-4">
@@ -1217,9 +1217,9 @@ const Policy = () => {
                 if (!sourceComp?.mlModelMeta) return null;
                 const meta = sourceComp.mlModelMeta;
                 return (
-                  <div className="mb-4 bg-purple-50 border border-purple-200 rounded-lg p-4">
+                  <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-sm font-medium text-purple-900">
+                      <h4 className="text-sm font-medium text-blue-900">
                         🤖 ML Model: {sourceComp.name}
                       </h4>
                       {meta.inputFields?.length > 0 && (
@@ -1227,13 +1227,13 @@ const Policy = () => {
                           onClick={() => {
                             setHighlightedFields(new Set(meta.inputFields));
                           }}
-                          className="text-sm px-3 py-1 bg-purple-200 text-purple-900 rounded hover:bg-purple-300 transition-colors"
+                          className="text-sm px-3 py-1 bg-purple-200 text-blue-900 rounded hover:bg-purple-300 transition-colors"
                         >
                           Highlight Training Fields
                         </button>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs text-purple-800">
+                    <div className="grid grid-cols-2 gap-2 text-xs text-blue-800">
                       {meta.architecture && <div><span className="font-medium">Architecture:</span> {meta.architecture}</div>}
                       {meta.windowDuration && <div><span className="font-medium">Window:</span> {meta.windowDuration}s</div>}
                       <div className="col-span-2">
@@ -1255,9 +1255,9 @@ const Policy = () => {
                 if (!sinkComp?.mlModelMeta) return null;
                 const meta = sinkComp.mlModelMeta;
                 return (
-                  <div className="mb-4 bg-purple-50 border border-purple-200 rounded-lg p-4">
+                  <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-sm font-medium text-purple-900">
+                      <h4 className="text-sm font-medium text-blue-900">
                         🤖 ML Model: {sinkComp.name}
                       </h4>
                       {meta.inputFields?.length > 0 && (
@@ -1265,13 +1265,13 @@ const Policy = () => {
                           onClick={() => {
                             setHighlightedFields(new Set(meta.inputFields));
                           }}
-                          className="text-sm px-3 py-1 bg-purple-200 text-purple-900 rounded hover:bg-purple-300 transition-colors"
+                          className="text-sm px-3 py-1 bg-purple-200 text-blue-900 rounded hover:bg-purple-300 transition-colors"
                         >
                           Highlight Training Fields
                         </button>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs text-purple-800">
+                    <div className="grid grid-cols-2 gap-2 text-xs text-blue-800">
                       {meta.architecture && <div><span className="font-medium">Architecture:</span> {meta.architecture}</div>}
                       {meta.windowDuration && <div><span className="font-medium">Window:</span> {meta.windowDuration}s</div>}
                       <div className="col-span-2">
@@ -1401,8 +1401,8 @@ const Policy = () => {
                     );
                   }
                   return (
-                    <div className="mb-6 bg-purple-50 border border-purple-200 rounded-lg p-4">
-                      <label className="block text-sm font-medium text-purple-900 mb-2">
+                    <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <label className="block text-sm font-medium text-blue-900 mb-2">
                         Select ML Models (Sink)
                       </label>
                       <p className="text-xs text-purple-700 mb-3">
@@ -1438,7 +1438,7 @@ const Policy = () => {
                               />
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
-                                  <div className="font-medium text-purple-900 text-sm">{model.name}</div>
+                                  <div className="font-medium text-blue-900 text-sm">{model.name}</div>
                                   {meta.architecture && (
                                     <div className="text-xs text-purple-600">{meta.architecture}</div>
                                   )}

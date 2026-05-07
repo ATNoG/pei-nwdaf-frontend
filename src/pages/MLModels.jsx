@@ -116,7 +116,7 @@ const PolicyStatusBadge = ({ modelName, policyUrl }) => {
       {/* Modal for showing policy details */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 max-h-[80vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 max-h-[80vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Policy Details</h3>
               <button
@@ -257,12 +257,12 @@ const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete,
               </span>
             )}
             {model.architecture && (
-              <span className="px-2 py-0.5 text-xs font-semibold bg-purple-100 text-purple-800 rounded uppercase tracking-wide">
+              <span className="px-2 py-0.5 text-xs font-semibold bg-gray-100 text-gray-600 rounded uppercase tracking-wide">
                 {model.architecture}
               </span>
             )}
             {model.modelType === 'anomaly' && (
-              <span className="px-2 py-0.5 text-xs font-bold bg-orange-200 text-orange-900 rounded uppercase tracking-wide">
+              <span className="px-2 py-0.5 text-xs font-bold bg-gray-200 text-gray-600 rounded uppercase tracking-wide">
                 anomaly
               </span>
             )}
@@ -293,7 +293,7 @@ const ModelCard = memo(({ model, onShowDetails, onTrain, onSetDefault, onDelete,
             </button>
             <button
               onClick={() => onTrain(model)}
-              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5"
+              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center justify-center gap-1.5"
             >
               {isTraining
                 ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white shrink-0"></div>Training</>
@@ -527,9 +527,9 @@ const FieldCheckboxes = ({ fieldKey, label, fields, loadingFields, selected, onT
 };
 
 const EVENT_COLORS = {
-  PERF_DATA:   'bg-blue-100 text-blue-800',
-  UE_MOBILITY: 'bg-purple-100 text-purple-800',
-  UE_COMM:     'bg-green-100 text-green-800',
+  PERF_DATA:   'bg-blue-50 text-blue-700',
+  UE_MOBILITY: 'bg-gray-100 text-gray-600',
+  UE_COMM:     'bg-gray-100 text-gray-600',
 };
 
 const intersectSets = (sets) => {
@@ -638,11 +638,11 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
 
 
   return (
-    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full flex flex-col max-h-[90vh]">
-        <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-lg flex-shrink-0">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-md w-full flex flex-col max-h-[90vh]">
+        <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-xl rounded-t-lg flex-shrink-0">
           <div>
-            <h3 className="text-xl font-bold text-gray-900">Create new Instance</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Create new Instance</h3>
             <p className="text-sm text-gray-600 mt-1">Instantiate a model</p>
           </div>
           <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
@@ -844,8 +844,8 @@ const ForceFieldPickerModal = ({ model, fields, onConfirm, onCancel }) => {
   const [selected, setSelected] = useState(fields[0] ?? '');
   if (!model) return null;
   return (
-    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 space-y-4">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 space-y-4">
         <h3 className="text-lg font-bold text-gray-900">Set Best Model</h3>
         <p className="text-sm text-gray-600">
           <span className="font-medium">{model.name}</span> has multiple output fields. Choose which field to set this model as best for:
@@ -958,11 +958,11 @@ const AllJobsModal = ({ showModal, setShowModal, mlUrl, onJobsUpdate }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-xl flex-shrink-0">
           <div>
-            <h3 className="text-xl font-bold text-gray-900">Training Jobs</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Training Jobs</h3>
             <p className="text-sm text-gray-600 mt-1">All training jobs across all models</p>
           </div>
           <div className="flex items-center gap-3">
@@ -1003,8 +1003,11 @@ const AllJobsModal = ({ showModal, setShowModal, mlUrl, onJobsUpdate }) => {
                 <tbody className="divide-y divide-gray-100">
                   {jobs.map((job) => (
                     <tr key={job.job_id} className="hover:bg-gray-50">
-                      <td className="px-4 py-2 font-mono text-xs text-gray-600" title={job.job_id}>
-                        {job.job_id?.slice(0, 8)}…
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-xs text-gray-600" title={job.job_id}>{job.job_id?.slice(0,8)}…</span>
+                          <button onClick={() => copyToClipboard(job.job_id, job.job_id + "-jid")} className="p-1 rounded hover:bg-gray-100 transition-colors" title="Copy Job ID">{copiedId === job.job_id + "-jid" ? <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> : <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>}</button>
+                        </div>
                       </td>
                       <td className="px-4 py-2">
                         <div className="flex items-center gap-2">
@@ -1012,11 +1015,11 @@ const AllJobsModal = ({ showModal, setShowModal, mlUrl, onJobsUpdate }) => {
                             {job.model_id?.slice(0, 8)}…
                           </span>
                           <button
-                            onClick={() => copyToClipboard(job.model_id, job.model_id)}
+                            onClick={() => copyToClipboard(job.model_id, job.job_id + "-mid")}
                             className="p-1 hover:bg-gray-200 rounded transition-colors"
                             title="Copy model ID"
                           >
-                            {copiedId === job.model_id ? (
+                            {copiedId === job.job_id + "-mid" ? (
                               <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                               </svg>
@@ -1060,6 +1063,12 @@ const TrainingModal = ({ model, mlUrl, onClose, onStartTraining, isTraining }) =
   const [loadingJobs, setLoadingJobs] = useState(true);
   const [cancellingIds, setCancellingIds] = useState(new Set());
   const intervalRef = useRef(null);
+  const [copiedId, setCopiedId] = useState(null);
+  const copyId = (text, id) => {
+    const fb = () => { const el = document.createElement("textarea"); el.value = text; el.style.cssText = "position:fixed;opacity:0"; document.body.appendChild(el); el.select(); document.execCommand("copy"); document.body.removeChild(el); };
+    navigator.clipboard?.writeText(text).catch(fb) ?? fb();
+    setCopiedId(id); setTimeout(() => setCopiedId(null), 2000);
+  };
 
   const [resourceCpu, setResourceCpu] = useState('');
   const [resourceMemory, setResourceMemory] = useState('');
@@ -1155,12 +1164,12 @@ const TrainingModal = ({ model, mlUrl, onClose, onStartTraining, isTraining }) =
   };
 
   return (
-    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
+        <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-xl flex-shrink-0">
           <div>
-            <h3 className="text-xl font-bold text-gray-900">Train</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Train</h3>
             <p className="text-sm text-gray-600 mt-1">{model.name}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
@@ -1277,8 +1286,11 @@ const TrainingModal = ({ model, mlUrl, onClose, onStartTraining, isTraining }) =
                       const isActive = job.status === 'running' || job.status === 'pending';
                       return (
                         <tr key={job.job_id} className="hover:bg-gray-50">
-                          <td className="px-4 py-2 font-mono text-xs text-gray-600" title={job.job_id}>
-                            {job.job_id?.slice(0, 8)}…
+                          <td className="px-4 py-2">
+                            <div className="flex items-center gap-1">
+                              <span className="font-mono text-xs text-gray-600" title={job.job_id}>{job.job_id?.slice(0,8)}…</span>
+                              <button onClick={() => copyId(job.job_id, "tm-" + job.job_id)} className="p-0.5 rounded hover:bg-gray-100 transition-colors">{copiedId === "tm-" + job.job_id ? <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg> : <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>}</button>
+                            </div>
                           </td>
                           <td className="px-4 py-2">
                             <span className={statusBadge(job.status)}>{job.status}</span>
@@ -1323,6 +1335,12 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
   const [importance, setImportance] = useState(null);
   const [loadingImportance, setLoadingImportance] = useState(false);
   const [triggeringImportance, setTriggeringImportance] = useState(false);
+  const [copiedId, setCopiedId] = useState(null);
+  const copyToClipboard = (text, id) => {
+    const fb = () => { const el = document.createElement("textarea"); el.value = text; el.style.cssText = "position:fixed;opacity:0"; document.body.appendChild(el); el.select(); document.execCommand("copy"); document.body.removeChild(el); };
+    navigator.clipboard?.writeText(text).catch(fb) ?? fb();
+    setCopiedId(id); setTimeout(() => setCopiedId(null), 2000);
+  };
 
   const isAnomaly = selectedModel?.modelType === 'anomaly';
   const config = modelDetails?.config || {};
@@ -1359,8 +1377,8 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
 
   if (loadingDetails) {
     return (
-      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full">
           <div className="p-12 flex items-center justify-center">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
@@ -1374,8 +1392,8 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
 
   if (!modelDetails) {
     return (
-      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
           <div className="p-12 text-center">
             <p className="text-gray-500">No model details available</p>
             <button onClick={() => setShowModal(false)} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Close</button>
@@ -1386,11 +1404,11 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
   }
 
   return (
-    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-xl flex-shrink-0">
           <div>
-            <h3 className="text-xl font-bold text-gray-900">Model Details</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Model Details</h3>
             <p className="text-sm text-gray-600 mt-1">{modelDetails.name}</p>
           </div>
           <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
@@ -1512,7 +1530,10 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
                 {modelDetails.mlflow_run_id && (
                   <div className="flex justify-between items-center">
                     <span className="text-gray-600">MLflow Run ID:</span>
-                    <span className="font-mono text-xs text-gray-900">{modelDetails.mlflow_run_id}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-xs text-gray-900" title={modelDetails.mlflow_run_id}>{modelDetails.mlflow_run_id.slice(0,12)}…</span>
+                      <button onClick={() => copyToClipboard(modelDetails.mlflow_run_id, "mlflow-run-id")} className="p-1 rounded hover:bg-gray-100 transition-colors" title="Copy MLflow Run ID">{copiedId === "mlflow-run-id" ? <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> : <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>}</button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1988,17 +2009,17 @@ const MLModels = () => {
 
       <div className="space-y-6">
         {/* Header */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
           {/* Header */}
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex-1">
-              <h2 className="text-2xl font-bold text-gray-900">ML Registry</h2>
+              <h2 className="text-xl font-semibold text-gray-900">ML Registry</h2>
               <p className="text-sm text-gray-600 mt-1">Browse and manage ML models</p>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
               <button
                 onClick={() => setShowAllJobsModal(true)}
-                className="px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors flex items-center gap-2"
+                className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 bg-white hover:bg-gray-50 rounded-lg transition-colors flex items-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -2007,25 +2028,13 @@ const MLModels = () => {
               </button>
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2"
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
                 New Instance
               </button>
-
-              <a
-                href={mlflowUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 rounded-lg transition-all shadow-sm hover:shadow-md flex items-center gap-2"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5zm0 2.18l8 4v8.82c0 4.52-3.13 8.74-8 9.82-4.87-1.08-8-5.3-8-9.82V8.18l8-4zM11 7v2h2V7h-2zm0 4v6h2v-6h-2z" />
-                </svg>
-                Open in MLflow
-              </a>
 
               {lastUpdated && (
                 <span className="text-xs text-gray-500">Updated: {lastUpdated.toLocaleTimeString()}</span>

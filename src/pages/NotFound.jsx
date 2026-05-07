@@ -38,13 +38,13 @@ export default function NotFound() {
         <rect x="34" y="145" width="62" height="8" rx="2" fill="#f97316" />
       </svg>
 
-      <h1 className="text-4xl font-bold text-gray-800 mt-6 mb-2">Page Not Found</h1>
-      <p className="text-gray-500 mb-8 max-w-sm">
+      <h1 className="text-3xl font-semibold text-gray-800 mt-6 mb-2">Page Not Found</h1>
+      <p className="text-gray-500 mb-8 max-w-sm text-sm">
         The page you are looking for doesn't exist or has been moved
       </p>
       <Link
         to="/"
-        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm transition-colors"
       >
         Go to Dashboard
       </Link>

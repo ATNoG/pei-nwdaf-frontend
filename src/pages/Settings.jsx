@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAccessibility } from '../contexts/AccessibilityContext';
+import { FaSun, FaMoon, FaDesktop } from 'react-icons/fa';
 
 const FONT_SIZE_OPTIONS = [
   { value: 'small',  label: 'S' },
@@ -9,21 +10,15 @@ const FONT_SIZE_OPTIONS = [
 ];
 
 const CVD_OPTIONS = [
-  {
-    value: 'none',
-    label: 'None',
-    description: 'Standard color palette.',
-  },
-  {
-    value: 'rg',
-    label: 'Red-Green',
-    description: 'For deuteranopia & protanopia.',
-  },
-  {
-    value: 'tritan',
-    label: 'Tritanopia',
-    description: 'For blue-yellow deficiency.',
-  },
+  { value: 'none',   label: 'None',        description: 'Standard color palette.' },
+  { value: 'rg',     label: 'Red-Green',   description: 'For deuteranopia & protanopia.' },
+  { value: 'tritan', label: 'Tritanopia',  description: 'For blue-yellow deficiency.' },
+];
+
+const THEME_OPTIONS = [
+  { value: 'light',  label: 'Light',  Icon: FaSun },
+  { value: 'dark',   label: 'Dark',   Icon: FaMoon },
+  { value: 'system', label: 'System', Icon: FaDesktop },
 ];
 
 const Toggle = ({ id, checked, onChange, label, description }) => (
@@ -50,30 +45,75 @@ const Toggle = ({ id, checked, onChange, label, description }) => (
   </div>
 );
 
+const SectionCard = ({ title, description, children }) => (
+  <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+    <h2 className="text-sm font-semibold text-gray-900 mb-0.5">{title}</h2>
+    {description && <p className="text-xs text-gray-500 mb-4">{description}</p>}
+    {children}
+  </div>
+);
+
 const Settings = () => {
   const { preferences, setPreference } = useAccessibility();
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="max-w-4xl mx-auto space-y-4">
 
-        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-          <h2 className="text-base font-semibold text-gray-900 mb-1">Display</h2>
-          <p className="text-sm text-gray-500 mb-2">Adjust visual contrast to improve readability.</p>
+      {/* Theme */}
+      <SectionCard
+        title="Theme"
+        description="Choose light, dark, or follow your system preference."
+      >
+        <div className="grid grid-cols-3 gap-2" role="group" aria-label="Color theme">
+          {THEME_OPTIONS.map(({ value, label, Icon }) => {
+            const isActive = preferences.theme === value;
+            return (
+              <button
+                key={value}
+                onClick={() => setPreference('theme', value)}
+                aria-pressed={isActive}
+                className={`flex flex-col items-center gap-2 px-3 py-4 rounded-lg border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
+                  isActive
+                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                    : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                }`}
+              >
+                <Icon className="text-lg" />
+                <span className="text-xs font-semibold">{label}</span>
+              </button>
+            );
+          })}
+        </div>
+        {preferences.theme === 'system' && (
+          <p className="text-xs text-gray-400 mt-3 text-center">
+            Follows your OS preference automatically.
+          </p>
+        )}
+      </SectionCard>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+        {/* Display */}
+        <SectionCard
+          title="Display"
+          description="Adjust visual contrast to improve readability."
+        >
           <div className="divide-y divide-gray-100">
             <Toggle
               id="high-contrast"
               checked={preferences.highContrast}
               onChange={(val) => setPreference('highContrast', val)}
               label="High Contrast"
-              description="Forces stark black and white backgrounds with strongly defined borders."
+              description="Forces stark black/white backgrounds with strong borders."
             />
           </div>
-        </div>
+        </SectionCard>
 
-        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-          <h2 className="text-base font-semibold text-gray-900 mb-1">Text Size</h2>
-          <p className="text-sm text-gray-500 mb-4">Adjust the base font size across the dashboard.</p>
+        {/* Text Size */}
+        <SectionCard
+          title="Text Size"
+          description="Adjust the base font size across the dashboard."
+        >
           <div className="flex gap-2" role="group" aria-label="Text size">
             {FONT_SIZE_OPTIONS.map(opt => (
               <button
@@ -90,50 +130,35 @@ const Settings = () => {
               </button>
             ))}
           </div>
-        </div>
-
-        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm md:col-span-2">
-          <h2 className="text-base font-semibold text-gray-900 mb-1">Color Vision</h2>
-          <p className="text-sm text-gray-500 mb-4">
-            Select a palette correction for your type of color vision deficiency.
-          </p>
-          <div role="radiogroup" aria-label="Color vision mode" className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            {CVD_OPTIONS.map(opt => (
-              <button
-                key={opt.value}
-                role="radio"
-                aria-checked={preferences.colorVision === opt.value}
-                onClick={() => setPreference('colorVision', opt.value)}
-                className={`text-left px-4 py-3 rounded-lg border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
-                  preferences.colorVision === opt.value
-                    ? 'border-blue-600 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <span className="block text-sm font-medium text-gray-900">{opt.label}</span>
-                <span className="block text-xs text-gray-500 mt-0.5">{opt.description}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Motion - commented out for now
-        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm md:col-span-2">
-          <h2 className="text-base font-semibold text-gray-900 mb-1">Motion</h2>
-          <p className="text-sm text-gray-500 mb-2">Disable transitions and animations that may cause discomfort.</p>
-          <div className="divide-y divide-gray-100">
-            <Toggle
-              id="reduced-motion"
-              checked={preferences.reducedMotion}
-              onChange={(val) => setPreference('reducedMotion', val)}
-              label="Reduce Motion"
-              description="Disables all CSS transitions and animations across the dashboard."
-            />
-          </div>
-        </div>
-        */}
+        </SectionCard>
 
       </div>
+
+      {/* Color Vision */}
+      <SectionCard
+        title="Color Vision"
+        description="Select a palette correction for your type of color vision deficiency."
+      >
+        <div role="radiogroup" aria-label="Color vision mode" className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {CVD_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              role="radio"
+              aria-checked={preferences.colorVision === opt.value}
+              onClick={() => setPreference('colorVision', opt.value)}
+              className={`text-left px-4 py-3 rounded-lg border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
+                preferences.colorVision === opt.value
+                  ? 'border-blue-600 bg-blue-50'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <span className="block text-sm font-medium text-gray-900">{opt.label}</span>
+              <span className="block text-xs text-gray-500 mt-0.5">{opt.description}</span>
+            </button>
+          ))}
+        </div>
+      </SectionCard>
+
     </div>
   );
 };

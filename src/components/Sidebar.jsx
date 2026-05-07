@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { FaRobot, FaShieldAlt } from 'react-icons/fa';
-import { FaPlug } from 'react-icons/fa6';
+import { FaPlug, FaRobot, FaShieldAlt, FaBars, FaChevronLeft, FaChartLine, FaCog, FaExternalLinkAlt } from 'react-icons/fa';
 import { VscGraph } from 'react-icons/vsc';
 import { FaBars, FaChevronLeft, FaChartLine, FaCog, FaSignOutAlt } from 'react-icons/fa';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLE_ACCESS } from '../lib/roles';
 
 const Sidebar = () => {
-  const [isCollapsed, setIsCollapsed] = useState(window.innerWidth < 1024);
+  const [collapsed, setCollapsed] = useState(window.innerWidth < 1024);
   const { user, logout } = useAuth();
 
   const allNavItems = [
@@ -30,50 +29,85 @@ const Sidebar = () => {
     : user.roles[0]?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) ?? 'User';
 
   useEffect(() => {
-    const handleResize = () => setIsCollapsed(window.innerWidth < 1024);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    const onResize = () => setCollapsed(window.innerWidth < 1024);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   return (
-    <div className={`${isCollapsed ? 'w-20' : 'w-64'} h-screen bg-white border-r border-gray-200 flex flex-col shadow-sm transition-all duration-300`}>
-      {/* Logo/Header */}
-      <div className="p-6 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <div className={`flex items-center space-x-3 ${isCollapsed ? 'hidden' : ''}`}>
-            <img src="/logo.svg" alt="AION Logo" className="w-8 h-8" />
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-500 to-blue-700 bg-clip-text text-transparent">AION</h1>
+    <div className="sidebar" style={{ width: collapsed ? '60px' : '220px' }}>
+      {/* Logo */}
+      <div className="sidebar-logo-area">
+        {collapsed ? (
+          <div className="flex justify-center w-full">
+            <img src="/logo.svg" alt="AION" className="w-7 h-7" />
           </div>
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-            title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {isCollapsed ? <FaBars className="text-gray-600" /> : <FaChevronLeft className="text-gray-600" />}
-          </button>
-        </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <img src="/logo.svg" alt="AION" className="w-7 h-7 shrink-0" />
+              <span className="text-xl font-bold tracking-tight" style={{ color: 'var(--accent)' }}>
+                AION
+              </span>
+            </div>
+            <button
+              className="sidebar-toggle-btn shrink-0"
+              onClick={() => setCollapsed(true)}
+              title="Collapse sidebar"
+            >
+              <FaChevronLeft size={12} />
+            </button>
+          </>
+        )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4">
-        <ul className="space-y-2">
-          {navItems.map((item) => (
-            <li key={item.name}>
-              <NavLink
-                to={item.path}
-                className={({ isActive }) =>
-                  `flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'} px-4 py-3 rounded-lg transition-colors ${
-                    isActive ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
-                  }`
-                }
-                title={isCollapsed ? item.name : ''}
-              >
-                <span className="text-xl flex-shrink-0">{item.icon}</span>
-                {!isCollapsed && <span className="font-medium whitespace-nowrap">{item.name}</span>}
-              </NavLink>
-            </li>
-          ))}
-        </ul>
+      <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
+        {collapsed && (
+          <button
+            className="sidebar-toggle-btn w-full flex justify-center py-2 mb-1"
+            onClick={() => setCollapsed(false)}
+            title="Expand sidebar"
+          >
+            <FaBars size={14} />
+          </button>
+        )}
+        {NAV_ITEMS.map(({ name, icon: Icon, path }) => (
+          <NavLink
+            key={path}
+            to={path}
+            end={path === '/'}
+            title={collapsed ? name : undefined}
+            className={({ isActive }) =>
+              ['sidebar-nav-item', isActive && 'active', collapsed && 'justify-center']
+                .filter(Boolean).join(' ')
+            }
+          >
+            <span className="sidebar-nav-icon"><Icon /></span>
+            {!collapsed && <span>{name}</span>}
+          </NavLink>
+        ))}
+
+        {/* MLflow external link */}
+        <div className="pt-1 mt-1" style={{ borderTop: '1px solid var(--border)' }}>
+          <a
+            href={mlflowUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open MLflow"
+            className={['sidebar-nav-item', collapsed && 'justify-center'].filter(Boolean).join(' ')}
+          >
+            <span className="sidebar-nav-icon">
+              <FaExternalLinkAlt size={12} />
+            </span>
+            {!collapsed && (
+              <span className="flex-1 flex items-center justify-between">
+                MLflow
+                <FaExternalLinkAlt size={9} style={{ color: 'var(--text-muted)' }} />
+              </span>
+            )}
+          </a>
+        </div>
       </nav>
 
       {/* Footer */}

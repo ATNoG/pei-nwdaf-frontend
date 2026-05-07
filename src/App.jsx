@@ -41,14 +41,19 @@ function AppContent() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
       <Sidebar />
-      <div className="flex-1 overflow-auto">
-        <header className="bg-gradient-to-r from-blue-500 to-blue-600 px-4 sm:px-8 py-4 sm:py-6 shadow-md">
-          <h1 className="text-3xl font-bold text-white">{getPageTitle()}</h1>
-          <p className="text-blue-50 mt-1">{getPageSubtitle()}</p>
+
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <header className="page-header shrink-0">
+          <div className="page-header-accent" aria-hidden="true" />
+          <div>
+            <h1>{meta.title}</h1>
+            {meta.subtitle && <p>{meta.subtitle}</p>}
+          </div>
         </header>
-        <div className="p-4 sm:p-8">
+
+        <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
           <Routes>
             <Route path="/" element={
               <ProtectedRoute allowedRoles={ROLE_ACCESS['/']}>
@@ -82,7 +87,7 @@ function AppContent() {
             } />
             <Route path="*" element={<NotFound />} />
           </Routes>
-        </div>
+        </main>
       </div>
     </div>
   );
