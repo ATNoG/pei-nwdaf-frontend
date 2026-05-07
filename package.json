@@ -21,12 +21,13 @@
   },
   "homepage": "https://github.com/ATNoG/pei-nwdaf-frontend#readme",
   "dependencies": {
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "react-router-dom": "^7.10.1",
-    "react-icons": "^4.x.x",
     "chart.js": "^4.4.0",
-    "react-chartjs-2": "^5.2.0"
+    "keycloak-js": "^26.2.3",
+    "react": "^19.2.0",
+    "react-chartjs-2": "^5.2.0",
+    "react-dom": "^19.2.0",
+    "react-icons": "^4.x.x",
+    "react-router-dom": "^7.10.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17",

@@ -8,74 +8,78 @@ import Performance from './pages/Performance';
 import Policy from './pages/Policy';
 import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
+import ProtectedRoute from './components/ProtectedRoute';
 import { AccessibilityProvider } from './contexts/AccessibilityContext';
+import { AuthProvider } from './contexts/AuthContext';
+import { ROLE_ACCESS } from './lib/roles';
 
 function AppContent() {
   const location = useLocation();
 
-  // Get page title based on current route
   const getPageTitle = () => {
     switch (location.pathname) {
-      case '/':
-        return 'Ingestion';
-      case '/ml':
-        return 'ML';
-      case '/analytics':
-        return 'Analytics';
-      case '/performance':
-        return 'Performance';
-      case '/policy':
-        return 'Policy';
-      case '/settings':
-        return 'Settings';
-      default:
-        return 'AION';
+      case '/': return 'Ingestion';
+      case '/ml': return 'ML';
+      case '/analytics': return 'Analytics';
+      case '/performance': return 'Performance';
+      case '/policy': return 'Policy';
+      case '/settings': return 'Settings';
+      default: return 'AION';
     }
   };
 
   const getPageSubtitle = () => {
     switch (location.pathname) {
-      case '/':
-        return 'Real-time Network Monitoring';
-      case '/ml':
-        return 'Browse and Manage model instances';
-      case '/analytics':
-        return 'Cell Analytics Insights';
-      case '/performance':
-        return 'Real-time ML Model Performance Monitoring';
-      case '/policy':
-        return 'Data transformation and field permissions';
-      case '/settings':
-        return 'Accessibility & Display Preferences';
-      default:
-        return '';
+      case '/': return 'Real-time Network Monitoring';
+      case '/ml': return 'Browse and Manage model instances';
+      case '/analytics': return 'Cell Analytics Insights';
+      case '/performance': return 'Real-time ML Model Performance Monitoring';
+      case '/policy': return 'Data transformation and field permissions';
+      case '/settings': return 'Accessibility & Display Preferences';
+      default: return '';
     }
   };
 
   return (
     <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
       <Sidebar />
-
-      {/* Main Content */}
       <div className="flex-1 overflow-auto">
-        {/* Header */}
         <header className="bg-gradient-to-r from-blue-500 to-blue-600 px-4 sm:px-8 py-4 sm:py-6 shadow-md">
           <h1 className="text-3xl font-bold text-white">{getPageTitle()}</h1>
-          <p className="text-blue-50 mt-1">
-            {getPageSubtitle()}
-          </p>
+          <p className="text-blue-50 mt-1">{getPageSubtitle()}</p>
         </header>
-
-        {/* Page Content */}
         <div className="p-4 sm:p-8">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/ml" element={<MLModels />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/performance" element={<Performance />} />
-            <Route path="/policy" element={<Policy />} />
-            <Route path="/settings" element={<Settings />} />
+            <Route path="/" element={
+              <ProtectedRoute allowedRoles={ROLE_ACCESS['/']}>
+                <Dashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/ml" element={
+              <ProtectedRoute allowedRoles={ROLE_ACCESS['/ml']}>
+                <MLModels />
+              </ProtectedRoute>
+            } />
+            <Route path="/analytics" element={
+              <ProtectedRoute allowedRoles={ROLE_ACCESS['/analytics']}>
+                <Analytics />
+              </ProtectedRoute>
+            } />
+            <Route path="/performance" element={
+              <ProtectedRoute allowedRoles={ROLE_ACCESS['/performance']}>
+                <Performance />
+              </ProtectedRoute>
+            } />
+            <Route path="/policy" element={
+              <ProtectedRoute allowedRoles={ROLE_ACCESS['/policy']}>
+                <Policy />
+              </ProtectedRoute>
+            } />
+            <Route path="/settings" element={
+              <ProtectedRoute allowedRoles={ROLE_ACCESS['/settings']}>
+                <Settings />
+              </ProtectedRoute>
+            } />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
@@ -84,12 +88,14 @@ function AppContent() {
   );
 }
 
-function App() {
+function App({ keycloak }) {
   return (
     <Router>
-      <AccessibilityProvider>
+      <AuthProvider keycloak={keycloak}>
+        <AccessibilityProvider>
           <AppContent />
-      </AccessibilityProvider>
+        </AccessibilityProvider>
+      </AuthProvider>
     </Router>
   );
 }
