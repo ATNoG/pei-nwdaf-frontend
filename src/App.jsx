@@ -40,6 +40,8 @@ function AppContent() {
     }
   };
 
+  const meta = { title: getPageTitle(), subtitle: getPageSubtitle() };
+
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
       <Sidebar />

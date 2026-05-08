@@ -37,7 +37,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:latest
     container_name: keycloak
-    command: start-dev
+    command: start-dev --import-realm
     environment:
       KC_HTTP_PORT: 8080
       KEYCLOAK_ADMIN: admin
@@ -46,6 +46,8 @@ services:
       - "${KEYCLOAK_PORT}:8080"
     volumes:
       - keycloak_data:/opt/keycloak/data
+      - ./keycloak/aion-realm.json:/opt/keycloak/data/import/aion-realm.json:ro
+      - ./keycloak/aion-theme:/opt/keycloak/themes/aion:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/health/ready || exit 1"]
       interval: 15s

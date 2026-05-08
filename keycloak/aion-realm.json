@@ -1,0 +1,83 @@
+{
+  "realm": "aion",
+  "enabled": true,
+  "displayName": "AION",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "roles": {
+    "realm": [
+      { "name": "admin",          "description": "Full access to all pages" },
+      { "name": "analyst",        "description": "Access to dashboard, analytics, performance, settings" },
+      { "name": "ml_engineer",    "description": "Access to dashboard, ML models, performance, settings" },
+      { "name": "policy_manager", "description": "Access to dashboard, policy, settings" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "aion-frontend",
+      "name": "AION Frontend",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "redirectUris": [
+        "http://localhost:5173/*",
+        "http://localhost:80/*",
+        "http://localhost/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5173",
+        "http://localhost:80",
+        "http://localhost"
+      ],
+      "protocol": "openid-connect"
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "enabled": true,
+      "email": "admin@aion.local",
+      "firstName": "Admin",
+      "lastName": "User",
+      "credentials": [{ "type": "password", "value": "admin", "temporary": false }],
+      "realmRoles": ["admin"]
+    },
+    {
+      "username": "analyst",
+      "enabled": true,
+      "email": "analyst@aion.local",
+      "firstName": "Analyst",
+      "lastName": "User",
+      "credentials": [{ "type": "password", "value": "analyst", "temporary": false }],
+      "realmRoles": ["analyst"]
+    },
+    {
+      "username": "ml_engineer",
+      "enabled": true,
+      "email": "ml@aion.local",
+      "firstName": "ML",
+      "lastName": "Engineer",
+      "credentials": [{ "type": "password", "value": "ml_engineer", "temporary": false }],
+      "realmRoles": ["ml_engineer"]
+    },
+    {
+      "username": "policy_manager",
+      "enabled": true,
+      "email": "policy@aion.local",
+      "firstName": "Policy",
+      "lastName": "Manager",
+      "credentials": [{ "type": "password", "value": "policy_manager", "temporary": false }],
+      "realmRoles": ["policy_manager"]
+    }
+  ]
+}

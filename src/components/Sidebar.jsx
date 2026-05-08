@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { FaPlug, FaRobot, FaShieldAlt, FaBars, FaChevronLeft, FaChartLine, FaCog, FaExternalLinkAlt } from 'react-icons/fa';
+import { FaPlug, FaRobot, FaShieldAlt, FaBars, FaChevronLeft, FaChartLine, FaCog, FaExternalLinkAlt, FaSignOutAlt } from 'react-icons/fa';
 import { VscGraph } from 'react-icons/vsc';
-import { FaBars, FaChevronLeft, FaChartLine, FaCog, FaSignOutAlt } from 'react-icons/fa';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLE_ACCESS } from '../lib/roles';
+
+const mlflowUrl = import.meta.env.VITE_MLFLOW_URL || '/mlflow';
 
 const Sidebar = () => {
   const [collapsed, setCollapsed] = useState(window.innerWidth < 1024);
@@ -72,7 +73,7 @@ const Sidebar = () => {
             <FaBars size={14} />
           </button>
         )}
-        {NAV_ITEMS.map(({ name, icon: Icon, path }) => (
+        {navItems.map(({ name, icon, path }) => (
           <NavLink
             key={path}
             to={path}
@@ -83,7 +84,7 @@ const Sidebar = () => {
                 .filter(Boolean).join(' ')
             }
           >
-            <span className="sidebar-nav-icon"><Icon /></span>
+            <span className="sidebar-nav-icon">{icon}</span>
             {!collapsed && <span>{name}</span>}
           </NavLink>
         ))}
@@ -112,12 +113,12 @@ const Sidebar = () => {
 
       {/* Footer */}
       <div className="p-4 border-t border-gray-200">
-        <div className={`flex items-center ${isCollapsed ? 'justify-center flex-col gap-2 px-0' : 'px-4'} py-2 gap-2`}>
+        <div className={`flex items-center ${collapsed ? 'justify-center flex-col gap-2 px-0' : 'px-4'} py-2 gap-2`}>
           {/* User avatar — first letter of username */}
           <div className="w-8 h-8 min-w-[2rem] bg-blue-600 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0">
             {user.username.charAt(0).toUpperCase()}
           </div>
-          {!isCollapsed && (
+          {!collapsed && (
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-900 truncate">{user.username}</p>
               <p className="text-xs text-gray-500 truncate">{displayRole}</p>
