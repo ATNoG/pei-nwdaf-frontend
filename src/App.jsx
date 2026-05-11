@@ -1,5 +1,5 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
 import MLModels from './pages/MLModels';
@@ -11,10 +11,27 @@ import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AccessibilityProvider } from './contexts/AccessibilityContext';
 import { AuthProvider } from './contexts/AuthContext';
+import { useAuth } from './contexts/AuthContext';
 import { ROLE_ACCESS } from './lib/roles';
+
+const allPages = ['/', '/ml', '/analytics', '/performance', '/policy', '/settings'];
 
 function AppContent() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (user.roles.length > 0 && !location.pathname.startsWith('/404')) {
+      const firstAccessible = allPages.find(page =>
+        ROLE_ACCESS[page]?.some(role => user.roles.includes(role))
+      );
+
+      if (firstAccessible && location.pathname !== firstAccessible) {
+        navigate(firstAccessible, { replace: true });
+      }
+    }
+  }, [user.roles.join(','), navigate]);
 
   const getPageTitle = () => {
     switch (location.pathname) {

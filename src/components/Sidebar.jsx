@@ -89,26 +89,28 @@ const Sidebar = () => {
           </NavLink>
         ))}
 
-        {/* MLflow external link */}
-        <div className="pt-1 mt-1" style={{ borderTop: '1px solid var(--border)' }}>
-          <a
-            href={mlflowUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Open MLflow"
-            className={['sidebar-nav-item', collapsed && 'justify-center'].filter(Boolean).join(' ')}
-          >
-            <span className="sidebar-nav-icon">
-              <FaExternalLinkAlt size={12} />
-            </span>
-            {!collapsed && (
-              <span className="flex-1 flex items-center justify-between">
-                MLflow
-                <FaExternalLinkAlt size={9} style={{ color: 'var(--text-muted)' }} />
+        {/* MLflow external link - only for ml_engineer and debug_admin */}
+        {(user.roles.includes('ml_engineer') || user.roles.includes('debug_admin')) && (
+          <div className="pt-1 mt-1" style={{ borderTop: '1px solid var(--border)' }}>
+            <a
+              href={mlflowUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open MLflow"
+              className={['sidebar-nav-item', collapsed && 'justify-center'].filter(Boolean).join(' ')}
+            >
+              <span className="sidebar-nav-icon">
+                <FaExternalLinkAlt size={12} />
               </span>
-            )}
-          </a>
-        </div>
+              {!collapsed && (
+                <span className="flex-1 flex items-center justify-between">
+                  MLflow
+                  <FaExternalLinkAlt size={9} style={{ color: 'var(--text-muted)' }} />
+                </span>
+              )}
+            </a>
+          </div>
+        )}
       </nav>
 
       {/* Footer */}
