@@ -1,10 +1,8 @@
 export const ROLE_ACCESS = {
-  '/':            ['admin', 'analyst', 'ml_engineer', 'policy_manager'],
-
-  // Test roles, to confirm with the group what the end roles and accesses will be
-  '/ml':          ['admin', 'ml_engineer'],
-  '/analytics':   ['admin', 'analyst'],
-  '/performance': ['admin', 'analyst', 'ml_engineer'],
-  '/policy':      ['admin', 'policy_manager'],
-  '/settings':    ['admin', 'analyst', 'ml_engineer', 'policy_manager'],
+  '/':            ['debug_admin', 'network_engineer'],
+  '/ml':          ['debug_admin', 'ml_engineer'],
+  '/analytics':   ['debug_admin', 'ml_engineer'],
+  '/performance': ['debug_admin', 'ml_engineer'],
+  '/policy':      ['debug_admin', 'policy_manager'],
+  '/settings':    ['debug_admin', 'ml_engineer', 'policy_manager', 'network_engineer'],
 };

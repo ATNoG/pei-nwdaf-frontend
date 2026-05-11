@@ -10,10 +10,10 @@
   "bruteForceProtected": true,
   "roles": {
     "realm": [
-      { "name": "admin",          "description": "Full access to all pages" },
-      { "name": "analyst",        "description": "Access to dashboard, analytics, performance, settings" },
-      { "name": "ml_engineer",    "description": "Access to dashboard, ML models, performance, settings" },
-      { "name": "policy_manager", "description": "Access to dashboard, policy, settings" }
+      { "name": "debug_admin",      "description": "Full access to all pages" },
+      { "name": "ml_engineer",      "description": "Access to ML models, analytics, performance, settings" },
+      { "name": "policy_manager",   "description": "Access to policy, settings" },
+      { "name": "network_engineer", "description": "Access to dashboard, settings" }
     ]
   },
   "clients": [
@@ -44,27 +44,9 @@
   ],
   "users": [
     {
-      "username": "admin",
-      "enabled": true,
-      "email": "admin@aion.local",
-      "firstName": "Admin",
-      "lastName": "User",
-      "credentials": [{ "type": "password", "value": "admin", "temporary": false }],
-      "realmRoles": ["admin"]
-    },
-    {
-      "username": "analyst",
-      "enabled": true,
-      "email": "analyst@aion.local",
-      "firstName": "Analyst",
-      "lastName": "User",
-      "credentials": [{ "type": "password", "value": "analyst", "temporary": false }],
-      "realmRoles": ["analyst"]
-    },
-    {
       "username": "ml_engineer",
       "enabled": true,
-      "email": "ml@aion.local",
+      "email": "ml_engineer@aion.local",
       "firstName": "ML",
       "lastName": "Engineer",
       "credentials": [{ "type": "password", "value": "ml_engineer", "temporary": false }],
@@ -73,11 +55,29 @@
     {
       "username": "policy_manager",
       "enabled": true,
-      "email": "policy@aion.local",
+      "email": "policy_manager@aion.local",
       "firstName": "Policy",
       "lastName": "Manager",
       "credentials": [{ "type": "password", "value": "policy_manager", "temporary": false }],
       "realmRoles": ["policy_manager"]
+    },
+    {
+      "username": "network_engineer",
+      "enabled": true,
+      "email": "network_engineer@aion.local",
+      "firstName": "Network",
+      "lastName": "Engineer",
+      "credentials": [{ "type": "password", "value": "network_engineer", "temporary": false }],
+      "realmRoles": ["network_engineer"]
+    },
+    {
+      "username": "debug_admin",
+      "enabled": true,
+      "email": "debug_admin@aion.local",
+      "firstName": "Debug",
+      "lastName": "Admin",
+      "credentials": [{ "type": "password", "value": "debug_admin", "temporary": false }],
+      "realmRoles": ["debug_admin"]
     }
   ]
 }
