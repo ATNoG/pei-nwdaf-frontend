@@ -5,7 +5,7 @@ import App from './App.jsx';
 import { setKeycloak } from './lib/authFetch.js';
 import './index.css';
 
-const keycloakUrl = `http://${import.meta.env.VITE_KEYCLOAK_HOST || 'localhost'}:${import.meta.env.VITE_KEYCLOAK_PORT || '9000'}`;
+const keycloakUrl = import.meta.env.VITE_KEYCLOAK_URL || '/auth';
 
 const kc = new Keycloak({
   url: keycloakUrl,

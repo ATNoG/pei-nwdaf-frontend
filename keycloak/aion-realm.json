@@ -30,14 +30,10 @@
         "pkce.code.challenge.method": "S256"
       },
       "redirectUris": [
-        "http://localhost:5173/*",
-        "http://localhost:80/*",
-        "http://localhost/*"
+        "*"
       ],
       "webOrigins": [
-        "http://localhost:5173",
-        "http://localhost:80",
-        "http://localhost"
+        "*"
       ],
       "protocol": "openid-connect"
     }
