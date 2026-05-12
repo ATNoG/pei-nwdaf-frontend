@@ -33,6 +33,31 @@ services:
       - nwdaf-network
     restart: unless-stopped
 
+  #---- Keycloak
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: keycloak
+    command: start-dev --import-realm
+    environment:
+      KC_HTTP_PORT: 8080
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    ports:
+      - "${KEYCLOAK_PORT}:8080"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+      - ./keycloak/aion-realm.json:/opt/keycloak/data/import/aion-realm.json:ro
+      - ./keycloak/aion-theme:/opt/keycloak/themes/aion:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health/ready || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - nwdaf-network
+    restart: unless-stopped
+
   #---- Frontend
   frontend:
     build:
@@ -46,6 +71,10 @@ services:
         - VITE_ML_URL=${VITE_ML_URL}
         - VITE_POLICY_SERVICE_URL=${VITE_POLICY_SERVICE_URL}
         - VITE_AVAILABLE_COMPONENTS=${VITE_AVAILABLE_COMPONENTS}
+        - VITE_KEYCLOAK_HOST=${VITE_KEYCLOAK_HOST:-localhost}
+        - VITE_KEYCLOAK_PORT=${VITE_KEYCLOAK_PORT:-8180}
+        - VITE_KEYCLOAK_REALM=${VITE_KEYCLOAK_REALM:-aion}
+        - VITE_KEYCLOAK_CLIENT_ID=${VITE_KEYCLOAK_CLIENT_ID:-aion-frontend}
     container_name: frontend
     ports:
       - "5173:5173"
@@ -64,6 +93,10 @@ services:
       - VITE_POLICY_SERVICE_URL=${VITE_POLICY_SERVICE_URL}
       - POLICY_HOST=${POLICY_HOST:-policy-service}
       - POLICY_PORT=${POLICY_PORT:-8788}
+      - VITE_KEYCLOAK_HOST=${VITE_KEYCLOAK_HOST:-localhost}
+      - VITE_KEYCLOAK_PORT=${VITE_KEYCLOAK_PORT:-8180}
+      - VITE_KEYCLOAK_REALM=${VITE_KEYCLOAK_REALM:-aion}
+      - VITE_KEYCLOAK_CLIENT_ID=${VITE_KEYCLOAK_CLIENT_ID:-aion-frontend}
     working_dir: /app
     networks:
       - nwdaf-network
@@ -72,3 +105,6 @@ services:
 networks:
   nwdaf-network:
     name: nwdaf-network
+
+volumes:
+  keycloak_data:

@@ -2,6 +2,8 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+const keycloakHost = process.env.KEYCLOAK_HOST || 'localhost'
+const keycloakPort = process.env.KEYCLOAK_PORT || '8180'
 const rawTarget = process.env.VITE_RAW_DATA_URL || 'http://localhost:7000'
 const storageTarget = process.env.VITE_DATA_STORAGE_URL || 'http://localhost:8000'
 const mlTarget = process.env.VITE_ML_URL || 'http://localhost:8060'
@@ -41,6 +43,12 @@ export default defineConfig({
 				changeOrigin: true,
 				secure: false,
 				rewrite: (path) => path.replace(/^\/policy-api/, '/api/v1')
+			},
+			'/keycloak-admin': {
+				target: `http://${keycloakHost}:${keycloakPort}`,
+				changeOrigin: true,
+				secure: false,
+				rewrite: (path) => path.replace(/^\/keycloak-admin/, '')
 			}
 		}
 	}

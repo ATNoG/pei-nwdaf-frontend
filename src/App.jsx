@@ -1,5 +1,5 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
 import MLModels from './pages/MLModels';
@@ -8,20 +8,56 @@ import Performance from './pages/Performance';
 import Policy from './pages/Policy';
 import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
+import ProtectedRoute from './components/ProtectedRoute';
 import { AccessibilityProvider } from './contexts/AccessibilityContext';
+import { AuthProvider } from './contexts/AuthContext';
+import { useAuth } from './contexts/AuthContext';
+import { ROLE_ACCESS } from './lib/roles';
 
-const PAGE_META = {
-  '/':            { title: 'Ingestion',    subtitle: 'Real-time network data streaming' },
-  '/ml':          { title: 'ML Models',    subtitle: 'Browse and manage model instances' },
-  '/analytics':   { title: 'Analytics',    subtitle: 'Cell analytics and predictions' },
-  '/performance': { title: 'Performance',  subtitle: 'Real-time ML model monitoring' },
-  '/policy':      { title: 'Policy',       subtitle: 'Data transformation and field permissions' },
-  '/settings':    { title: 'Settings',     subtitle: 'Accessibility and display preferences' },
-};
+const allPages = ['/', '/ml', '/analytics', '/performance', '/policy', '/settings'];
 
 function AppContent() {
   const location = useLocation();
-  const meta = PAGE_META[location.pathname] ?? { title: 'AION', subtitle: '' };
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (user.roles.length > 0 && !location.pathname.startsWith('/404')) {
+      const firstAccessible = allPages.find(page =>
+        ROLE_ACCESS[page]?.some(role => user.roles.includes(role))
+      );
+
+      if (firstAccessible && location.pathname !== firstAccessible) {
+        navigate(firstAccessible, { replace: true });
+      }
+    }
+  }, [user.roles.join(','), navigate]);
+
+  const getPageTitle = () => {
+    switch (location.pathname) {
+      case '/': return 'Ingestion';
+      case '/ml': return 'ML';
+      case '/analytics': return 'Analytics';
+      case '/performance': return 'Performance';
+      case '/policy': return 'Policy';
+      case '/settings': return 'Settings';
+      default: return 'AION';
+    }
+  };
+
+  const getPageSubtitle = () => {
+    switch (location.pathname) {
+      case '/': return 'Real-time Network Monitoring';
+      case '/ml': return 'Browse and Manage model instances';
+      case '/analytics': return 'Cell Analytics Insights';
+      case '/performance': return 'Real-time ML Model Performance Monitoring';
+      case '/policy': return 'Data transformation and field permissions';
+      case '/settings': return 'Accessibility & Display Preferences';
+      default: return '';
+    }
+  };
+
+  const meta = { title: getPageTitle(), subtitle: getPageSubtitle() };
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
@@ -38,13 +74,37 @@ function AppContent() {
 
         <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
           <Routes>
-            <Route path="/"            element={<Dashboard />} />
-            <Route path="/ml"          element={<MLModels />} />
-            <Route path="/analytics"   element={<Analytics />} />
-            <Route path="/performance" element={<Performance />} />
-            <Route path="/policy"      element={<Policy />} />
-            <Route path="/settings"    element={<Settings />} />
-            <Route path="*"            element={<NotFound />} />
+            <Route path="/" element={
+              <ProtectedRoute allowedRoles={ROLE_ACCESS['/']}>
+                <Dashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/ml" element={
+              <ProtectedRoute allowedRoles={ROLE_ACCESS['/ml']}>
+                <MLModels />
+              </ProtectedRoute>
+            } />
+            <Route path="/analytics" element={
+              <ProtectedRoute allowedRoles={ROLE_ACCESS['/analytics']}>
+                <Analytics />
+              </ProtectedRoute>
+            } />
+            <Route path="/performance" element={
+              <ProtectedRoute allowedRoles={ROLE_ACCESS['/performance']}>
+                <Performance />
+              </ProtectedRoute>
+            } />
+            <Route path="/policy" element={
+              <ProtectedRoute allowedRoles={ROLE_ACCESS['/policy']}>
+                <Policy />
+              </ProtectedRoute>
+            } />
+            <Route path="/settings" element={
+              <ProtectedRoute allowedRoles={ROLE_ACCESS['/settings']}>
+                <Settings />
+              </ProtectedRoute>
+            } />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
       </div>
@@ -52,12 +112,14 @@ function AppContent() {
   );
 }
 
-function App() {
+function App({ keycloak }) {
   return (
     <Router>
-      <AccessibilityProvider>
-        <AppContent />
-      </AccessibilityProvider>
+      <AuthProvider keycloak={keycloak}>
+        <AccessibilityProvider>
+          <AppContent />
+        </AccessibilityProvider>
+      </AuthProvider>
     </Router>
   );
 }
