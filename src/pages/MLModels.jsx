@@ -558,13 +558,14 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
   const [fieldEventMap, setFieldEventMap] = useState({});  // {field: [events]}
   const [loadingFields, setLoadingFields] = useState(true);
   const [isAnomaly, setIsAnomaly] = useState(false);
+  const [availableArchitectures, setAvailableArchitectures] = useState([]);
 
   useEffect(() => {
     if (!showCreateModal) {
       setIsAnomaly(false);
       setFormData({
         name: '',
-        architecture: 'ann',
+        architecture: '',
         input_fields: [],
         output_fields: [],
         window_duration_seconds: 60,
@@ -587,8 +588,21 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
         setLoadingFields(false);
       }
     };
+    const fetchArchitectures = async () => {
+      try {
+        const response = await fetch(`${mlUrl}/v1/architectures`);
+        if (response.ok) {
+          const data = await response.json();
+          setAvailableArchitectures(data);
+          if (data.length > 0) {
+            setFormData(prev => ({ ...prev, architecture: data[0].name }));
+          }
+        }
+      } catch {}
+    };
     fetchFields();
-  }, [showCreateModal, dataStorageUrl]);
+    fetchArchitectures();
+  }, [showCreateModal, dataStorageUrl, mlUrl]);
 
   const allFields = Object.keys(fieldEventMap).sort();
 
@@ -692,8 +706,12 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
               >
-                <option value="ann">ANN</option>
-                <option value="lstm">LSTM</option>
+                {availableArchitectures.length === 0 && (
+                  <option value="" disabled>No architectures available</option>
+                )}
+                {availableArchitectures.map(a => (
+                  <option key={a.name} value={a.name}>{a.name}</option>
+                ))}
               </select>
             </div>
           )}
