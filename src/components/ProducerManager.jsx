@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { authFetch } from '../lib/authFetch';
 
 const EVENTS = ['PERF_DATA', 'UE_MOBILITY', 'UE_COMM'];
 
@@ -49,7 +50,7 @@ const ProducerManager = ({ apiBase = '/data-ingestion', onRemove }) => {
 
   const fetchSubscriptions = async () => {
     try {
-      const res = await fetch(`${apiBase}/nef/subscriptions`);
+      const res = await authFetch(`${apiBase}/nef/subscriptions`);
       if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
       const data = await res.json();
       setSubscriptions(Array.isArray(data.subscriptions) ? data.subscriptions : []);
@@ -90,7 +91,7 @@ const ProducerManager = ({ apiBase = '/data-ingestion', onRemove }) => {
       }
       if (form.dnn.trim()) body.dnn = form.dnn.trim();
 
-      const res = await fetch(`${apiBase}/nef/subscriptions`, {
+      const res = await authFetch(`${apiBase}/nef/subscriptions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -112,7 +113,7 @@ const ProducerManager = ({ apiBase = '/data-ingestion', onRemove }) => {
   const removeSubscription = async (notifId) => {
     if (!confirm(`Remove subscription "${notifId}"?`)) return;
     try {
-      const res = await fetch(`${apiBase}/nef/subscriptions/${encodeURIComponent(notifId)}`, { method: 'DELETE' });
+      const res = await authFetch(`${apiBase}/nef/subscriptions/${encodeURIComponent(notifId)}`, { method: 'DELETE' });
       if (!res.ok && res.status !== 204) throw new Error(`Failed to delete: ${res.status}`);
       await fetchSubscriptions();
       if (onRemove) onRemove(notifId);

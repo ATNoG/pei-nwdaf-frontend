@@ -23,12 +23,15 @@ function AppContent() {
 
   useEffect(() => {
     if (user.roles.length > 0 && !location.pathname.startsWith('/404')) {
-      const firstAccessible = allPages.find(page =>
-        ROLE_ACCESS[page]?.some(role => user.roles.includes(role))
-      );
+      const currentAccessible = ROLE_ACCESS[location.pathname]?.some(role => user.roles.includes(role));
 
-      if (firstAccessible && location.pathname !== firstAccessible) {
-        navigate(firstAccessible, { replace: true });
+      if (!currentAccessible) {
+        const firstAccessible = allPages.find(page =>
+          ROLE_ACCESS[page]?.some(role => user.roles.includes(role))
+        );
+        if (firstAccessible) {
+          navigate(firstAccessible, { replace: true });
+        }
       }
     }
   }, [user.roles.join(','), navigate]);
