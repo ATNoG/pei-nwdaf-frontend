@@ -33,36 +33,6 @@ services:
       - nwdaf-network
     restart: unless-stopped
 
-  #---- Keycloak
-  keycloak:
-    image: quay.io/keycloak/keycloak:latest
-    container_name: keycloak
-    command: start --import-realm
-    environment:
-      KC_HTTP_PORT: 8080
-      KC_HTTP_ENABLED: "true"
-      KC_HTTP_RELATIVE_PATH: /auth
-      KC_PROXY_HEADERS: xforwarded
-      KC_HOSTNAME: localhost
-      KC_HOSTNAME_STRICT: "false"
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
-    ports:
-      - "${KEYCLOAK_PORT}:8080"
-    volumes:
-      - keycloak_data:/opt/keycloak/data
-      - ./keycloak/aion-realm.json:/opt/keycloak/data/import/aion-realm.json:ro
-      - ./keycloak/aion-theme:/opt/keycloak/themes/aion:ro
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080/auth/health/ready || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-    networks:
-      - nwdaf-network
-    restart: unless-stopped
-
   #---- Frontend
   frontend:
     build:
@@ -109,5 +79,3 @@ networks:
   nwdaf-network:
     name: nwdaf-network
 
-volumes:
-  keycloak_data:
