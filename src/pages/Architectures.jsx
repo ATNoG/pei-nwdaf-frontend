@@ -41,7 +41,7 @@ const Architectures = () => {
       form.append('file', uploadFile);
       const token = getToken();
       const res = await fetch(
-        `${ML_URL}/v1/architectures?name=${encodeURIComponent(uploadName.trim())}&uploaded_by=frontend`,
+        `${ML_URL}/v1/architectures?name=${encodeURIComponent(uploadName.trim())}`,
         {
           method: 'POST',
           body: form,
