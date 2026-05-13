@@ -1,3 +1,4 @@
+import { authFetch } from '../lib/authFetch.js';
 import React, { useState, useEffect } from 'react';
 import { FaShieldAlt, FaPlus, FaTrash, FaEdit, FaSave, FaSearch, FaSync, FaTimes, FaArrowRight, FaSearchPlus, FaChevronDown } from 'react-icons/fa';
 import FieldDiscoveryPanel from '../components/FieldDiscoveryPanel';
@@ -59,7 +60,7 @@ const fetchRegisteredComponents = async () => {
 
   let registeredComponents = [];
   try {
-    const response = await fetch(`${POLICY_SERVICE_URL}/components`);
+    const response = await authFetch(`${POLICY_SERVICE_URL}/components`);
     if (!response.ok) throw new Error('Failed to fetch components');
     const data = await response.json();
 
@@ -222,7 +223,7 @@ const Policy = () => {
   // Fetch producers from data-ingestion service
   const fetchProducers = async () => {
     try {
-      const res = await fetch('/data-ingestion/subscriptions');
+      const res = await authFetch('/data-ingestion/subscriptions');
       if (!res.ok) return;
       const data = await res.json();
       const list = Array.isArray(data.producers) ? data.producers : [];
@@ -260,7 +261,7 @@ const Policy = () => {
 
   const fetchPipelines = async () => {
     try {
-      const response = await fetch(`${POLICY_SERVICE_URL}/transformers`);
+      const response = await authFetch(`${POLICY_SERVICE_URL}/transformers`);
       if (!response.ok) throw new Error('Failed to fetch pipelines');
       const data = await response.json();
       setPipelines(data);
@@ -318,7 +319,7 @@ const Policy = () => {
     setIsLoadingFields(true);
     try {
       const [source, sink] = parsePipelineId(selectedPipeline);
-      const response = await fetch(
+      const response = await authFetch(
         `${POLICY_SERVICE_URL}/transformers/fields/${source}/${sink}`
       );
       if (!response.ok) throw new Error('Failed to discover fields');
@@ -336,7 +337,7 @@ const Policy = () => {
 
   const loadPipelineConfiguration = async () => {
     try {
-      const response = await fetch(`${POLICY_SERVICE_URL}/transformers/${selectedPipeline}`);
+      const response = await authFetch(`${POLICY_SERVICE_URL}/transformers/${selectedPipeline}`);
       if (!response.ok) {
         if (response.status === 404) {
           // Pipeline doesn't exist yet, start fresh
@@ -362,7 +363,7 @@ const Policy = () => {
     setIsLoadingFields(true);
     try {
       const [source, sink] = parsePipelineId(selectedPipeline);
-      const response = await fetch(`${POLICY_SERVICE_URL}/transformers/fields/sync`, {
+      const response = await authFetch(`${POLICY_SERVICE_URL}/transformers/fields/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source, sink })
@@ -407,7 +408,7 @@ const Policy = () => {
       // Add any additional transformer steps
       steps.push(...pipelineSteps);
 
-      const response = await fetch(`${POLICY_SERVICE_URL}/transformers/${selectedPipeline}`, {
+      const response = await authFetch(`${POLICY_SERVICE_URL}/transformers/${selectedPipeline}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pipeline_id: selectedPipeline, steps })
@@ -433,7 +434,7 @@ const Policy = () => {
     if (!confirm(`Delete pipeline "${pipelineId}"?`)) return;
 
     try {
-      const response = await fetch(`${POLICY_SERVICE_URL}/transformers/${pipelineId}`, {
+      const response = await authFetch(`${POLICY_SERVICE_URL}/transformers/${pipelineId}`, {
         method: 'DELETE'
       });
       if (!response.ok) throw new Error('Failed to delete pipeline');

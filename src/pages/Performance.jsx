@@ -1,3 +1,4 @@
+import { authFetch } from '../lib/authFetch.js';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import SearchableDropdown from '../components/SearchableDropdown';
 import { Line } from 'react-chartjs-2';
@@ -94,7 +95,7 @@ const Performance = () => {
 
   const fetchStatus = useCallback(async (field) => {
     try {
-      const res = await fetch(`${mlUrl}/v1/performance/${encodeURIComponent(field)}/status`);
+      const res = await authFetch(`${mlUrl}/v1/performance/${encodeURIComponent(field)}/status`);
       if (!res.ok) return;
       const data = await res.json();
       setStatus(data);
@@ -104,7 +105,7 @@ const Performance = () => {
 
   const fetchBest = useCallback(async (field) => {
     try {
-      const res = await fetch(`${mlUrl}/v1/performance/${encodeURIComponent(field)}/best`);
+      const res = await authFetch(`${mlUrl}/v1/performance/${encodeURIComponent(field)}/best`);
       if (!res.ok) { setBestModel(null); return; }
       setBestModel(await res.json());
     } catch { setBestModel(null); }
@@ -112,7 +113,7 @@ const Performance = () => {
 
   const fetchHistory = useCallback(async (field) => {
     try {
-      const res = await fetch(`${mlUrl}/v1/performance/${encodeURIComponent(field)}/history`);
+      const res = await authFetch(`${mlUrl}/v1/performance/${encodeURIComponent(field)}/history`);
       if (!res.ok) { setHistory(null); return; }
       setHistory(await res.json());
     } catch { setHistory(null); }
@@ -120,7 +121,7 @@ const Performance = () => {
 
   const fetchModels = useCallback(async (field) => {
     try {
-      const res = await fetch(`${mlUrl}/v1/models?output_field=${encodeURIComponent(field)}`);
+      const res = await authFetch(`${mlUrl}/v1/models?output_field=${encodeURIComponent(field)}`);
       if (!res.ok) return;
       setModels(await res.json());
     } catch { /* ignore */ }
@@ -129,7 +130,7 @@ const Performance = () => {
   const fetchImportance = useCallback(async (field) => {
     setLoadingImportance(true);
     try {
-      const res = await fetch(`${mlUrl}/v1/performance/${encodeURIComponent(field)}/importance`);
+      const res = await authFetch(`${mlUrl}/v1/performance/${encodeURIComponent(field)}/importance`);
       setImportance(res.ok ? await res.json() : null);
     } catch { setImportance(null); }
     finally { setLoadingImportance(false); }
@@ -139,7 +140,7 @@ const Performance = () => {
     if (!jobIds?.length) { setActiveJobs({}); return; }
     const results = await Promise.all(
       jobIds.map(id =>
-        fetch(`${mlUrl}/v1/training/jobs/${id}`)
+        authFetch(`${mlUrl}/v1/training/jobs/${id}`)
           .then(r => r.ok ? r.json() : null)
           .catch(() => null)
       )
@@ -193,7 +194,7 @@ const Performance = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch(`${mlUrl}/v1/fields`);
+        const res = await authFetch(`${mlUrl}/v1/fields`);
         if (!res.ok) return;
         const data = await res.json();
         const list = (data.fields ?? []).map(f => f.name ?? f);
@@ -267,7 +268,7 @@ const Performance = () => {
     if (!bestModel?.model_id) return;
     setRecomputingImportance(true);
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `${mlUrl}/v1/performance/${encodeURIComponent(activeField)}/models/${encodeURIComponent(bestModel.model_id)}/importance`,
         { method: 'POST' }
       );
@@ -280,7 +281,7 @@ const Performance = () => {
     setActionLoading('evaluate');
     setStatus(prev => prev ? { ...prev, state: 'evaluating' } : prev);
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `${mlUrl}/v1/performance/${encodeURIComponent(activeField)}/evaluate?metric=${encodeURIComponent(metric)}`,
         { method: 'POST' }
       );
@@ -302,7 +303,7 @@ const Performance = () => {
   const handleMonitor = async () => {
     setActionLoading('monitor');
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `${mlUrl}/v1/performance/${encodeURIComponent(activeField)}/monitor`,
         { method: 'POST' }
       );
