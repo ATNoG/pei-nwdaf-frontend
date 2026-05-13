@@ -4,6 +4,7 @@ export const ROLE_ACCESS = {
   '/analytics':   ['debug_admin', 'ml_engineer'],
   '/performance': ['debug_admin', 'ml_engineer'],
   '/policy':      ['debug_admin', 'policy_manager'],
+  '/decision':    ['debug_admin', 'network_engineer'],
   '/settings':       ['debug_admin', 'ml_engineer', 'policy_manager', 'network_engineer'],
   '/architectures':  ['debug_admin', 'ml_engineer'],
 };

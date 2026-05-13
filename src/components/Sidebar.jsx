@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { FaPlug, FaRobot, FaShieldAlt, FaBars, FaChevronLeft, FaChartLine, FaCog, FaExternalLinkAlt, FaSignOutAlt, FaCubes } from 'react-icons/fa';
+import { FaPlug, FaRobot, FaShieldAlt, FaBars, FaChevronLeft, FaChartLine, FaCog, FaExternalLinkAlt, FaSignOutAlt, FaCubes, FaProjectDiagram } from 'react-icons/fa';
 import { VscGraph } from 'react-icons/vsc';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLE_ACCESS } from '../lib/roles';
@@ -17,6 +17,7 @@ const Sidebar = () => {
     { name: 'Analytics', icon: <VscGraph />, path: '/analytics' },
     { name: 'Performance', icon: <FaChartLine />, path: '/performance' },
     { name: 'Policy', icon: <FaShieldAlt />, path: '/policy' },
+    { name: 'Decision', icon: <FaProjectDiagram />, path: '/decision' },
     { name: 'Architectures', icon: <FaCubes />, path: '/architectures' },
   ];
 
