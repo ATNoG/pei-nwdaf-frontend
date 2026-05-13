@@ -7,6 +7,7 @@ import Analytics from './pages/Analytics';
 import Performance from './pages/Performance';
 import Policy from './pages/Policy';
 import Settings from './pages/Settings';
+import Architectures from './pages/Architectures';
 import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AccessibilityProvider } from './contexts/AccessibilityContext';
@@ -14,7 +15,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { useAuth } from './contexts/AuthContext';
 import { ROLE_ACCESS } from './lib/roles';
 
-const allPages = ['/', '/ml', '/analytics', '/performance', '/policy', '/settings'];
+const allPages = ['/', '/ml', '/analytics', '/performance', '/policy', '/settings', '/architectures'];
 
 function AppContent() {
   const location = useLocation();
@@ -44,6 +45,7 @@ function AppContent() {
       case '/performance': return 'Performance';
       case '/policy': return 'Policy';
       case '/settings': return 'Settings';
+      case '/architectures': return 'Architectures';
       default: return 'AION';
     }
   };
@@ -56,6 +58,7 @@ function AppContent() {
       case '/performance': return 'Real-time ML Model Performance Monitoring';
       case '/policy': return 'Data transformation and field permissions';
       case '/settings': return 'Accessibility & Display Preferences';
+      case '/architectures': return 'Manage custom model architectures';
       default: return '';
     }
   };
@@ -105,6 +108,11 @@ function AppContent() {
             <Route path="/settings" element={
               <ProtectedRoute allowedRoles={ROLE_ACCESS['/settings']}>
                 <Settings />
+              </ProtectedRoute>
+            } />
+            <Route path="/architectures" element={
+              <ProtectedRoute allowedRoles={ROLE_ACCESS['/architectures']}>
+                <Architectures />
               </ProtectedRoute>
             } />
             <Route path="*" element={<NotFound />} />
