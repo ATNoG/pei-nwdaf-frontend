@@ -8,6 +8,7 @@ import Performance from './pages/Performance';
 import Policy from './pages/Policy';
 import Settings from './pages/Settings';
 import Architectures from './pages/Architectures';
+import Decision from './pages/Decision';
 import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AccessibilityProvider } from './contexts/AccessibilityContext';
@@ -15,7 +16,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { useAuth } from './contexts/AuthContext';
 import { ROLE_ACCESS } from './lib/roles';
 
-const allPages = ['/', '/ml', '/analytics', '/performance', '/policy', '/settings', '/architectures'];
+const allPages = ['/', '/ml', '/analytics', '/performance', '/policy', '/decision', '/settings', '/architectures'];
 
 function AppContent() {
   const location = useLocation();
@@ -27,12 +28,7 @@ function AppContent() {
       const currentAccessible = ROLE_ACCESS[location.pathname]?.some(role => user.roles.includes(role));
 
       if (!currentAccessible) {
-        const firstAccessible = allPages.find(page =>
-          ROLE_ACCESS[page]?.some(role => user.roles.includes(role))
-        );
-        if (firstAccessible) {
-          navigate(firstAccessible, { replace: true });
-        }
+        navigate("/404")
       }
     }
   }, [user.roles.join(','), navigate]);
@@ -44,6 +40,7 @@ function AppContent() {
       case '/analytics': return 'Analytics';
       case '/performance': return 'Performance';
       case '/policy': return 'Policy';
+      case '/decision': return 'Decision';
       case '/settings': return 'Settings';
       case '/architectures': return 'Architectures';
       default: return 'AION';
@@ -57,6 +54,7 @@ function AppContent() {
       case '/analytics': return 'Cell Analytics Insights';
       case '/performance': return 'Real-time ML Model Performance Monitoring';
       case '/policy': return 'Data transformation and field permissions';
+      case '/decision': return 'Decisions, Risk Levels & Subscriptions';
       case '/settings': return 'Accessibility & Display Preferences';
       case '/architectures': return 'Manage custom model architectures';
       default: return '';
@@ -103,6 +101,11 @@ function AppContent() {
             <Route path="/policy" element={
               <ProtectedRoute allowedRoles={ROLE_ACCESS['/policy']}>
                 <Policy />
+              </ProtectedRoute>
+            } />
+            <Route path="/decision" element={
+              <ProtectedRoute allowedRoles={ROLE_ACCESS['/decision']}>
+                <Decision />
               </ProtectedRoute>
             } />
             <Route path="/settings" element={
