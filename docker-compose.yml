@@ -49,6 +49,7 @@ services:
         - VITE_KEYCLOAK_URL=${VITE_KEYCLOAK_URL:-/auth}
         - VITE_KEYCLOAK_REALM=${VITE_KEYCLOAK_REALM:-aion}
         - VITE_KEYCLOAK_CLIENT_ID=${VITE_KEYCLOAK_CLIENT_ID:-aion-frontend}
+        - VITE_DEV_MODE=${VITE_DEV_MODE:-false}
     container_name: frontend
     ports:
       - "5173:5173"
@@ -78,4 +79,3 @@ services:
 networks:
   nwdaf-network:
     name: nwdaf-network
-
