@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import ProducerManager from '../components/ProducerManager';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { authFetch } from '../lib/authFetch';
 
 const SUMMARY_COLS = ['timestamp', 'event', 'snssai_sst', 'snssai_sd', 'dnn'];
 
@@ -68,7 +69,7 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchSubscriptions = async () => {
       try {
-        const res = await fetch(`${rawDataUrl}/nef/subscriptions`);
+        const res = await authFetch(`${rawDataUrl}/nef/subscriptions`);
         if (!res.ok) return;
         const data = await res.json();
         const list = Array.isArray(data.subscriptions) ? data.subscriptions : [];

@@ -46,6 +46,9 @@ services:
         - VITE_ML_URL=${VITE_ML_URL}
         - VITE_POLICY_SERVICE_URL=${VITE_POLICY_SERVICE_URL}
         - VITE_AVAILABLE_COMPONENTS=${VITE_AVAILABLE_COMPONENTS}
+        - VITE_KEYCLOAK_URL=${VITE_KEYCLOAK_URL:-/auth}
+        - VITE_KEYCLOAK_REALM=${VITE_KEYCLOAK_REALM:-aion}
+        - VITE_KEYCLOAK_CLIENT_ID=${VITE_KEYCLOAK_CLIENT_ID:-aion-frontend}
     container_name: frontend
     ports:
       - "5173:5173"
@@ -64,6 +67,9 @@ services:
       - VITE_POLICY_SERVICE_URL=${VITE_POLICY_SERVICE_URL}
       - POLICY_HOST=${POLICY_HOST:-policy-service}
       - POLICY_PORT=${POLICY_PORT:-8788}
+      - VITE_KEYCLOAK_URL=${VITE_KEYCLOAK_URL:-/auth}
+      - VITE_KEYCLOAK_REALM=${VITE_KEYCLOAK_REALM:-aion}
+      - VITE_KEYCLOAK_CLIENT_ID=${VITE_KEYCLOAK_CLIENT_ID:-aion-frontend}
     working_dir: /app
     networks:
       - nwdaf-network
@@ -72,3 +78,4 @@ services:
 networks:
   nwdaf-network:
     name: nwdaf-network
+

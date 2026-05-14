@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import SearchableDropdown from '../components/SearchableDropdown';
 import FeatureImportanceChart from '../components/FeatureImportanceChart';
+import { authFetch } from '../lib/authFetch';
 
 const fmtTs = (epoch) => epoch ? new Date(epoch * 1000).toLocaleString() : 'N/A';
 
@@ -45,7 +46,7 @@ const Analytics = () => {
 
   // Fetch field→event map from data-storage
   useEffect(() => {
-    fetch(`${dataStorageUrl}/api/v1/processed/fields`)
+    authFetch(`${dataStorageUrl}/api/v1/processed/fields`)
       .then(r => r.ok ? r.json() : {})
       .then(data => setFieldEventMap(typeof data === 'object' && !Array.isArray(data) ? data : {}))
       .catch(() => {});
@@ -54,7 +55,7 @@ const Analytics = () => {
   useEffect(() => {
     const fetchFields = async () => {
       try {
-        const response = await fetch(`${mlUrl}/v1/fields?include_model_status=true`);
+        const response = await authFetch(`${mlUrl}/v1/fields?include_model_status=true`);
         if (!response.ok) return;
         const data = await response.json();
         const fieldList = (data.fields ?? []).map(f => f.name);
@@ -77,7 +78,7 @@ const Analytics = () => {
     const fetchModels = async () => {
       setLoadingModels(true);
       try {
-        const response = await fetch(`${mlUrl}/v1/models?output_field=${encodeURIComponent(formData.output_field)}`);
+        const response = await authFetch(`${mlUrl}/v1/models?output_field=${encodeURIComponent(formData.output_field)}`);
         if (response.ok) setModels(await response.json());
       } finally {
         setLoadingModels(false);
@@ -105,7 +106,7 @@ const Analytics = () => {
         ? { tags, model_id: formData.model_id || undefined, lookback_seconds: formData.lookback_seconds, explain }
         : { output_field: formData.output_field, tags, model_id: formData.model_id, explain };
 
-      const response = await fetch(endpoint, {
+      const response = await authFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

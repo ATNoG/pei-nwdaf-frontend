@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { authFetch } from '../lib/authFetch';
 
 const DataTable = ({ title, apiEndpoint, columns, refreshInterval = 30000 }) => {
   const [data, setData] = useState([]);
@@ -9,7 +10,7 @@ const DataTable = ({ title, apiEndpoint, columns, refreshInterval = 30000 }) => 
   const fetchData = async () => {
     try {
       setError(null);
-      const response = await fetch(apiEndpoint);
+      const response = await authFetch(apiEndpoint);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

@@ -1,3 +1,4 @@
+import { authFetch } from '../lib/authFetch.js';
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { FaShieldAlt } from 'react-icons/fa';
 import FeatureImportanceChart from '../components/FeatureImportanceChart';
@@ -34,7 +35,7 @@ const PolicyStatusBadge = ({ modelName, policyUrl }) => {
     const fetchPolicyStatus = async () => {
       try {
         // First check if model is registered
-        const componentsResponse = await fetch(`${policyUrl}/components`);
+        const componentsResponse = await authFetch(`${policyUrl}/components`);
         if (!componentsResponse.ok) return;
 
         const componentsData = await componentsResponse.json();
@@ -57,7 +58,7 @@ const PolicyStatusBadge = ({ modelName, policyUrl }) => {
         });
 
         // Check if there are any pipelines (transformers) for this model
-        const transformersResponse = await fetch(`${policyUrl}/transformers`);
+        const transformersResponse = await authFetch(`${policyUrl}/transformers`);
         if (!transformersResponse.ok) return;
 
         const transformersData = await transformersResponse.json();
@@ -71,7 +72,7 @@ const PolicyStatusBadge = ({ modelName, policyUrl }) => {
         if (modelPipelineKeys.length > 0) {
           const details = await Promise.all(
             modelPipelineKeys.map(async (pipelineId) => {
-              const pipelineResponse = await fetch(`${policyUrl}/transformers/${pipelineId}`);
+              const pipelineResponse = await authFetch(`${policyUrl}/transformers/${pipelineId}`);
               if (!pipelineResponse.ok) return null;
               const pipelineData = await pipelineResponse.json();
               // Extract source from pipeline ID (format: "source_to_ml-modelname")
@@ -558,13 +559,14 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
   const [fieldEventMap, setFieldEventMap] = useState({});  // {field: [events]}
   const [loadingFields, setLoadingFields] = useState(true);
   const [isAnomaly, setIsAnomaly] = useState(false);
+  const [availableArchitectures, setAvailableArchitectures] = useState([]);
 
   useEffect(() => {
     if (!showCreateModal) {
       setIsAnomaly(false);
       setFormData({
         name: '',
-        architecture: 'ann',
+        architecture: '',
         input_fields: [],
         output_fields: [],
         window_duration_seconds: 60,
@@ -578,7 +580,7 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
     const fetchFields = async () => {
       setLoadingFields(true);
       try {
-        const response = await fetch(`${dataStorageUrl}/api/v1/processed/fields`);
+        const response = await authFetch(`${dataStorageUrl}/api/v1/processed/fields`);
         if (response.ok) {
           const data = await response.json();
           setFieldEventMap(typeof data === 'object' && !Array.isArray(data) ? data : {});
@@ -587,8 +589,21 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
         setLoadingFields(false);
       }
     };
+    const fetchArchitectures = async () => {
+      try {
+        const response = await fetch(`${mlUrl}/v1/architectures`);
+        if (response.ok) {
+          const data = await response.json();
+          setAvailableArchitectures(data);
+          if (data.length > 0) {
+            setFormData(prev => ({ ...prev, architecture: data[0].name }));
+          }
+        }
+      } catch {}
+    };
     fetchFields();
-  }, [showCreateModal, dataStorageUrl]);
+    fetchArchitectures();
+  }, [showCreateModal, dataStorageUrl, mlUrl]);
 
   const allFields = Object.keys(fieldEventMap).sort();
 
@@ -692,8 +707,12 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
               >
-                <option value="ann">ANN</option>
-                <option value="lstm">LSTM</option>
+                {availableArchitectures.length === 0 && (
+                  <option value="" disabled>No architectures available</option>
+                )}
+                {availableArchitectures.map(a => (
+                  <option key={a.name} value={a.name}>{a.name}</option>
+                ))}
               </select>
             </div>
           )}
@@ -902,7 +921,7 @@ const AllJobsModal = ({ showModal, setShowModal, mlUrl, onJobsUpdate }) => {
     setLoading(true);
     try {
       // Fetch forecast training jobs
-      const forecastResponse = await fetch(`${mlUrl}/v1/training/jobs`);
+      const forecastResponse = await authFetch(`${mlUrl}/v1/training/jobs`);
       let forecastJobs = [];
       if (forecastResponse.ok) {
         const data = await forecastResponse.json();
@@ -912,7 +931,7 @@ const AllJobsModal = ({ showModal, setShowModal, mlUrl, onJobsUpdate }) => {
       // Fetch anomaly training jobs
       let anomalyJobs = [];
       try {
-        const anomalyResponse = await fetch(`${mlUrl}/v1/anomaly/training/jobs`);
+        const anomalyResponse = await authFetch(`${mlUrl}/v1/anomaly/training/jobs`);
         if (anomalyResponse.ok) {
           const data = await anomalyResponse.json();
           anomalyJobs = Array.isArray(data) ? data : [];
@@ -1079,7 +1098,7 @@ const TrainingModal = ({ model, mlUrl, onClose, onStartTraining, isTraining }) =
   useEffect(() => {
     if (!model) return;
     setLoadingResources(true);
-    fetch(`${mlUrl}/v1/resources/defaults/${model.id}`)
+    authFetch(`${mlUrl}/v1/resources/defaults/${model.id}`)
       .then(r => r.ok ? r.json() : null)
       .catch(() => null)
       .then(data => {
@@ -1093,7 +1112,7 @@ const TrainingModal = ({ model, mlUrl, onClose, onStartTraining, isTraining }) =
     setSavingResources(true);
     setResourceSaveMsg(null);
     try {
-      const res = await fetch(`${mlUrl}/v1/resources/defaults/${model.id}`, {
+      const res = await authFetch(`${mlUrl}/v1/resources/defaults/${model.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cpu: resourceCpu, memory: resourceMemory }),
@@ -1114,7 +1133,7 @@ const TrainingModal = ({ model, mlUrl, onClose, onStartTraining, isTraining }) =
       const endpoint = model.modelType === 'anomaly'
         ? `${mlUrl}/v1/anomaly/training/jobs?model_id=${model.id}`
         : `${mlUrl}/v1/training/jobs?model_id=${model.id}`;
-      const res = await fetch(endpoint);
+      const res = await authFetch(endpoint);
       if (!res.ok) return;
       const data = await res.json();
       const raw = Array.isArray(data) ? data : [];
@@ -1143,7 +1162,7 @@ const TrainingModal = ({ model, mlUrl, onClose, onStartTraining, isTraining }) =
       const endpoint = model.modelType === 'anomaly'
         ? `${mlUrl}/v1/anomaly/training/jobs/${jobId}`
         : `${mlUrl}/v1/training/jobs/${jobId}`;
-      await fetch(endpoint, { method: 'DELETE' });
+      await authFetch(endpoint, { method: 'DELETE' });
       await fetchJobs();
     } catch (err) {
       console.error('Failed to cancel job:', err.message);
@@ -1353,7 +1372,7 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
     }
     setLoadingImportance(true);
     setImportance(null);
-    fetch(`${mlUrl}/v1/performance/${encodeURIComponent(outputField)}/importance?model_id=${encodeURIComponent(modelDetails.id)}`)
+    authFetch(`${mlUrl}/v1/performance/${encodeURIComponent(outputField)}/importance?model_id=${encodeURIComponent(modelDetails.id)}`)
       .then(r => r.ok ? r.json() : null)
       .catch(() => null)
       .then(data => setImportance(data))
@@ -1364,7 +1383,7 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
     if (!outputField || !modelDetails?.id) return;
     setTriggeringImportance(true);
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `${mlUrl}/v1/performance/${encodeURIComponent(outputField)}/models/${encodeURIComponent(modelDetails.id)}/importance`,
         { method: 'POST' }
       );
@@ -1709,7 +1728,7 @@ const MLModels = () => {
   useEffect(() => {
     const fetchFields = async () => {
       try {
-        const response = await fetch(`${mlUrl}/v1/fields?include_model_status=true`);
+        const response = await authFetch(`${mlUrl}/v1/fields?include_model_status=true`);
         if (response.ok) {
           const data = await response.json();
           setFields((data.fields ?? []).map(f => (typeof f === 'object' ? f.name : f)));
@@ -1732,7 +1751,7 @@ const MLModels = () => {
       const forecastUrl = (field && field !== 'anomaly')
         ? `${mlUrl}/v1/models?output_field=${encodeURIComponent(field)}&include_details=true`
         : `${mlUrl}/v1/models?include_details=true`;
-      const forecastResponse = await fetch(forecastUrl);
+      const forecastResponse = await authFetch(forecastUrl);
       if (!forecastResponse.ok) throw new Error(`HTTP error! status: ${forecastResponse.status}`);
       const forecastData = await forecastResponse.json();
       const forecastModels = (Array.isArray(forecastData) ? forecastData : [forecastData]).map(m => ({
@@ -1743,14 +1762,14 @@ const MLModels = () => {
       // Fetch anomaly models
       let anomalyModels = [];
       try {
-        const anomalyResponse = await fetch(`${mlUrl}/v1/anomaly/models`);
+        const anomalyResponse = await authFetch(`${mlUrl}/v1/anomaly/models`);
         if (anomalyResponse.ok) {
           const anomalyData = await anomalyResponse.json();
           const summaries = Array.isArray(anomalyData) ? anomalyData : [anomalyData];
           anomalyModels = await Promise.all(
             summaries.map(async (m) => {
               try {
-                const detailRes = await fetch(`${mlUrl}/v1/anomaly/models/${m.id}`);
+                const detailRes = await authFetch(`${mlUrl}/v1/anomaly/models/${m.id}`);
                 if (detailRes.ok) return { ...(await detailRes.json()), modelType: 'anomaly' };
               } catch { }
               return { ...m, modelType: 'anomaly' };
@@ -1791,7 +1810,7 @@ const MLModels = () => {
       const endpoint = model.modelType === 'anomaly'
         ? `${mlUrl}/v1/anomaly/models/${model.id}`
         : `${mlUrl}/v1/models/${model.id}`;
-      const response = await fetch(endpoint);
+      const response = await authFetch(endpoint);
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       setModelDetails(await response.json());
     } catch (err) {
@@ -1809,7 +1828,7 @@ const MLModels = () => {
         const endpoint = modelType === 'anomaly'
           ? `${mlUrl}/v1/anomaly/training/jobs/${jobId}`
           : `${mlUrl}/v1/training/jobs/${jobId}`;
-        const response = await fetch(endpoint);
+        const response = await authFetch(endpoint);
         if (!response.ok) return;
         const job = await response.json();
         setTimedTrainingMessage({ type: 'info', text: `Training job ${jobId.slice(0, 8)}… - ${job.status} (${modelName})` });
@@ -1844,7 +1863,7 @@ const MLModels = () => {
       const endpoint = trainTarget.modelType === 'anomaly'
         ? `${mlUrl}/v1/anomaly/training/train`
         : `${mlUrl}/v1/training/train`;
-      const response = await fetch(endpoint, {
+      const response = await authFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model_id: trainTarget.id, lookback_seconds: lookbackSeconds }),
@@ -1863,7 +1882,7 @@ const MLModels = () => {
   const setModelAsBest = useCallback(async (model, outputField) => {
     setTimedTrainingMessage(null);
     try {
-      const response = await fetch(`${mlUrl}/v1/performance/${encodeURIComponent(outputField)}/set-best/${model.id}`, {
+      const response = await authFetch(`${mlUrl}/v1/performance/${encodeURIComponent(outputField)}/set-best/${model.id}`, {
         method: 'POST',
       });
       if (!response.ok) {
@@ -1881,7 +1900,7 @@ const MLModels = () => {
   const handleSetAsDefault = useCallback(async (model) => {
     setTimedTrainingMessage(null);
     try {
-      const response = await fetch(`${mlUrl}/v1/models/${model.id}`);
+      const response = await authFetch(`${mlUrl}/v1/models/${model.id}`);
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const details = await response.json();
       const outputFields = details.config?.output_fields ?? [];
@@ -1907,7 +1926,7 @@ const MLModels = () => {
       const endpoint = model.modelType === 'anomaly'
         ? `${mlUrl}/v1/anomaly/models/${model.id}`
         : `${mlUrl}/v1/models/${model.id}`;
-      const response = await fetch(endpoint, { method: 'DELETE' });
+      const response = await authFetch(endpoint, { method: 'DELETE' });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         const detail = errorData.detail;
@@ -1926,7 +1945,7 @@ const MLModels = () => {
       const endpoint = isAnomaly
         ? `${mlUrl}/v1/anomaly/models`
         : `${mlUrl}/v1/models`;
-      const response = await fetch(endpoint, {
+      const response = await authFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
