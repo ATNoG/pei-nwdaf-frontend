@@ -528,9 +528,9 @@ const FieldCheckboxes = ({ fieldKey, label, fields, loadingFields, selected, onT
 };
 
 const EVENT_COLORS = {
-  PERF_DATA:   'bg-blue-50 text-blue-700',
+  PERF_DATA: 'bg-blue-50 text-blue-700',
   UE_MOBILITY: 'bg-gray-100 text-gray-600',
-  UE_COMM:     'bg-gray-100 text-gray-600',
+  UE_COMM: 'bg-gray-100 text-gray-600',
 };
 
 const intersectSets = (sets) => {
@@ -591,7 +591,7 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
     };
     const fetchArchitectures = async () => {
       try {
-        const response = await fetch(`${mlUrl}/v1/architectures`);
+        const response = await authFetch(`${mlUrl}/v1/architectures`);
         if (response.ok) {
           const data = await response.json();
           setAvailableArchitectures(data);
@@ -599,7 +599,7 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
             setFormData(prev => ({ ...prev, architecture: data[0].name }));
           }
         }
-      } catch {}
+      } catch { }
     };
     fetchFields();
     fetchArchitectures();
@@ -723,8 +723,8 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
               <span className="text-xs font-medium text-gray-500">Event:</span>
               {activeEvents.size > 0
                 ? [...activeEvents].map(e => (
-                    <span key={e} className={`px-2 py-0.5 text-xs font-semibold rounded-full ${EVENT_COLORS[e] || 'bg-gray-100 text-gray-700'}`}>{e}</span>
-                  ))
+                  <span key={e} className={`px-2 py-0.5 text-xs font-semibold rounded-full ${EVENT_COLORS[e] || 'bg-gray-100 text-gray-700'}`}>{e}</span>
+                ))
                 : <span className="text-xs text-red-600 font-medium">No common event — fields incompatible</span>
               }
             </div>
@@ -753,25 +753,25 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
             </div>
             {!isAnomaly && (
               <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Lookback steps <span className="text-red-500">*</span></label>
-              <input
-                type="number"
-                min="1"
-                value={formData.lookback_steps}
-                onChange={(e) => setFormData({ ...formData, lookback_steps: e.target.value })}
-                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-              />
-            </div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Lookback steps <span className="text-red-500">*</span></label>
+                <input
+                  type="number"
+                  min="1"
+                  value={formData.lookback_steps}
+                  onChange={(e) => setFormData({ ...formData, lookback_steps: e.target.value })}
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
             )}
             {isAnomaly && (
               <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Percentile threshold <span className="text-red-500">*</span></label>
-              <input
-                type="number"
-                min="1"
-                value={formData.percentile_threshold}
-                onChange={(e) => {
+                <label className="block text-xs font-medium text-gray-700 mb-1">Percentile threshold <span className="text-red-500">*</span></label>
+                <input
+                  type="number"
+                  min="1"
+                  value={formData.percentile_threshold}
+                  onChange={(e) => {
                     let v = parseFloat(e.target.value);
                     if (Number.isNaN(v)) {
                       setFormData({ ...formData, percentile_threshold: '' });
@@ -780,10 +780,10 @@ const CreateModelModal = memo(({ showCreateModal, setShowCreateModal, handleCrea
                       setFormData({ ...formData, percentile_threshold: v });
                     }
                   }}
-                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-              />
-            </div>
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
             )}
             {!isAnomaly && (
               <div>
@@ -1024,7 +1024,7 @@ const AllJobsModal = ({ showModal, setShowModal, mlUrl, onJobsUpdate }) => {
                     <tr key={job.job_id} className="hover:bg-gray-50">
                       <td className="px-4 py-2">
                         <div className="flex items-center gap-1.5">
-                          <span className="font-mono text-xs text-gray-600" title={job.job_id}>{job.job_id?.slice(0,8)}…</span>
+                          <span className="font-mono text-xs text-gray-600" title={job.job_id}>{job.job_id?.slice(0, 8)}…</span>
                           <button onClick={() => copyToClipboard(job.job_id, job.job_id + "-jid")} className="p-1 rounded hover:bg-gray-100 transition-colors" title="Copy Job ID">{copiedId === job.job_id + "-jid" ? <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> : <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>}</button>
                         </div>
                       </td>
@@ -1307,8 +1307,8 @@ const TrainingModal = ({ model, mlUrl, onClose, onStartTraining, isTraining }) =
                         <tr key={job.job_id} className="hover:bg-gray-50">
                           <td className="px-4 py-2">
                             <div className="flex items-center gap-1">
-                              <span className="font-mono text-xs text-gray-600" title={job.job_id}>{job.job_id?.slice(0,8)}…</span>
-                              <button onClick={() => copyId(job.job_id, "tm-" + job.job_id)} className="p-0.5 rounded hover:bg-gray-100 transition-colors">{copiedId === "tm-" + job.job_id ? <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg> : <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>}</button>
+                              <span className="font-mono text-xs text-gray-600" title={job.job_id}>{job.job_id?.slice(0, 8)}…</span>
+                              <button onClick={() => copyId(job.job_id, "tm-" + job.job_id)} className="p-0.5 rounded hover:bg-gray-100 transition-colors">{copiedId === "tm-" + job.job_id ? <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> : <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>}</button>
                             </div>
                           </td>
                           <td className="px-4 py-2">
@@ -1550,7 +1550,7 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
                   <div className="flex justify-between items-center">
                     <span className="text-gray-600">MLflow Run ID:</span>
                     <div className="flex items-center gap-1.5">
-                      <span className="font-mono text-xs text-gray-900" title={modelDetails.mlflow_run_id}>{modelDetails.mlflow_run_id.slice(0,12)}…</span>
+                      <span className="font-mono text-xs text-gray-900" title={modelDetails.mlflow_run_id}>{modelDetails.mlflow_run_id.slice(0, 12)}…</span>
                       <button onClick={() => copyToClipboard(modelDetails.mlflow_run_id, "mlflow-run-id")} className="p-1 rounded hover:bg-gray-100 transition-colors" title="Copy MLflow Run ID">{copiedId === "mlflow-run-id" ? <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> : <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>}</button>
                     </div>
                   </div>
@@ -1580,8 +1580,8 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
                   {triggeringImportance
                     ? <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600" />
                     : <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
                   }
                   Recompute
                 </button>
@@ -2179,11 +2179,10 @@ const MLModels = () => {
                   <button
                     key={evt || 'all'}
                     onClick={() => setFilterEvent(evt)}
-                    className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                      filterEvent === evt
+                    className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${filterEvent === evt
                         ? evt === '' ? 'bg-gray-700 text-white' : `${EVENT_COLORS[evt]} ring-1 ring-current`
                         : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'
-                    }`}
+                      }`}
                   >
                     {evt || 'All'}
                   </button>
@@ -2272,7 +2271,7 @@ const MLModels = () => {
                 <span>Anomaly: <span className="font-semibold text-orange-700">{models.filter(m => m.modelType === 'anomaly').length}</span></span>
               </div>
               <div className="flex items-center gap-2 flex-wrap text-xs">
-                {['PERF_DATA','UE_MOBILITY','UE_COMM'].map(evt => {
+                {['PERF_DATA', 'UE_MOBILITY', 'UE_COMM'].map(evt => {
                   const count = models.filter(m => m.event_type === evt).length;
                   return count > 0 ? (
                     <span key={evt} className={`px-2 py-0.5 rounded font-medium ${EVENT_COLORS[evt]}`}>
