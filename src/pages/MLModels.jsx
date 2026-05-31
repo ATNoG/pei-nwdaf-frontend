@@ -1564,12 +1564,7 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
             <div>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <h4 className="text-sm font-semibold text-gray-900">Feature Importance</h4>
-                  {importance?.metric && (
-                    <span className="px-2 py-0.5 text-xs font-bold bg-gray-100 text-gray-700 rounded uppercase tracking-wide">
-                      {importance.metric}
-                    </span>
-                  )}
+                  <h4 className="text-sm font-semibold text-gray-900">Global Explanation - Feature Importance</h4>
                 </div>
                 <button
                   onClick={handleRecomputeImportance}
@@ -1593,7 +1588,7 @@ const ModelDetailsModal = memo(({ showModal, setShowModal, selectedModel, loadin
               ) : importance?.importances ? (
                 <FeatureImportanceChart
                   importances={importance.importances}
-                  metric={importance.metric}
+                  axisLabel="Permutation importance"
                   computedAt={importance.computed_at}
                 />
               ) : (
