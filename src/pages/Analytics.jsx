@@ -343,7 +343,7 @@ const Analytics = () => {
                   <p className="text-xs text-gray-500 mb-3">Baseline: <span className="font-mono font-medium text-gray-700">{prediction.explanation.baseline?.toFixed(4)}</span> · Positive = pushed above baseline.</p>
                   <FeatureImportanceChart
                     importances={Object.fromEntries(Object.entries(prediction.explanation.attributions).map(([k, v]) => [k, { mean: v }]))}
-                    metric="shap"
+                    axisLabel={`${(prediction.explanation.method ?? 'Attribution').toUpperCase()} value`}
                     computedAt={prediction.explanation.computed_at}
                   />
                 </div>
@@ -423,13 +423,13 @@ const Analytics = () => {
                       {anomalousWindows.filter(s => s.explanation).map((s, i) => (
                         <div key={i} className="mb-4">
                           <div className="flex items-center gap-2 mb-2">
-                            <span className="text-xs font-semibold text-red-700">Explanation — anomalous window @ {fmtTs(s.window_start_time)}</span>
+                            <span className="text-xs font-semibold text-red-700">Local Explanation - anomalous window @ {fmtTs(s.window_start_time)}</span>
                             <span className="px-1.5 py-0.5 text-xs bg-gray-100 text-gray-600 rounded uppercase">{s.explanation.method}</span>
                           </div>
                           <p className="text-xs text-gray-500 mb-2">Baseline error: <span className="font-mono">{s.explanation.baseline?.toFixed(6)}</span> · Reconstruction error: <span className="font-mono">{s.reconstruction_error?.toFixed(6)}</span></p>
                           <FeatureImportanceChart
                             importances={Object.fromEntries(Object.entries(s.explanation.attributions).map(([k, v]) => [k, { mean: v }]))}
-                            metric="shap"
+                            axisLabel={`${(s.explanation.method ?? 'Attribution').toUpperCase()} value`}
                             computedAt={s.explanation.computed_at}
                           />
                         </div>

@@ -749,12 +749,7 @@ const Performance = () => {
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-semibold text-gray-900">Feature Importance</h3>
-                {importance?.metric && (
-                  <span className="px-2 py-0.5 text-xs font-bold bg-gray-100 text-gray-700 rounded uppercase tracking-wide">
-                    {importance.metric}
-                  </span>
-                )}
+                <h3 className="text-base font-semibold text-gray-900">Global Explanation - Feature Importance</h3>
                 <span className="text-xs text-gray-400">best model</span>
               </div>
               <button
@@ -780,7 +775,7 @@ const Performance = () => {
             ) : importance?.importances ? (
               <FeatureImportanceChart
                 importances={importance.importances}
-                metric={importance.metric}
+                axisLabel="Permutation importance"
                 computedAt={importance.computed_at}
               />
             ) : (
