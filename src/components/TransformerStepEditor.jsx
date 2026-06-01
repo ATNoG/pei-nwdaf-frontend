@@ -3,7 +3,9 @@ import { FaTimes, FaPlus, FaTrash } from 'react-icons/fa';
 
 const TRANSFORMER_TYPES = [
   { type: 'hashing', label: 'Hashing', description: 'Hash specified fields (preserves data type)' },
-  { type: 'redaction', label: 'Redaction', description: 'Redact sensitive field values (preserves data type)' }
+  { type: 'redaction', label: 'Redaction', description: 'Redact sensitive field values (preserves data type)' },
+  { type: 'homomorphic_encrypt', label: 'Homomorphic Encryption', description: 'Encrypt fields with CKKS homomorphic encryption' },
+  { type: 'homomorphic_decrypt', label: 'Homomorphic Decryption', description: 'Decrypt CKKS-encrypted fields back to plaintext' },
 ];
 
 const TransformerStepEditor = ({ step, onSave, onCancel, availableFields }) => {
@@ -43,6 +45,10 @@ const TransformerStepEditor = ({ step, onSave, onCancel, availableFields }) => {
         return { fields: [], salt: '' };
       case 'redaction':
         return { fields: [], replacement: '***' };
+      case 'homomorphic_encrypt':
+        return { fields: [] };
+      case 'homomorphic_decrypt':
+        return { fields: [] };
       default:
         return {};
     }
@@ -67,6 +73,10 @@ const TransformerStepEditor = ({ step, onSave, onCancel, availableFields }) => {
     }
     if (stepType === 'hashing' && !params.salt) {
       showToast('Please enter a salt value for hashing', 'error');
+      return;
+    }
+    if ((stepType === 'homomorphic_encrypt' || stepType === 'homomorphic_decrypt') && (!params.fields || params.fields.length === 0)) {
+      showToast('Please select at least one field to encrypt/decrypt', 'error');
       return;
     }
 
@@ -214,6 +224,24 @@ const TransformerStepEditor = ({ step, onSave, onCancel, availableFields }) => {
     </div>
   );
 
+  const renderHomomorphicEncryptParams = () => (
+    <div className="space-y-4">
+      {renderFieldSelector('Fields to Encrypt')}
+      <p className="text-xs text-gray-500">
+        Fields are encrypted with CKKS homomorphic encryption. The Data Processor can aggregate them without decrypting.
+      </p>
+    </div>
+  );
+
+  const renderHomomorphicDecryptParams = () => (
+    <div className="space-y-4">
+      {renderFieldSelector('Fields to Decrypt')}
+      <p className="text-xs text-gray-500">
+        Decrypts CKKS-encrypted fields back to plaintext. Fields not encrypted are passed through unchanged.
+      </p>
+    </div>
+  );
+
   const renderPreview = () => (
     <div className="bg-gray-50 rounded-lg p-4 h-full">
       <h3 className="text-sm font-medium text-gray-700 mb-3">Configuration data preview</h3>
@@ -290,6 +318,8 @@ const TransformerStepEditor = ({ step, onSave, onCancel, availableFields }) => {
                     {renderSelectedFieldsSummary()}
                     {stepType === 'hashing' && renderHashingParams()}
                     {stepType === 'redaction' && renderRedactionParams()}
+                    {stepType === 'homomorphic_encrypt' && renderHomomorphicEncryptParams()}
+                    {stepType === 'homomorphic_decrypt' && renderHomomorphicDecryptParams()}
                   </div>
                 </div>
 
