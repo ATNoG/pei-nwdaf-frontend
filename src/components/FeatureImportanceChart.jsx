@@ -4,7 +4,7 @@ import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip } fro
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
-const FeatureImportanceChart = ({ importances, metric, computedAt }) => {
+const FeatureImportanceChart = ({ importances, axisLabel = 'Importance', computedAt }) => {
   const sorted = useMemo(() => {
     if (!importances) return [];
     return Object.entries(importances)
@@ -38,12 +38,12 @@ const FeatureImportanceChart = ({ importances, metric, computedAt }) => {
     },
     scales: {
       x: {
-        title: { display: true, text: `Score degradation (${(metric ?? '').toUpperCase()})` },
+        title: { display: true, text: axisLabel },
         grid: { color: 'rgba(0,0,0,0.05)' },
       },
       y: { ticks: { font: { size: 12 } } },
     },
-  }), [metric]);
+  }), [axisLabel]);
 
   if (!sorted.length) return null;
 
