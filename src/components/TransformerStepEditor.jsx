@@ -4,8 +4,8 @@ import { FaTimes, FaPlus, FaTrash } from 'react-icons/fa';
 const TRANSFORMER_TYPES = [
   { type: 'hashing', label: 'Hashing', description: 'Hash specified fields (preserves data type)' },
   { type: 'redaction', label: 'Redaction', description: 'Redact sensitive field values (preserves data type)' },
-  { type: 'homomorphic_encrypt', label: 'Homomorphic Encryption', description: 'Encrypt fields with CKKS homomorphic encryption' },
-  { type: 'homomorphic_decrypt', label: 'Homomorphic Decryption', description: 'Decrypt CKKS-encrypted fields back to plaintext' },
+  { type: 'homomorphic_encrypt', label: 'Homomorphic Encryption (experimental)', description: 'Encrypt fields with CKKS homomorphic encryption. Experimental: high latency and large payloads, expect 50x to 200x slowdown.', experimental: true },
+  { type: 'homomorphic_decrypt', label: 'Homomorphic Decryption (experimental)', description: 'Decrypt CKKS-encrypted fields back to plaintext. Experimental: pairs with homomorphic_encrypt.', experimental: true },
 ];
 
 const TransformerStepEditor = ({ step, onSave, onCancel, availableFields }) => {
@@ -224,8 +224,22 @@ const TransformerStepEditor = ({ step, onSave, onCancel, availableFields }) => {
     </div>
   );
 
+  const renderExperimentalBanner = () => (
+    <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+      <p className="font-semibold mb-1">Experimental: proof of concept.</p>
+      <p>
+        CKKS homomorphic encryption adds severe overhead. Measured cost scales
+        linearly with the number of encrypted fields and reaches several
+        seconds per request at high field counts. Ciphertext payloads are
+        orders of magnitude larger than plaintext. Use only for evaluation,
+        not production traffic.
+      </p>
+    </div>
+  );
+
   const renderHomomorphicEncryptParams = () => (
     <div className="space-y-4">
+      {renderExperimentalBanner()}
       {renderFieldSelector('Fields to Encrypt')}
       <p className="text-xs text-gray-500">
         Fields are encrypted with CKKS homomorphic encryption. The Data Processor can aggregate them without decrypting.
@@ -235,6 +249,7 @@ const TransformerStepEditor = ({ step, onSave, onCancel, availableFields }) => {
 
   const renderHomomorphicDecryptParams = () => (
     <div className="space-y-4">
+      {renderExperimentalBanner()}
       {renderFieldSelector('Fields to Decrypt')}
       <p className="text-xs text-gray-500">
         Decrypts CKKS-encrypted fields back to plaintext. Fields not encrypted are passed through unchanged.
@@ -290,7 +305,7 @@ const TransformerStepEditor = ({ step, onSave, onCancel, availableFields }) => {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Transformation Type</label>
               <div className="grid grid-cols-2 gap-3">
-                {TRANSFORMER_TYPES.map(({ type, label, description }) => (
+                {TRANSFORMER_TYPES.map(({ type, label, description, experimental }) => (
                   <button
                     key={type}
                     type="button"
@@ -301,7 +316,14 @@ const TransformerStepEditor = ({ step, onSave, onCancel, availableFields }) => {
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                   >
-                    <div className="font-medium text-gray-900">{label}</div>
+                    <div className="font-medium text-gray-900 flex items-center gap-2">
+                      <span>{label}</span>
+                      {experimental && (
+                        <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">
+                          experimental
+                        </span>
+                      )}
+                    </div>
                     <div className="text-sm text-gray-500 mt-1">{description}</div>
                   </button>
                 ))}
